@@ -6,6 +6,7 @@ import 'package:claimsupport/core/network/api_client.dart';
 import 'package:claimsupport/core/utils/shared_prefs.dart';
 import 'package:claimsupport/core/utils/json_utils.dart';
 import 'package:claimsupport/features/summary/presentation/widgets/coverage_donut_chart.dart';
+import 'package:claimsupport/features/summary/presentation/widgets/policy_continuity_card.dart';
 
 import 'package:claimsupport/features/dashboard/presentation/controllers/dashboard_controller.dart';
 
@@ -669,6 +670,16 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                       ),
                     const SizedBox(height: 16),
 
+                    // Policy Continuity
+                    if (data['policyContinuity'] is Map &&
+                        (data['policyContinuity']['status'] ?? '').toString().isNotEmpty) ...[
+                      PolicyContinuityCard(
+                        continuity: Map<String, dynamic>.from(data['policyContinuity'] as Map),
+                        isDark: isDark,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
                     // Prescription Summary
                     if (prescriptionJson.isNotEmpty)
                       Builder(
@@ -1031,6 +1042,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                         final status = (item['status'] ?? item['coverageStatus'] ?? 'Not Covered').toString();
                         final isCovered = status == 'Covered';
                         final isPartial = status == 'Partially Covered';
+                        final isReview = status == 'Manual Review';
 
                         Color itemColor;
                         Color itemBg;
@@ -1042,6 +1054,12 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                           itemBg = isDark ? successGreen.withAlpha(15) : const Color(0xFFECFDF5);
                           itemBorder = isDark ? successGreen.withAlpha(40) : const Color(0xFFA7F3D0);
                           itemIcon = Icons.check_circle_outline;
+                        } else if (isReview) {
+                          // Undecided, not rejected: amber like partial, with a pending icon.
+                          itemColor = warningAmber;
+                          itemBg = isDark ? warningAmber.withAlpha(15) : const Color(0xFFFFFBEB);
+                          itemBorder = isDark ? warningAmber.withAlpha(40) : const Color(0xFFFDE68A);
+                          itemIcon = Icons.hourglass_top_rounded;
                         } else if (isPartial) {
                           itemColor = warningAmber;
                           itemBg = isDark ? warningAmber.withAlpha(15) : const Color(0xFFFFFBEB);
@@ -1508,11 +1526,15 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
 
   /// Colour for a comparison verdict: green where the policy matches the
   /// standard, amber where the standard offers more.
+  /// One colour per level, best to worst. Older reports carry the previous
+  /// labels (Parity, Potential Gap, Coverage Gap, ...), so both are matched.
   Color _benchmarkStatusColor(String status) {
     final lower = status.toLowerCase();
-    if (lower.contains('parity')) return const Color(0xFF059669);
-    if (lower.contains('gap')) return const Color(0xFFD97706);
-    return const Color(0xFF2563EB);
+    if (lower.contains('same as') || lower.contains('parity')) return const Color(0xFF059669); // green
+    if (lower.contains('you pay') || lower.contains('coverage gap')) return const Color(0xFFDC2626); // red
+    if (lower.contains('may cost') || lower.contains('potential gap')) return const Color(0xFFD97706); // amber
+    if (lower.contains('not stated') || lower.contains('not assessed')) return const Color(0xFF6B7280); // grey
+    return const Color(0xFF2563EB); // blue: best plan offers more
   }
 
   /// Feature-by-feature comparison of the analysed policy against the industry
