@@ -16,10 +16,15 @@ class UploadPolicyScreen extends StatefulWidget {
   State<UploadPolicyScreen> createState() => _UploadPolicyScreenState();
 }
 
-/// One policy the user has uploaded in this session, with its own start date.
+/// One policy the user has uploaded in this session, with its own continuity answers.
 ///
-/// Policies are independent documents, so each keeps its own record id and
-/// date rather than sharing one screen-wide value.
+/// Waiting periods are counted from [inceptionDate] (first start, before any
+/// renewals), or from [restartDate] when the renewals had a break. The current
+/// policy period itself is read from the document.
+///
+/// The questions are asked in order, each only when the previous answer needs it:
+/// start date → new or renewed → (renewed) renewed every year without a break →
+/// (break) date the break started → date cover restarted.
 class _UploadedPolicy {
   _UploadedPolicy({
     required this.fileName,
@@ -30,8 +35,24 @@ class _UploadedPolicy {
   final String fileName;
   final String fileId;
   final String policyId;
-  DateTime? startDate;
+  DateTime? inceptionDate;
+  /// false for a new (first-year) policy, true for a renewed one.
+  bool? isRenewal;
+  bool? renewedWithoutBreak;
+  DateTime? breakStartDate;
+  DateTime? restartDate;
+
+  /// Clear the answers that no longer apply after an earlier answer changed.
+  void clearAfterRenewalAnswer() {
+    if (isRenewal != true) renewedWithoutBreak = null;
+    if (renewedWithoutBreak != false) {
+      breakStartDate = null;
+      restartDate = null;
+    }
+  }
 }
+
+enum _PolicyDate { inception, breakStart, restart }
 
 class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
   /// Matches the server's MAX_POLICIES_PER_ANALYSIS limit.
@@ -40,19 +61,42 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
   final List<_UploadedPolicy> _policies = [];
   bool _isUploading = false;
 
-  Future<void> _pickStartDate(_UploadedPolicy policy) async {
+  /// Pick one of the policy's continuity dates. The break cannot start before the
+  /// policy was first taken, and cover can only restart after the break started.
+  Future<void> _pickDate(_UploadedPolicy policy, _PolicyDate kind) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final initialDate = (policy.startDate != null && !policy.startDate!.isAfter(today))
-        ? policy.startDate!
+    final DateTime? current;
+    DateTime firstDate = DateTime(1970);
+    final String helpText;
+    switch (kind) {
+      case _PolicyDate.inception:
+        current = policy.inceptionDate;
+        helpText = 'Policy start date (first start)';
+      case _PolicyDate.breakStart:
+        current = policy.breakStartDate;
+        firstDate = policy.inceptionDate ?? firstDate;
+        helpText = 'Date the break started';
+      case _PolicyDate.restart:
+        current = policy.restartDate;
+        final after = policy.breakStartDate ?? policy.inceptionDate;
+        if (after != null) firstDate = after.add(const Duration(days: 1));
+        helpText = 'Date cover restarted after the break';
+    }
+    if (firstDate.isAfter(today)) {
+      _toast('The break dates must be after the policy start date and not in the future.');
+      return;
+    }
+    final initialDate = (current != null && !current.isAfter(today) && !current.isBefore(firstDate))
+        ? current
         : today;
 
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: DateTime(1970),
+      firstDate: firstDate,
       lastDate: today,
-      helpText: 'Start date for ${policy.fileName}',
+      helpText: helpText,
       confirmText: 'Confirm',
       cancelText: 'Cancel',
       builder: (context, child) {
@@ -73,14 +117,64 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
 
     if (picked == null) return;
 
-    setState(() => policy.startDate = picked);
+    setState(() {
+      switch (kind) {
+        case _PolicyDate.inception:
+          policy.inceptionDate = picked;
+          // Keep the break dates consistent with a changed start date.
+          if (policy.breakStartDate != null && policy.breakStartDate!.isBefore(picked)) {
+            policy.breakStartDate = null;
+          }
+          if (policy.restartDate != null && !policy.restartDate!.isAfter(picked)) {
+            policy.restartDate = null;
+          }
+        case _PolicyDate.breakStart:
+          policy.breakStartDate = picked;
+          if (policy.restartDate != null && !policy.restartDate!.isAfter(picked)) {
+            policy.restartDate = null;
+          }
+        case _PolicyDate.restart:
+          policy.restartDate = picked;
+      }
+    });
+  }
 
+  /// What is still missing for [policy], or null when its continuity answers are complete.
+  String? _missingAnswer(_UploadedPolicy policy) {
+    if (policy.inceptionDate == null) return 'Please select the policy start date for ${policy.fileName}.';
+    if (policy.isRenewal == null) return 'Please answer whether ${policy.fileName} is a new or a renewed policy.';
+    if (policy.isRenewal == false) return null;
+    if (policy.renewedWithoutBreak == null) {
+      return 'Please answer whether ${policy.fileName} was renewed every year without a break.';
+    }
+    if (policy.renewedWithoutBreak == false) {
+      if (policy.breakStartDate == null) {
+        return 'Please select the date the break started for ${policy.fileName}.';
+      }
+      if (policy.restartDate == null) {
+        return 'Please select the date cover restarted after the break for ${policy.fileName}.';
+      }
+      if (!policy.restartDate!.isAfter(policy.breakStartDate!)) {
+        return 'For ${policy.fileName}, cover must restart after the date the break started.';
+      }
+    }
+    return null;
+  }
+
+  /// Store the continuity answers on the policy record before the analysis reads them.
+  Future<void> _syncContinuity(_UploadedPolicy policy) async {
     try {
+      // Answers that do not apply are sent as null so an earlier answer is cleared.
+      final hadBreak = policy.isRenewal == true && policy.renewedWithoutBreak == false;
       await ApiClient().dio.put('/policies/${policy.policyId}', data: {
-        'policyStartDate': picked.toIso8601String(),
+        'inceptionDate': policy.inceptionDate!.toIso8601String(),
+        'isRenewal': policy.isRenewal,
+        'continuousRenewal': policy.isRenewal == true ? policy.renewedWithoutBreak : null,
+        'breakStartDate': hadBreak ? policy.breakStartDate?.toIso8601String() : null,
+        'coverRestartDate': hadBreak ? policy.restartDate?.toIso8601String() : null,
       });
     } catch (e) {
-      debugPrint("Failed to update policy start date: $e");
+      debugPrint("Failed to save policy continuity details: $e");
     }
   }
 
@@ -206,28 +300,19 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
       return;
     }
 
-    final missingDate = _policies.where((p) => p.startDate == null).toList();
-    if (missingDate.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(missingDate.length == 1
-              ? 'Please select the start date for ${missingDate.first.fileName}.'
-              : 'Please select a start date for each policy.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
+    for (final policy in _policies) {
+      final missing = _missingAnswer(policy);
+      if (missing != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(missing), backgroundColor: Colors.red),
+        );
+        return;
+      }
     }
 
-    // Make sure the dates the user picked are stored before the analysis reads them.
+    // Make sure the answers are stored before the analysis reads them.
     for (final policy in _policies) {
-      try {
-        await ApiClient().dio.put('/policies/${policy.policyId}', data: {
-          'policyStartDate': policy.startDate!.toIso8601String(),
-        });
-      } catch (e) {
-        debugPrint("Failed to sync policy start date before analysis: $e");
-      }
+      await _syncContinuity(policy);
     }
 
     final prefs = SharedPrefs.instance;
@@ -474,7 +559,7 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
     required Color textSecondary,
     required Color primaryBlue,
   }) {
-    final hasDate = policy.startDate != null;
+    final hasDate = _missingAnswer(policy) == null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -517,39 +602,157 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          // Required per policy: waiting periods are judged against this date.
-          GestureDetector(
-            onTap: () => _pickStartDate(policy),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1F2937) : const Color(0xFFEEF2F6),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.calendar_month_rounded, size: 18, color: primaryBlue),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      hasDate
-                          ? 'Start date: ${DateFormat('dd-MM-yyyy').format(policy.startDate!)}'
-                          : 'Select policy start date *',
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: hasDate ? FontWeight.w600 : FontWeight.w400,
-                        color: hasDate ? textColor : Colors.red.shade400,
-                      ),
-                    ),
-                  ),
-                  Icon(Icons.arrow_drop_down, color: textSecondary),
-                ],
-              ),
-            ),
+          // Waiting periods are counted from this date, not from the current renewal.
+          _fieldLabel('Policy Start Date (when this policy was first taken) *', textColor),
+          Text(
+            'For a renewed policy, this is the very first start date, before any renewals.',
+            style: TextStyle(fontSize: 11.5, height: 1.35, color: textSecondary),
           ),
+          const SizedBox(height: 6),
+          _dateField(
+            value: policy.inceptionDate,
+            placeholder: 'Select policy start date *',
+            onTap: () => _pickDate(policy, _PolicyDate.inception),
+            isDark: isDark,
+            textColor: textColor,
+            textSecondary: textSecondary,
+            primaryBlue: primaryBlue,
+          ),
+          const SizedBox(height: 12),
+          _fieldLabel('Is this a new policy or a renewed policy? *', textColor),
+          _twoChoice(
+            value: policy.isRenewal,
+            firstLabel: 'New (first year)',
+            firstValue: false,
+            secondLabel: 'Renewed',
+            secondValue: true,
+            onChanged: (v) => setState(() {
+              policy.isRenewal = v;
+              policy.clearAfterRenewalAnswer();
+            }),
+            primaryBlue: primaryBlue,
+          ),
+          if (policy.isRenewal == true) ...[
+            const SizedBox(height: 12),
+            _fieldLabel('Has this policy been renewed every year without a break? *', textColor),
+            _twoChoice(
+              value: policy.renewedWithoutBreak,
+              firstLabel: 'Yes',
+              firstValue: true,
+              secondLabel: 'No',
+              secondValue: false,
+              onChanged: (v) => setState(() {
+                policy.renewedWithoutBreak = v;
+                policy.clearAfterRenewalAnswer();
+              }),
+              primaryBlue: primaryBlue,
+            ),
+          ],
+          if (policy.isRenewal == true && policy.renewedWithoutBreak == false) ...[
+            const SizedBox(height: 12),
+            _fieldLabel('Date the break started *', textColor),
+            Text(
+              'The day cover lapsed, when the gap in renewals began.',
+              style: TextStyle(fontSize: 11.5, color: textSecondary),
+            ),
+            const SizedBox(height: 6),
+            _dateField(
+              value: policy.breakStartDate,
+              placeholder: 'Select break start date *',
+              onTap: () => _pickDate(policy, _PolicyDate.breakStart),
+              isDark: isDark,
+              textColor: textColor,
+              textSecondary: textSecondary,
+              primaryBlue: primaryBlue,
+            ),
+            const SizedBox(height: 12),
+            _fieldLabel('Date cover restarted after the break *', textColor),
+            Text(
+              'Waiting periods start again from this date.',
+              style: TextStyle(fontSize: 11.5, color: textSecondary),
+            ),
+            const SizedBox(height: 6),
+            _dateField(
+              value: policy.restartDate,
+              placeholder: 'Select restart date *',
+              onTap: () => _pickDate(policy, _PolicyDate.restart),
+              isDark: isDark,
+              textColor: textColor,
+              textSecondary: textSecondary,
+              primaryBlue: primaryBlue,
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Widget _fieldLabel(String text, Color textColor) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(text, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: textColor)),
+    );
+  }
+
+  Widget _dateField({
+    required DateTime? value,
+    required String placeholder,
+    required VoidCallback onTap,
+    required bool isDark,
+    required Color textColor,
+    required Color textSecondary,
+    required Color primaryBlue,
+  }) {
+    final hasValue = value != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1F2937) : const Color(0xFFEEF2F6),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.calendar_month_rounded, size: 18, color: primaryBlue),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                hasValue ? DateFormat('dd-MM-yyyy').format(value) : placeholder,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: hasValue ? FontWeight.w600 : FontWeight.w400,
+                  color: hasValue ? textColor : Colors.red.shade400,
+                ),
+              ),
+            ),
+            Icon(Icons.arrow_drop_down, color: textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _twoChoice({
+    required bool? value,
+    required String firstLabel,
+    required bool firstValue,
+    required String secondLabel,
+    required bool secondValue,
+    required ValueChanged<bool> onChanged,
+    required Color primaryBlue,
+  }) {
+    Widget chip(String label, bool option) => ChoiceChip(
+          label: Text(label),
+          selected: value == option,
+          onSelected: (_) => onChanged(option),
+          selectedColor: primaryBlue.withAlpha(40),
+          labelStyle: TextStyle(
+            fontWeight: value == option ? FontWeight.w700 : FontWeight.w500,
+            color: value == option ? primaryBlue : null,
+          ),
+        );
+    return Wrap(spacing: 8, children: [chip(firstLabel, firstValue), chip(secondLabel, secondValue)]);
   }
 }
 

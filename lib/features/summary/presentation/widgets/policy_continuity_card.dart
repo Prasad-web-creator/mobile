@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:claimsupport/core/utils/json_utils.dart';
+import 'package:claimsupport/features/summary/presentation/widgets/summary_info_row.dart';
 
 /// Colour and icon for a continuity status code from the backend.
 ({Color color, IconData icon}) continuityStatusStyle(String statusCode) {
@@ -45,16 +46,7 @@ class PolicyContinuityCard extends StatelessWidget {
     return '${start.isEmpty ? 'Not stated' : start} – ${end.isEmpty ? 'Not stated' : end}';
   }
 
-  static const Map<String, String> _roleLabels = {
-    'current': 'Current',
-    'previous': 'Previous',
-    'declared': 'Stated only',
-    'later': 'After claim',
-    'linked': 'Linked',
-    'not_linked': 'Not linked',
-    'undated': 'No dates',
-    'duplicate': 'Duplicate',
-  };
+
 
   @override
   Widget build(BuildContext context) {
@@ -71,8 +63,7 @@ class PolicyContinuityCard extends StatelessWidget {
     final gaps = asList(continuity['coverageGaps']).map(asMap).toList();
     final conflicts = asList(continuity['continuityConflicts']).map((e) => e.toString()).toList();
     final missing = asList(continuity['missingInformation']).map((e) => e.toString()).toList();
-    final evidence = asList(continuity['continuityEvidence']).map(asMap).toList();
-    final policies = asList(continuity['policiesEvaluated']).map(asMap).toList();
+
 
     final originalStart = formatDate(continuity['originalPolicyStartDate']);
     final earliestDocumented = formatDate(continuity['earliestDocumentedStartDate']);
@@ -134,21 +125,23 @@ class PolicyContinuityCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          _row('Original Policy Start Date',
+          // Labels are kept to one line so every row lines up with the other summary cards.
+          _row('First Start Date',
               originalStart.isNotEmpty
                   ? originalStart
                   : (earliestDocumented.isNotEmpty
                       ? 'Not established (earliest documented: $earliestDocumented)'
-                      : 'Not established'),
-              textColor, subColor),
-          _row('Current Policy Period', _period(current).isEmpty ? 'Not stated' : _period(current),
-              textColor, subColor,
+                      : 'Not established')),
+          if (continuity['declared'] == true && continuity['isRenewal'] != null)
+            _row('New / Renewed', continuity['isRenewal'] == false ? 'New policy (first year)' : 'Renewed policy'),
+          if (formatDate(continuity['coverRestartDate']).isNotEmpty)
+            _row('Cover Restarted', formatDate(continuity['coverRestartDate']),
+                detail: 'Waiting periods count from this date'),
+          _row('Current Period', _period(current).isEmpty ? 'Not stated' : _period(current),
               detail: current['label']?.toString()),
-          _row('Claim / Hospitalization Date', claimDate.isEmpty ? 'Not available' : claimDate,
-              textColor, subColor,
+          _row('Claim Date', claimDate.isEmpty ? 'Not available' : claimDate,
               detail: claimSource.isEmpty ? null : 'From $claimSource'),
-          _row('Continuity Status', status.isEmpty ? '—' : status, textColor, subColor,
-              valueColor: style.color),
+          _row('Continuity Status', status.isEmpty ? '—' : status, valueColor: style.color),
 
           // Gaps
           _label('Coverage Gap(s)', subColor),
@@ -160,13 +153,33 @@ class PolicyContinuityCard extends StatelessWidget {
               textColor,
             )
           else
-            ...gaps.map((g) => _bullet(
-                  '${formatDate(g['from'])} – ${formatDate(g['to'])} (${g['days']} day${g['days'] == 1 ? '' : 's'})',
-                  textColor,
-                  subColor,
-                  detail: g['description']?.toString(),
-                  color: const Color(0xFFDC2626),
-                )),
+            ...gaps.map((g) {
+              final days = g['days'];
+              final fromDate = g['from'] != null ? formatDate(g['from']) : null;
+              final toDate = g['to'] != null ? formatDate(g['to']) : null;
+              final desc = g['description']?.toString();
+
+              String title;
+              String? detail;
+              if (fromDate != null && toDate != null && days != null) {
+                title = '$fromDate – $toDate ($days day${days == 1 ? '' : 's'})';
+                detail = desc;
+              } else if (desc != null && desc.isNotEmpty) {
+                title = desc;
+                detail = (toDate != null) ? 'Before $toDate' : null;
+              } else {
+                title = 'Policy renewal break / gap';
+                detail = (toDate != null) ? 'Before $toDate' : null;
+              }
+
+              return _bullet(
+                title,
+                textColor,
+                subColor,
+                detail: detail,
+                color: const Color(0xFFDC2626),
+              );
+            }),
 
           if (conflicts.isNotEmpty) ...[
             _label('Conflicts', subColor),
@@ -177,108 +190,13 @@ class PolicyContinuityCard extends StatelessWidget {
             _label('Information Not Available', subColor),
             ...missing.map((m) => _bullet(m, textColor, subColor)),
           ],
-
-          // Policies evaluated
-          _label('Policies Evaluated (${policies.length})', subColor),
-          ...policies.map((p) {
-            final role = p['role']?.toString() ?? '';
-            final period = _period(p);
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(top: 1, right: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: (role == 'current' ? const Color(0xFF2563EB) : subColor).withAlpha(30),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      _roleLabels[role] ?? role,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: role == 'current' ? const Color(0xFF2563EB) : subColor,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(p['label']?.toString() ?? 'Policy',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textColor)),
-                        if (period.isNotEmpty)
-                          Text(period, style: TextStyle(fontSize: 12, color: subColor)),
-                        if ((p['reason']?.toString() ?? '').isNotEmpty)
-                          Text(p['reason'].toString(),
-                              style: TextStyle(fontSize: 11.5, color: subColor, fontStyle: FontStyle.italic)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-
-          // Evidence
-          if (evidence.isNotEmpty)
-            Theme(
-              data: theme.copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                childrenPadding: EdgeInsets.zero,
-                initiallyExpanded: statusCode != 'VERIFIED',
-                title: Text(
-                  'Continuity Evidence (${evidence.length})',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: subColor),
-                ),
-                children: evidence.map((e) {
-                  final isQuote = e['type'] == 'document_quote';
-                  final labels = asList(e['policyLabels']).map((x) => x.toString()).where((x) => x.isNotEmpty);
-                  return _bullet(
-                    isQuote ? '“${e['description']}”' : e['description']?.toString() ?? '',
-                    textColor,
-                    subColor,
-                    detail: isQuote && labels.isNotEmpty ? 'Quoted from ${labels.first}' : null,
-                    italic: isQuote,
-                  );
-                }).toList(),
-              ),
-            ),
         ],
       ),
     );
   }
 
-  Widget _row(String label, String value, Color textColor, Color subColor,
-      {String? detail, Color? valueColor}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 128,
-            child: Text(label, style: TextStyle(fontSize: 12.5, color: subColor, fontWeight: FontWeight.w500)),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(value,
-                    style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600, color: valueColor ?? textColor)),
-                if (detail != null && detail.isNotEmpty)
-                  Text(detail, style: TextStyle(fontSize: 11.5, color: subColor)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  Widget _row(String label, String value, {String? detail, Color? valueColor}) {
+    return SummaryInfoRow(label: label, value: value, detail: detail, valueColor: valueColor, isDark: isDark);
   }
 
   Widget _label(String text, Color subColor) {
@@ -296,7 +214,7 @@ class PolicyContinuityCard extends StatelessWidget {
   }
 
   Widget _bullet(String text, Color textColor, Color subColor,
-      {String? detail, Color? color, bool italic = false}) {
+      {String? detail, Color? color}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -319,7 +237,6 @@ class PolicyContinuityCard extends StatelessWidget {
                       fontSize: 12.5,
                       height: 1.4,
                       color: textColor,
-                      fontStyle: italic ? FontStyle.italic : FontStyle.normal,
                     )),
                 if (detail != null && detail.isNotEmpty)
                   Text(detail, style: TextStyle(fontSize: 11.5, height: 1.4, color: subColor)),

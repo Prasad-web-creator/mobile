@@ -944,7 +944,6 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
                                               q['reason'],
                                               style: TextStyle(
                                                 fontSize: 11,
-                                                fontStyle: FontStyle.italic,
                                                 color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
                                                 height: 1.4,
                                               ),

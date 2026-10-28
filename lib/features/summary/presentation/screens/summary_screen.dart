@@ -7,6 +7,7 @@ import 'package:claimsupport/core/utils/shared_prefs.dart';
 import 'package:claimsupport/core/utils/json_utils.dart';
 import 'package:claimsupport/features/summary/presentation/widgets/coverage_donut_chart.dart';
 import 'package:claimsupport/features/summary/presentation/widgets/policy_continuity_card.dart';
+import 'package:claimsupport/features/summary/presentation/widgets/summary_info_row.dart';
 
 import 'package:claimsupport/features/dashboard/presentation/controllers/dashboard_controller.dart';
 
@@ -92,15 +93,12 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
         final dominanceScore = data['dominanceScore'] ?? 0;
         final coverageBreakdown = data['coverageBreakdown'] as Map<String, dynamic>? ?? {};
         final overallStatus = data['overallStatus'] ?? 'Unknown';
-        final summaryText = data['summaryText'] ?? 'No summary available.';
         final comparison = asList(data['comparison']);
         final policyJson = data['policyJson'] as Map<String, dynamic>? ?? {};
         final prescriptionJson = data['prescriptionJson'] as Map<String, dynamic>? ?? {};
         final processingTime = data['processingTimeMs'] ?? 0;
         // Clarification Q&A from LLM interactive session
         final clarificationQA = asList(data['clarificationAnswersUsed']);
-        // Reference benchmark comparison (from Marsh GIC Snapshot & ReAssure 3.0 Reference Standards)
-        final referenceComparison = data['referenceComparison'] as Map<String, dynamic>? ?? {};
 
         // Document & validation statuses
         final docValidity = data['documentValidity'] as Map<String, dynamic>?;
@@ -630,16 +628,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                                   ),
                                 ),
                               ],
-                              const SizedBox(height: 20),
-                              Text(
-                                summaryText,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: textSecondary,
-                                  height: 1.6,
-                                ),
-                              ),
+
                             ],
                           ),
                         ],
@@ -656,11 +645,11 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                         icon: Icons.policy_outlined,
                         iconColor: primaryBlue,
                         items: [
-                          _infoRow(isDark, 'Company', policyJson['insuranceCompany']),
-                          _infoRow(isDark, 'Policy', policyJson['policyName']),
-                          _infoRow(isDark, 'Number', policyJson['policyNumber']),
-                          _infoRow(isDark, 'Type', policyJson['policyType']),
-                          _infoRow(isDark, 'Coverage', policyJson['coverageAmount'] != null
+                          _infoRow(isDark, 'Insurance Provider', policyJson['insuranceCompany']),
+                          _infoRow(isDark, 'Policy Name', policyJson['policyName']),
+                          _infoRow(isDark, 'Policy Number', policyJson['policyNumber']),
+                          _infoRow(isDark, 'Policy Type', policyJson['policyType']),
+                          _infoRow(isDark, 'Sum Insured', policyJson['coverageAmount'] != null
                               ? '₹${policyJson['coverageAmount']}'
                               : null),
                           _infoRow(isDark, 'Max Claim', policyJson['maximumClaimAmount'] != null
@@ -755,18 +744,20 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                                     ),
                                   ),
                                 ),
-                              _infoRow(isDark, 'Patient', cleanValue(prescriptionJson['patientName'])),
+                              _infoRow(isDark, 'Patient Name', cleanValue(prescriptionJson['patientName'])),
                               _infoRow(isDark, 'Hospital', cleanValue(prescriptionJson['hospitalName'])),
                               _infoRow(isDark, 'Doctor', cleanValue(prescriptionJson['doctorName'])),
-                              _infoRow(isDark, 'Diagnosis', diag),
+                              _infoRow(isDark, 'Primary Diagnosis', diag),
                               if (symptomsStr != null && symptomsStr != diag)
-                                _infoRow(isDark, 'Symptoms', symptomsStr),
-                              _infoRow(isDark, 'Hospitalization',
-                                  prescriptionJson['hospitalizationRequired'] == true
-                                      ? 'Required'
-                                      : prescriptionJson['hospitalizationRequired'] == false
-                                          ? 'Not Required'
-                                          : null),
+                                _infoRow(isDark, 'Reported Symptoms', symptomsStr),
+                              // A self-entered check has no admission details to show.
+                              if (!isManual)
+                                _infoRow(isDark, 'Hospitalization',
+                                    prescriptionJson['hospitalizationRequired'] == true
+                                        ? 'Required'
+                                        : prescriptionJson['hospitalizationRequired'] == false
+                                            ? 'Not Required'
+                                            : null),
                               _infoRow(isDark, 'Est. Cost',
                                   prescriptionJson['estimatedTreatmentCost'] != null && prescriptionJson['estimatedTreatmentCost'].toString() != '0'
                                       ? '₹${prescriptionJson['estimatedTreatmentCost']}'
@@ -930,7 +921,8 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                                   ),
                                   Expanded(
                                     flex: 1,
-                                    child: Center(
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
                                       child: Text('COST',
                                           style: TextStyle(
                                               fontSize: 11,
@@ -977,11 +969,13 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                                         ),
                                         Expanded(
                                           flex: 1,
-                                          child: Center(
+                                          child: Align(
+                                            alignment: Alignment.centerRight,
                                             child: Text(
                                               item['cost'] != null && item['cost'] != 0
                                                   ? '₹${item['cost']}'
                                                   : '-',
+                                              textAlign: TextAlign.right,
                                               style: TextStyle(
                                                 fontSize: 14,
                                                 color: textSecondary,
@@ -1075,6 +1069,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                         final reason = (item['explanation'] ?? item['reason'] ?? item['coverageStatusReason'] ?? '').toString().trim();
                         final policyEvidence = (item['policyEvidence'] ?? '').toString().trim();
                         final financialDecision = (item['financialDecision'] ?? '').toString().trim();
+                        final policyClauses = asList(item['policyClauses']);
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -1194,6 +1189,17 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                                 ),
                               ],
 
+                              // Exact policy passages the decision was based on
+                              if (policyClauses.isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                _buildPolicyClauses(
+                                  clauses: policyClauses,
+                                  isDark: isDark,
+                                  textColor: textColor,
+                                  textSecondary: textSecondary,
+                                ),
+                              ],
+
                               // 3. Financial Status Section
                               if (financialDecision.isNotEmpty) ...[
                                 const SizedBox(height: 8),
@@ -1247,17 +1253,11 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                       const SizedBox(height: 24),
                     ],
 
-                    // ─── Reference Benchmark Comparison (Extra Content) ───
-                    if (referenceComparison.isNotEmpty &&
-                        (asList(referenceComparison['featureComparisons']).isNotEmpty ||
-                         asList(referenceComparison['detectedPermanentExclusions']).isNotEmpty)) ...[
-                      _buildReferenceBenchmarkSection(
-                        context: context,
-                        refData: referenceComparison,
+                    // ─── Major policy terms that make the analysis Not Covered ───
+                    if (asList(data['majorTerms']).isNotEmpty) ...[
+                      _buildMajorTerms(
+                        terms: asList(data['majorTerms']),
                         isDark: isDark,
-                        theme: theme,
-                        textColor: textColor,
-                        textSecondary: textSecondary,
                       ),
                       const SizedBox(height: 24),
                     ],
@@ -1451,326 +1451,177 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
       }
     }
     if (displayVal.isEmpty) return null;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(label,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isDark ? Colors.grey.shade400 : const Color(0xFF6B7280),
-                  fontWeight: FontWeight.w500,
-                )),
-          ),
-          Expanded(
-            child: Text(
-              displayVal,
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? Colors.white : const Color(0xFF111827), 
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    return SummaryInfoRow(label: label, value: displayVal, isDark: isDark);
   }
 
-  // ─── Helper: Reference Benchmark Comparison Section (Extra Content) ───
-  Widget _buildReferenceBenchmarkSection({
-    required BuildContext context,
-    required Map<String, dynamic> refData,
+
+  // ─── Helper: Exact policy passages behind one item's decision ───
+  Widget _buildPolicyClauses({
+    required List<dynamic> clauses,
     required bool isDark,
-    required ThemeData theme,
     required Color textColor,
     required Color textSecondary,
   }) {
-    final permanentExclusions = asList(refData['detectedPermanentExclusions']);
-    final featureComparisons = asList(refData['featureComparisons']);
-    final policyType = refData['policyType']?.toString() ?? '';
-
-    if (permanentExclusions.isEmpty && featureComparisons.isEmpty) {
-      return const SizedBox.shrink();
+    Color effectColor(String effect) {
+      switch (effect) {
+        case 'Excludes':
+          return const Color(0xFFDC2626);
+        case 'Waiting Period':
+        case 'Condition':
+        case 'Limit':
+          return const Color(0xFFD97706);
+        case 'Covers':
+          return const Color(0xFF059669);
+        default:
+          return const Color(0xFF2563EB);
+      }
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 1. Permanent exclusion screener
-        if (permanentExclusions.isNotEmpty) ...[
-          _buildPermanentExclusionAlerts(
-            permanentExclusions: permanentExclusions,
-            isDark: isDark,
-            textColor: textColor,
-            textSecondary: textSecondary,
-          ),
-          const SizedBox(height: 14),
-        ],
-
-        // 2. This policy measured against the industry standard
-        if (featureComparisons.isNotEmpty)
-          _buildBenchmarkComparisonCard(
-            comparisons: featureComparisons,
-            policyType: policyType,
-            isDark: isDark,
-            textColor: textColor,
-            textSecondary: textSecondary,
-          ),
-      ],
-    );
-  }
-
-  /// Colour for a comparison verdict: green where the policy matches the
-  /// standard, amber where the standard offers more.
-  /// One colour per level, best to worst. Older reports carry the previous
-  /// labels (Parity, Potential Gap, Coverage Gap, ...), so both are matched.
-  Color _benchmarkStatusColor(String status) {
-    final lower = status.toLowerCase();
-    if (lower.contains('same as') || lower.contains('parity')) return const Color(0xFF059669); // green
-    if (lower.contains('you pay') || lower.contains('coverage gap')) return const Color(0xFFDC2626); // red
-    if (lower.contains('may cost') || lower.contains('potential gap')) return const Color(0xFFD97706); // amber
-    if (lower.contains('not stated') || lower.contains('not assessed')) return const Color(0xFF6B7280); // grey
-    return const Color(0xFF2563EB); // blue: best plan offers more
-  }
-
-  /// Feature-by-feature comparison of the analysed policy against the industry
-  /// standard cover.
-  ///
-  /// Deliberately names neither the analysed policy nor any insurer: the
-  /// comparison is about cover levels, and the only identity shown is the type
-  /// of policy being compared.
-  Widget _buildBenchmarkComparisonCard({
-    required List<dynamic> comparisons,
-    required String policyType,
-    required bool isDark,
-    required Color textColor,
-    required Color textSecondary,
-  }) {
-    final typeLabel = policyType.isNotEmpty ? policyType : 'health';
-
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? Colors.blueGrey.withAlpha(60) : const Color(0xFFE5E7EB),
-        ),
+        color: isDark ? Colors.white.withAlpha(8) : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade300),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.balance_outlined, color: Color(0xFF2563EB), size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'How This Cover Compares',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: textColor,
-                  ),
-                ),
+              Icon(Icons.menu_book_outlined, size: 16, color: textColor),
+              const SizedBox(width: 6),
+              Text(
+                'Policy Clauses Considered',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textColor),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Your policy against a standard $typeLabel cover.',
-            style: TextStyle(fontSize: 12, color: textSecondary, height: 1.4),
-          ),
-          const SizedBox(height: 14),
-
-          for (final raw in comparisons) ...[
-            Builder(builder: (context) {
-              final item = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
-              final feature = item['feature']?.toString() ?? '';
-              final userPolicy = item['userPolicy']?.toString() ?? '';
-              final benchmark = item['benchmarkStandard']?.toString() ?? '';
-              final status = item['comparisonStatus']?.toString() ?? '';
-              final insight = item['insight']?.toString() ?? '';
-              final statusColor = _benchmarkStatusColor(status);
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF9FAFB),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark ? Colors.grey.shade800 : const Color(0xFFE5E7EB),
+          for (final clause in clauses) ...[
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    (clause['section'] ?? '').toString(),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textColor),
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            feature,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: textColor,
-                            ),
-                          ),
-                        ),
-                        if (status.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: statusColor.withAlpha(25),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: statusColor.withAlpha(60)),
-                            ),
-                            child: Text(
-                              status,
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
-                                color: statusColor,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
+                if ((clause['effect'] ?? '').toString().isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(left: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: effectColor(clause['effect'].toString()).withAlpha(25),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    const SizedBox(height: 8),
-                    _buildComparisonRow(
-                      label: 'This policy',
-                      value: userPolicy,
-                      isDark: isDark,
-                      textColor: textColor,
-                      textSecondary: textSecondary,
-                    ),
-                    const SizedBox(height: 4),
-                    _buildComparisonRow(
-                      label: 'Standard cover',
-                      value: benchmark,
-                      isDark: isDark,
-                      textColor: textColor,
-                      textSecondary: textSecondary,
-                    ),
-                    if (insight.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        insight,
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: textSecondary,
-                          height: 1.4,
-                          fontStyle: FontStyle.italic,
-                        ),
+                    child: Text(
+                      clause['effect'].toString(),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: effectColor(clause['effect'].toString()),
                       ),
-                    ],
-                  ],
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.only(left: 8),
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: effectColor((clause['effect'] ?? '').toString()), width: 2),
                 ),
-              );
-            }),
+              ),
+              child: Text(
+                '"${clause['quote'] ?? ''}"',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: textColor,
+                  height: 1.4,
+                ),
+              ),
+            ),
+            if ((clause['explanation'] ?? '').toString().isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                clause['explanation'].toString(),
+                style: TextStyle(fontSize: 12, color: textSecondary, height: 1.4),
+              ),
+            ],
           ],
-
-          Text(
-            'The standard cover is a market reference, not a product you hold or can buy here.',
-            style: TextStyle(fontSize: 11, color: textSecondary, height: 1.4),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildComparisonRow({
-    required String label,
-    required String value,
+  // ─── Helper: Policy terms that make the overall analysis Not Covered ───
+  Widget _buildMajorTerms({
+    required List<dynamic> terms,
     required bool isDark,
-    required Color textColor,
-    required Color textSecondary,
   }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 104,
-          child: Text(
-            label,
-            style: TextStyle(fontSize: 12, color: textSecondary),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value.isNotEmpty ? value : '--',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: textColor,
-              height: 1.35,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+    final titleColor = isDark ? Colors.red.shade200 : const Color(0xFF991B1B);
+    final bodyColor = isDark ? Colors.grey.shade300 : const Color(0xFF7F1D1D);
 
-  Widget _buildPermanentExclusionAlerts({
-    required List<dynamic> permanentExclusions,
-    required bool isDark,
-    required Color textColor,
-    required Color textSecondary,
-  }) {
-    return Column(
-      children: [
-        for (final item in permanentExclusions)
-          Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF2E1215) : const Color(0xFFFEF2F2),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isDark ? Colors.red.withAlpha(60) : const Color(0xFFFECACA),
-              ),
-            ),
-            child: Row(
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2E1215) : const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? Colors.red.withAlpha(60) : const Color(0xFFFECACA),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Standard Permanent Exclusion #${item['exclusionNumber']}: ${item['title']}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.red.shade200 : const Color(0xFF991B1B),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item['warning']?.toString() ?? '',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? Colors.grey.shade300 : const Color(0xFF7F1D1D),
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
-                  ),
+                Text(
+                  'Major Policy Terms – Not Covered',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: titleColor),
                 ),
+                for (final term in terms) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    (term['title'] ?? '').toString(),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: titleColor),
+                  ),
+                  if ((term['quote'] ?? '').toString().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '"${term['quote']}"',
+                      style: TextStyle(fontSize: 12, color: bodyColor, height: 1.4),
+                    ),
+                  ],
+                  if ((term['explanation'] ?? '').toString().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      term['explanation'].toString(),
+                      style: TextStyle(fontSize: 12, color: bodyColor, height: 1.4),
+                    ),
+                  ],
+                  if (asList(term['items']).isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Applies to: ${asList(term['items']).join(', ')}',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: bodyColor),
+                    ),
+                  ],
+                ],
               ],
             ),
           ),
-      ],
+        ],
+      ),
     );
   }
 }
