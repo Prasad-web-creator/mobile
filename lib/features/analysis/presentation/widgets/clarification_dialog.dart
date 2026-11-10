@@ -41,13 +41,22 @@ class _SingleChoiceQuestionState extends State<_SingleChoiceQuestion> {
     super.dispose();
   }
 
+  /// A date already written into the option, e.g. "Use my entered date (01-11-2022)".
+  static final RegExp _concreteDate = RegExp(
+    r'\b\d{1,2}[-/ .](\d{1,2}|[A-Za-z]{3,9})[-/ .]\d{2,4}\b|\b\d{4}-\d{1,2}-\d{1,2}\b',
+  );
+
+  /// Whole-word prompts for free input ("Enter date", "Other", "Specify"); words like
+  /// "entered" or "otherwise" do not count.
+  static final RegExp _inputPrompt = RegExp(
+    r'\b(enter|select|specify|other)\b|specific past date',
+    caseSensitive: false,
+  );
+
   bool _isOptionRequiringInput(String optStr) {
-    final lower = optStr.toLowerCase();
-    return lower.contains('enter') ||
-        lower.contains('select') ||
-        lower.contains('specify') ||
-        lower.contains('specific past date') ||
-        lower.contains('other');
+    // An option that already names its date is a fixed choice, not a prompt for a date.
+    if (_concreteDate.hasMatch(optStr)) return false;
+    return _inputPrompt.hasMatch(optStr);
   }
 
   bool _isDateContext(String optStr) {

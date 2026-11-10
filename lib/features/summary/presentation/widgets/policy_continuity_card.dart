@@ -143,9 +143,13 @@ class PolicyContinuityCard extends StatelessWidget {
               detail: claimSource.isEmpty ? null : 'From $claimSource'),
           _row('Continuity Status', status.isEmpty ? '—' : status, valueColor: style.color),
 
-          // Gaps
-          _label('Coverage Gap(s)', subColor),
-          if (gaps.isEmpty)
+          // Gaps. A declared break has no known dates, so the section is hidden and
+          // the summary above explains the gap.
+          if (!(gaps.isEmpty && statusCode == 'GAP_DETECTED'))
+            _label('Coverage Gap(s)', subColor),
+          if (gaps.isEmpty && statusCode == 'GAP_DETECTED')
+            const SizedBox.shrink()
+          else if (gaps.isEmpty)
             _bodyText(
               statusCode == 'CANNOT_BE_ESTABLISHED' || statusCode.isEmpty
                   ? 'None found in the documents provided (history incomplete).'

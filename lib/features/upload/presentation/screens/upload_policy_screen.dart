@@ -19,12 +19,12 @@ class UploadPolicyScreen extends StatefulWidget {
 /// One policy the user has uploaded in this session, with its own continuity answers.
 ///
 /// Waiting periods are counted from [inceptionDate] (first start, before any
-/// renewals), or from [restartDate] when the renewals had a break. The current
-/// policy period itself is read from the document.
+/// renewals). When the renewals had a break, they are counted from the start date
+/// of the uploaded policy document instead. The current policy period itself is
+/// read from the document.
 ///
 /// The questions are asked in order, each only when the previous answer needs it:
-/// start date → new or renewed → (renewed) renewed every year without a break →
-/// (break) date the break started → date cover restarted.
+/// start date → new or renewed → (renewed) renewed every year without a break.
 class _UploadedPolicy {
   _UploadedPolicy({
     required this.fileName,
@@ -39,20 +39,12 @@ class _UploadedPolicy {
   /// false for a new (first-year) policy, true for a renewed one.
   bool? isRenewal;
   bool? renewedWithoutBreak;
-  DateTime? breakStartDate;
-  DateTime? restartDate;
 
   /// Clear the answers that no longer apply after an earlier answer changed.
   void clearAfterRenewalAnswer() {
     if (isRenewal != true) renewedWithoutBreak = null;
-    if (renewedWithoutBreak != false) {
-      breakStartDate = null;
-      restartDate = null;
-    }
   }
 }
-
-enum _PolicyDate { inception, breakStart, restart }
 
 class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
   /// Matches the server's MAX_POLICIES_PER_ANALYSIS limit.
@@ -61,32 +53,13 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
   final List<_UploadedPolicy> _policies = [];
   bool _isUploading = false;
 
-  /// Pick one of the policy's continuity dates. The break cannot start before the
-  /// policy was first taken, and cover can only restart after the break started.
-  Future<void> _pickDate(_UploadedPolicy policy, _PolicyDate kind) async {
+  /// Pick the date the policy was first taken.
+  Future<void> _pickDate(_UploadedPolicy policy) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final DateTime? current;
-    DateTime firstDate = DateTime(1970);
-    final String helpText;
-    switch (kind) {
-      case _PolicyDate.inception:
-        current = policy.inceptionDate;
-        helpText = 'Policy start date (first start)';
-      case _PolicyDate.breakStart:
-        current = policy.breakStartDate;
-        firstDate = policy.inceptionDate ?? firstDate;
-        helpText = 'Date the break started';
-      case _PolicyDate.restart:
-        current = policy.restartDate;
-        final after = policy.breakStartDate ?? policy.inceptionDate;
-        if (after != null) firstDate = after.add(const Duration(days: 1));
-        helpText = 'Date cover restarted after the break';
-    }
-    if (firstDate.isAfter(today)) {
-      _toast('The break dates must be after the policy start date and not in the future.');
-      return;
-    }
+    final current = policy.inceptionDate;
+    final firstDate = DateTime(1970);
+    const helpText = 'Policy start date (first start)';
     final initialDate = (current != null && !current.isAfter(today) && !current.isBefore(firstDate))
         ? current
         : today;
@@ -117,26 +90,7 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
 
     if (picked == null) return;
 
-    setState(() {
-      switch (kind) {
-        case _PolicyDate.inception:
-          policy.inceptionDate = picked;
-          // Keep the break dates consistent with a changed start date.
-          if (policy.breakStartDate != null && policy.breakStartDate!.isBefore(picked)) {
-            policy.breakStartDate = null;
-          }
-          if (policy.restartDate != null && !policy.restartDate!.isAfter(picked)) {
-            policy.restartDate = null;
-          }
-        case _PolicyDate.breakStart:
-          policy.breakStartDate = picked;
-          if (policy.restartDate != null && !policy.restartDate!.isAfter(picked)) {
-            policy.restartDate = null;
-          }
-        case _PolicyDate.restart:
-          policy.restartDate = picked;
-      }
-    });
+    setState(() => policy.inceptionDate = picked);
   }
 
   /// What is still missing for [policy], or null when its continuity answers are complete.
@@ -147,17 +101,6 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
     if (policy.renewedWithoutBreak == null) {
       return 'Please answer whether ${policy.fileName} was renewed every year without a break.';
     }
-    if (policy.renewedWithoutBreak == false) {
-      if (policy.breakStartDate == null) {
-        return 'Please select the date the break started for ${policy.fileName}.';
-      }
-      if (policy.restartDate == null) {
-        return 'Please select the date cover restarted after the break for ${policy.fileName}.';
-      }
-      if (!policy.restartDate!.isAfter(policy.breakStartDate!)) {
-        return 'For ${policy.fileName}, cover must restart after the date the break started.';
-      }
-    }
     return null;
   }
 
@@ -165,13 +108,14 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
   Future<void> _syncContinuity(_UploadedPolicy policy) async {
     try {
       // Answers that do not apply are sent as null so an earlier answer is cleared.
-      final hadBreak = policy.isRenewal == true && policy.renewedWithoutBreak == false;
+      // Break dates are no longer asked: after a break, the analysis counts cover
+      // from the uploaded policy document's start date.
       await ApiClient().dio.put('/policies/${policy.policyId}', data: {
         'inceptionDate': policy.inceptionDate!.toIso8601String(),
         'isRenewal': policy.isRenewal,
         'continuousRenewal': policy.isRenewal == true ? policy.renewedWithoutBreak : null,
-        'breakStartDate': hadBreak ? policy.breakStartDate?.toIso8601String() : null,
-        'coverRestartDate': hadBreak ? policy.restartDate?.toIso8601String() : null,
+        'breakStartDate': null,
+        'coverRestartDate': null,
       });
     } catch (e) {
       debugPrint("Failed to save policy continuity details: $e");
@@ -612,7 +556,7 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
           _dateField(
             value: policy.inceptionDate,
             placeholder: 'Select policy start date *',
-            onTap: () => _pickDate(policy, _PolicyDate.inception),
+            onTap: () => _pickDate(policy),
             isDark: isDark,
             textColor: textColor,
             textSecondary: textSecondary,
@@ -650,38 +594,41 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
           ],
           if (policy.isRenewal == true && policy.renewedWithoutBreak == false) ...[
             const SizedBox(height: 12),
-            _fieldLabel('Date the break started *', textColor),
-            Text(
-              'The day cover lapsed, when the gap in renewals began.',
-              style: TextStyle(fontSize: 11.5, color: textSecondary),
-            ),
-            const SizedBox(height: 6),
-            _dateField(
-              value: policy.breakStartDate,
-              placeholder: 'Select break start date *',
-              onTap: () => _pickDate(policy, _PolicyDate.breakStart),
-              isDark: isDark,
-              textColor: textColor,
-              textSecondary: textSecondary,
-              primaryBlue: primaryBlue,
-            ),
-            const SizedBox(height: 12),
-            _fieldLabel('Date cover restarted after the break *', textColor),
-            Text(
-              'Waiting periods start again from this date.',
-              style: TextStyle(fontSize: 11.5, color: textSecondary),
-            ),
-            const SizedBox(height: 6),
-            _dateField(
-              value: policy.restartDate,
-              placeholder: 'Select restart date *',
-              onTap: () => _pickDate(policy, _PolicyDate.restart),
-              isDark: isDark,
-              textColor: textColor,
-              textSecondary: textSecondary,
-              primaryBlue: primaryBlue,
-            ),
+            _coverageGapNotice(isDark),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// Shown when a renewed policy had a break: cover is counted from the uploaded
+  /// policy's own start date instead of the first start date.
+  Widget _coverageGapNotice(bool isDark) {
+    const amber = Color(0xFFD97706);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: amber.withValues(alpha: isDark ? 0.15 : 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: amber.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, size: 18, color: amber),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'You have a coverage gap in your policy continuity. So the coverage analysis will check '
+              'your prescription against this policy from the start date of the uploaded policy document.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: isDark ? const Color(0xFFFCD34D) : const Color(0xFF92400E),
+              ),
+            ),
+          ),
         ],
       ),
     );
