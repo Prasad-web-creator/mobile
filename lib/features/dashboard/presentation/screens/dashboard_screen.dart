@@ -365,6 +365,9 @@ class DashboardScreen extends ConsumerWidget {
     } else if (statusLower == 'not covered' || statusLower == 'rejected' || statusLower == 'likely not covered') {
       statusColor = const Color(0xFFDC2626);
       statusBgColor = isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFEF2F2);
+    } else if (statusLower == 'needs verification') {
+      statusColor = const Color(0xFF7C3AED);
+      statusBgColor = isDark ? const Color(0xFF4C1D95) : const Color(0xFFF5F3FF);
     } else if (statusLower.startsWith('invalid')) {
       statusColor = const Color(0xFFD97706);
       statusBgColor = isDark ? const Color(0xFF78350F) : const Color(0xFFFEF3C7);

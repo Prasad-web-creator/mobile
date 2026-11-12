@@ -501,6 +501,8 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
       final lower = policy.overallStatus.toLowerCase();
       if (lower.contains('not covered') || lower.contains('rejected')) {
         color = Colors.redAccent;
+      } else if (lower.contains('verification')) {
+        color = const Color(0xFF7C3AED);
       } else if (lower.contains('partial')) {
         color = Colors.orange;
       } else {

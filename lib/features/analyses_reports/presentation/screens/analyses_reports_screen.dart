@@ -613,6 +613,10 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen> {
       bg = const Color(0xFFFEE2E2);
       fg = const Color(0xFFDC2626);
       icon = Icons.cancel_rounded;
+    } else if (lower.contains('verification')) {
+      bg = const Color(0xFFF5F3FF);
+      fg = const Color(0xFF7C3AED);
+      icon = Icons.fact_check_outlined;
     } else if (lower.contains('needs your input') ||
         lower.contains('partial') ||
         lower.contains('manual review') ||
@@ -665,6 +669,10 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen> {
       bg = const Color(0xFFFEE2E2);
       fg = const Color(0xFFDC2626);
       icon = Icons.cancel_rounded;
+    } else if (lower.contains('verification')) {
+      bg = const Color(0xFFF5F3FF);
+      fg = const Color(0xFF7C3AED);
+      icon = Icons.fact_check_outlined;
     } else if (lower.contains('needs your input') || lower.contains('manual review') || lower.contains('review')) {
       bg = const Color(0xFFFEF3C7);
       fg = const Color(0xFFD97706);

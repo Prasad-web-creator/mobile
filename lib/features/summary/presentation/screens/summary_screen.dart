@@ -11,6 +11,11 @@ import 'package:claimsupport/features/summary/presentation/widgets/summary_info_
 
 import 'package:claimsupport/features/dashboard/presentation/controllers/dashboard_controller.dart';
 
+/// Status of an item whose coverage depends on a detail not yet known
+/// (for example eye power in dioptres for LASIK).
+const String _needsVerification = 'Needs Verification';
+const Color _verifyPurple = Color(0xFF7C3AED);
+
 class SummaryScreen extends ConsumerStatefulWidget {
   final String? reportId;
   const SummaryScreen({super.key, this.reportId});
@@ -75,6 +80,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
     final Color successGreen = const Color(0xFF059669);
     final Color dangerRed = const Color(0xFFDC2626);
     final Color warningAmber = const Color(0xFFD97706);
+    const Color verifyPurple = _verifyPurple;
 
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 400),
@@ -241,6 +247,11 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
           statusIcon = Icons.cancel;
           statusBg = isDark ? dangerRed.withAlpha(20) : const Color(0xFFFEF2F2);
           statusBorder = isDark ? dangerRed.withAlpha(50) : const Color(0xFFFECACA);
+        } else if (overallStatus == _needsVerification) {
+          statusColor = verifyPurple;
+          statusIcon = Icons.fact_check_outlined;
+          statusBg = isDark ? verifyPurple.withAlpha(20) : const Color(0xFFF5F3FF);
+          statusBorder = isDark ? verifyPurple.withAlpha(50) : const Color(0xFFDDD6FE);
         } else {
           statusColor = warningAmber;
           statusIcon = Icons.warning_amber_rounded;
@@ -616,14 +627,26 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                                         ),
                                       ),
                                       const SizedBox(height: 8),
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                        children: [
-                                          _buildBreakdownStat('Covered', coverageBreakdown['covered'] ?? 0, successGreen),
-                                          _buildBreakdownStat('Partial', coverageBreakdown['partiallyCovered'] ?? 0, warningAmber),
-                                          _buildBreakdownStat('Not Covered', coverageBreakdown['notCovered'] ?? 0, dangerRed),
-                                        ],
-                                      ),
+                                      if (_countOf(coverageBreakdown['needsVerification']) > 0)
+                                        // Four counts: equal columns so the longer label wraps instead of overflowing.
+                                        Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(child: _buildBreakdownStat('Covered', _countOf(coverageBreakdown['covered']), successGreen)),
+                                            Expanded(child: _buildBreakdownStat('Partial', _countOf(coverageBreakdown['partiallyCovered']), warningAmber)),
+                                            Expanded(child: _buildBreakdownStat('Not Covered', _countOf(coverageBreakdown['notCovered']), dangerRed)),
+                                            Expanded(child: _buildBreakdownStat(_needsVerification, _countOf(coverageBreakdown['needsVerification']), verifyPurple)),
+                                          ],
+                                        )
+                                      else
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                          children: [
+                                            _buildBreakdownStat('Covered', coverageBreakdown['covered'] ?? 0, successGreen),
+                                            _buildBreakdownStat('Partial', coverageBreakdown['partiallyCovered'] ?? 0, warningAmber),
+                                            _buildBreakdownStat('Not Covered', coverageBreakdown['notCovered'] ?? 0, dangerRed),
+                                          ],
+                                        ),
                                     ],
                                   ),
                                 ),
@@ -635,6 +658,17 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
+
+                    // Needs Verification: items whose coverage depends on a detail not yet known
+                    if (_verificationItems(comparison).isNotEmpty) ...[
+                      _buildVerificationCard(
+                        items: _verificationItems(comparison),
+                        isDark: isDark,
+                        textColor: textColor,
+                        textSecondary: textSecondary,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
 
                     // Policy Summary
                     if (policyJson.isNotEmpty)
@@ -994,9 +1028,11 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                                               style: TextStyle(
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w700,
-                                                color: isCovered
-                                                    ? successGreen
-                                                    : dangerRed,
+                                                color: _isNeedsVerification(item)
+                                                    ? verifyPurple
+                                                    : isCovered
+                                                        ? successGreen
+                                                        : dangerRed,
                                               ),
                                             ),
                                           ),
@@ -1037,13 +1073,19 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                         final isCovered = status == 'Covered';
                         final isPartial = status == 'Partially Covered';
                         final isReview = status == 'Manual Review';
+                        final isVerify = status == _needsVerification;
 
                         Color itemColor;
                         Color itemBg;
                         Color itemBorder;
                         IconData itemIcon;
 
-                        if (isCovered) {
+                        if (isVerify) {
+                          itemColor = verifyPurple;
+                          itemBg = isDark ? verifyPurple.withAlpha(15) : const Color(0xFFF5F3FF);
+                          itemBorder = isDark ? verifyPurple.withAlpha(40) : const Color(0xFFDDD6FE);
+                          itemIcon = Icons.fact_check_outlined;
+                        } else if (isCovered) {
                           itemColor = successGreen;
                           itemBg = isDark ? successGreen.withAlpha(15) : const Color(0xFFECFDF5);
                           itemBorder = isDark ? successGreen.withAlpha(40) : const Color(0xFFA7F3D0);
@@ -1383,6 +1425,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
         const SizedBox(height: 2),
         Text(
           label,
+          textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -1390,6 +1433,112 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  // ─── Helpers: "Needs Verification" items ───
+  int _countOf(dynamic value) {
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  bool _isNeedsVerification(dynamic item) {
+    if (item is! Map) return false;
+    return (item['coverageStatus'] ?? item['status'] ?? '').toString() == _needsVerification;
+  }
+
+  List<Map> _verificationItems(List<dynamic> comparison) =>
+      comparison.where(_isNeedsVerification).cast<Map>().toList();
+
+  // ─── Helper: card listing what must be verified before coverage is known ───
+  Widget _buildVerificationCard({
+    required List<Map> items,
+    required bool isDark,
+    required Color textColor,
+    required Color textSecondary,
+  }) {
+    final titleColor = isDark ? const Color(0xFFC4B5FD) : const Color(0xFF5B21B6);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? _verifyPurple.withAlpha(20) : const Color(0xFFF5F3FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? _verifyPurple.withAlpha(60) : const Color(0xFFDDD6FE),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: _verifyPurple, size: 22),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  _needsVerification,
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: titleColor),
+                ),
+              ),
+            ],
+          ),
+          for (int i = 0; i < items.length; i++) ...[
+            if (i > 0)
+              Divider(
+                height: 24,
+                color: isDark ? _verifyPurple.withAlpha(50) : const Color(0xFFDDD6FE),
+              )
+            else
+              const SizedBox(height: 12),
+            Builder(builder: (context) {
+              final item = items[i];
+              final name = (item['item'] ?? 'Prescribed Treatment').toString();
+              String condition = (item['verificationCondition'] ?? '').toString().trim();
+              if (condition.isEmpty) {
+                condition = (item['coverageStatusReason'] ?? item['explanation'] ?? item['reason'] ?? '')
+                    .toString()
+                    .trim();
+              }
+              final clause = (item['verificationClause'] ?? '').toString().trim();
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: textColor),
+                  ),
+                  if (condition.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      condition,
+                      style: TextStyle(fontSize: 13, color: textSecondary, height: 1.45),
+                    ),
+                  ],
+                  if (clause.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    RichText(
+                      text: TextSpan(
+                        style: TextStyle(fontSize: 12, color: titleColor, height: 1.4),
+                        children: [
+                          const TextSpan(
+                            text: 'Clause: ',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          TextSpan(text: clause),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            }),
+          ],
+        ],
+      ),
     );
   }
 

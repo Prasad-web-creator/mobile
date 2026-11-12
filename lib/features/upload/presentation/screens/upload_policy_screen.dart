@@ -24,7 +24,8 @@ class UploadPolicyScreen extends StatefulWidget {
 /// read from the document.
 ///
 /// The questions are asked in order, each only when the previous answer needs it:
-/// start date → new or renewed → (renewed) renewed every year without a break.
+/// new or renewed → start date (new) / first start date (renewed) →
+/// (renewed) renewed every year without a break.
 class _UploadedPolicy {
   _UploadedPolicy({
     required this.fileName,
@@ -44,6 +45,15 @@ class _UploadedPolicy {
   void clearAfterRenewalAnswer() {
     if (isRenewal != true) renewedWithoutBreak = null;
   }
+
+  /// Set new / renewed. The date means something different for each (the
+  /// policy's start date vs the very first start date), so a date picked for
+  /// the other answer is cleared and asked again.
+  void setRenewal(bool value) {
+    if (isRenewal != null && isRenewal != value) inceptionDate = null;
+    isRenewal = value;
+    clearAfterRenewalAnswer();
+  }
 }
 
 class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
@@ -59,7 +69,7 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
     final today = DateTime(now.year, now.month, now.day);
     final current = policy.inceptionDate;
     final firstDate = DateTime(1970);
-    const helpText = 'Policy start date (first start)';
+    final helpText = policy.isRenewal == true ? 'Date this policy was first taken' : 'Policy start date';
     final initialDate = (current != null && !current.isAfter(today) && !current.isBefore(firstDate))
         ? current
         : today;
@@ -95,8 +105,12 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
 
   /// What is still missing for [policy], or null when its continuity answers are complete.
   String? _missingAnswer(_UploadedPolicy policy) {
-    if (policy.inceptionDate == null) return 'Please select the policy start date for ${policy.fileName}.';
     if (policy.isRenewal == null) return 'Please answer whether ${policy.fileName} is a new or a renewed policy.';
+    if (policy.inceptionDate == null) {
+      return policy.isRenewal == true
+          ? 'Please select when ${policy.fileName} was first taken.'
+          : 'Please select the policy start date for ${policy.fileName}.';
+    }
     if (policy.isRenewal == false) return null;
     if (policy.renewedWithoutBreak == null) {
       return 'Please answer whether ${policy.fileName} was renewed every year without a break.';
@@ -546,23 +560,7 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          // Waiting periods are counted from this date, not from the current renewal.
-          _fieldLabel('Policy Start Date (when this policy was first taken) *', textColor),
-          Text(
-            'For a renewed policy, this is the very first start date, before any renewals.',
-            style: TextStyle(fontSize: 11.5, height: 1.35, color: textSecondary),
-          ),
-          const SizedBox(height: 6),
-          _dateField(
-            value: policy.inceptionDate,
-            placeholder: 'Select policy start date *',
-            onTap: () => _pickDate(policy),
-            isDark: isDark,
-            textColor: textColor,
-            textSecondary: textSecondary,
-            primaryBlue: primaryBlue,
-          ),
-          const SizedBox(height: 12),
+          // 1. New or renewed decides which date is asked next.
           _fieldLabel('Is this a new policy or a renewed policy? *', textColor),
           _twoChoice(
             value: policy.isRenewal,
@@ -570,15 +568,47 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
             firstValue: false,
             secondLabel: 'Renewed',
             secondValue: true,
-            onChanged: (v) => setState(() {
-              policy.isRenewal = v;
-              policy.clearAfterRenewalAnswer();
-            }),
+            onChanged: (v) => setState(() => policy.setRenewal(v)),
             primaryBlue: primaryBlue,
           ),
+          // 2. The date: the policy's start date (new), or the very first start date (renewed).
+          //    Waiting periods are counted from this date, not from the current renewal.
+          if (policy.isRenewal != null) ...[
+            const SizedBox(height: 12),
+            _fieldLabel(
+              policy.isRenewal == true
+                  ? 'When was this policy first taken? *'
+                  : 'Policy Start Date *',
+              textColor,
+            ),
+            Text(
+              policy.isRenewal == true
+                  ? 'The very first start date of this policy, before any renewals.'
+                  : 'The date this policy started, as shown on your policy document.',
+              style: TextStyle(fontSize: 11.5, height: 1.35, color: textSecondary),
+            ),
+            const SizedBox(height: 6),
+            _dateField(
+              value: policy.inceptionDate,
+              placeholder: policy.isRenewal == true ? 'Select first start date *' : 'Select policy start date *',
+              onTap: () => _pickDate(policy),
+              isDark: isDark,
+              textColor: textColor,
+              textSecondary: textSecondary,
+              primaryBlue: primaryBlue,
+            ),
+          ],
+          // 3. Renewed only: renewed every year without a break?
           if (policy.isRenewal == true) ...[
             const SizedBox(height: 12),
             _fieldLabel('Has this policy been renewed every year without a break? *', textColor),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                'Answer Yes if you moved from another insurance company without any gap (portability).',
+                style: TextStyle(fontSize: 11.5, height: 1.35, color: textSecondary),
+              ),
+            ),
             _twoChoice(
               value: policy.renewedWithoutBreak,
               firstLabel: 'Yes',

@@ -2,7 +2,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 /// A responsive, animated Donut Chart widget that visually represents
-/// the percentage breakdown of Covered, Partially Covered, and Not Covered claim items.
+/// the percentage breakdown of Covered, Partially Covered, Not Covered and
+/// Needs Verification claim items. The Needs Verification segment and legend
+/// row appear only when at least one item needs verification.
 class CoverageDonutChart extends StatefulWidget {
   final Map<String, dynamic>? coverageBreakdown;
   final bool isPolicyValid;
@@ -24,13 +26,15 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
   late AnimationController _animController;
   late Animation<double> _animation;
 
-  // Selected segment index: 0 = Covered, 1 = Partially Covered, 2 = Not Covered, null = none
+  // Selected segment index: 0 = Covered, 1 = Partially Covered, 2 = Not Covered,
+  // 3 = Needs Verification, null = none
   int? _selectedSegment;
 
   // Theme colors
   static const Color coveredColor = Color(0xFF059669); // Emerald Green
   static const Color partiallyCoveredColor = Color(0xFFD97706); // Amber / Orange
   static const Color notCoveredColor = Color(0xFFDC2626); // Danger Red
+  static const Color needsVerificationColor = Color(0xFF7C3AED); // Purple
 
   @override
   void initState() {
@@ -64,26 +68,30 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
     required int covered,
     required int partiallyCovered,
     required int notCovered,
+    int needsVerification = 0,
   }) {
-    final total = covered + partiallyCovered + notCovered;
+    final total = covered + partiallyCovered + notCovered + needsVerification;
     if (total == 0) {
-      return {'covered': 0, 'partiallyCovered': 0, 'notCovered': 0};
+      return {'covered': 0, 'partiallyCovered': 0, 'notCovered': 0, 'needsVerification': 0};
     }
 
     final double coveredPct = (covered / total) * 100;
     final double partialPct = (partiallyCovered / total) * 100;
     final double notCoveredPct = (notCovered / total) * 100;
+    final double verifyPct = (needsVerification / total) * 100;
 
     final int cFloor = coveredPct.floor();
     final int pFloor = partialPct.floor();
     final int nFloor = notCoveredPct.floor();
+    final int vFloor = verifyPct.floor();
 
-    final int remainder = 100 - (cFloor + pFloor + nFloor);
+    final int remainder = 100 - (cFloor + pFloor + nFloor + vFloor);
 
     final remainders = [
       MapEntry('covered', coveredPct - cFloor),
       MapEntry('partiallyCovered', partialPct - pFloor),
       MapEntry('notCovered', notCoveredPct - nFloor),
+      MapEntry('needsVerification', verifyPct - vFloor),
     ];
 
     // Sort descending by remainder
@@ -93,6 +101,7 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
       'covered': cFloor,
       'partiallyCovered': pFloor,
       'notCovered': nFloor,
+      'needsVerification': vFloor,
     };
 
     for (int i = 0; i < remainder && i < remainders.length; i++) {
@@ -121,7 +130,8 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
       final int coveredCount = _parseInt(breakdown['covered']);
       final int partiallyCoveredCount = _parseInt(breakdown['partiallyCovered']);
       final int notCoveredCount = _parseInt(breakdown['notCovered']);
-      final int totalEvaluated = coveredCount + partiallyCoveredCount + notCoveredCount;
+      final int verifyCount = _parseInt(breakdown['needsVerification']);
+      final int totalEvaluated = coveredCount + partiallyCoveredCount + notCoveredCount + verifyCount;
 
       final theme = Theme.of(context);
       final isDark = theme.brightness == Brightness.dark;
@@ -168,22 +178,26 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
         covered: coveredCount,
         partiallyCovered: partiallyCoveredCount,
         notCovered: notCoveredCount,
+        needsVerification: verifyCount,
       );
 
       final int coveredPct = percentages['covered'] ?? 0;
       final int partialPct = percentages['partiallyCovered'] ?? 0;
       final int notCoveredPct = percentages['notCovered'] ?? 0;
+      final int verifyPct = percentages['needsVerification'] ?? 0;
 
       // Angles in radians
       final double coveredAngle = (coveredCount / totalEvaluated) * 2 * math.pi;
       final double partialAngle = (partiallyCoveredCount / totalEvaluated) * 2 * math.pi;
       final double notCoveredAngle = (notCoveredCount / totalEvaluated) * 2 * math.pi;
+      final double verifyAngle = (verifyCount / totalEvaluated) * 2 * math.pi;
 
       return Semantics(
         label: 'Coverage Distribution Donut Chart: '
             '$coveredPct% Covered ($coveredCount items), '
             '$partialPct% Partially Covered ($partiallyCoveredCount items), '
-            '$notCoveredPct% Not Covered ($notCoveredCount items).',
+            '$notCoveredPct% Not Covered ($notCoveredCount items)'
+            '${verifyCount > 0 ? ', $verifyPct% Needs Verification ($verifyCount items)' : ''}.',
         child: Container(
           margin: const EdgeInsets.only(bottom: 24),
           padding: const EdgeInsets.all(20),
@@ -276,9 +290,11 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
                                 coveredAngle: coveredAngle * _animation.value,
                                 partialAngle: partialAngle * _animation.value,
                                 notCoveredAngle: notCoveredAngle * _animation.value,
+                                verifyAngle: verifyAngle * _animation.value,
                                 coveredColor: coveredColor,
                                 partialColor: partiallyCoveredColor,
                                 notCoveredColor: notCoveredColor,
+                                verifyColor: needsVerificationColor,
                                 strokeWidth: 22,
                                 highlightedIndex: _selectedSegment,
                               ),
@@ -293,6 +309,8 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
                               coveredCount: coveredCount,
                               partialCount: partiallyCoveredCount,
                               notCoveredCount: notCoveredCount,
+                              verifyPct: verifyPct,
+                              verifyCount: verifyCount,
                               totalEvaluated: totalEvaluated,
                             ),
                           ],
@@ -333,6 +351,18 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
                         index: 2,
                         isDark: isDark,
                       ),
+                      if (verifyCount > 0) ...[
+                        const SizedBox(height: 8),
+                        _buildLegendItem(
+                          context: context,
+                          label: 'Needs Verification',
+                          count: verifyCount,
+                          percentage: verifyPct,
+                          color: needsVerificationColor,
+                          index: 3,
+                          isDark: isDark,
+                        ),
+                      ],
                     ],
                   );
 
@@ -377,6 +407,8 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
     required int coveredCount,
     required int partialCount,
     required int notCoveredCount,
+    int verifyPct = 0,
+    int verifyCount = 0,
     required int totalEvaluated,
   }) {
     String title = 'Coverage';
@@ -399,6 +431,11 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
       value = '$notCoveredPct%';
       subtitle = '$notCoveredCount ${notCoveredCount == 1 ? "Item" : "Items"}';
       titleColor = notCoveredColor;
+    } else if (_selectedSegment == 3) {
+      title = 'Verify';
+      value = '$verifyPct%';
+      subtitle = '$verifyCount ${verifyCount == 1 ? "Item" : "Items"}';
+      titleColor = needsVerificationColor;
     }
 
     return GestureDetector(
@@ -547,9 +584,11 @@ class _DonutChartPainter extends CustomPainter {
   final double coveredAngle;
   final double partialAngle;
   final double notCoveredAngle;
+  final double verifyAngle;
   final Color coveredColor;
   final Color partialColor;
   final Color notCoveredColor;
+  final Color verifyColor;
   final double strokeWidth;
   final int? highlightedIndex;
 
@@ -557,9 +596,11 @@ class _DonutChartPainter extends CustomPainter {
     required this.coveredAngle,
     required this.partialAngle,
     required this.notCoveredAngle,
+    this.verifyAngle = 0,
     required this.coveredColor,
     required this.partialColor,
     required this.notCoveredColor,
+    this.verifyColor = const Color(0xFF7C3AED),
     required this.strokeWidth,
     this.highlightedIndex,
   });
@@ -574,6 +615,7 @@ class _DonutChartPainter extends CustomPainter {
       _SegmentData(coveredAngle, coveredColor, 0),
       _SegmentData(partialAngle, partialColor, 1),
       _SegmentData(notCoveredAngle, notCoveredColor, 2),
+      _SegmentData(verifyAngle, verifyColor, 3),
     ];
 
     final nonZeroSegments = segments.where((s) => s.angle > 0.001).toList();
@@ -621,6 +663,8 @@ class _DonutChartPainter extends CustomPainter {
     return oldDelegate.coveredAngle != coveredAngle ||
         oldDelegate.partialAngle != partialAngle ||
         oldDelegate.notCoveredAngle != notCoveredAngle ||
+        oldDelegate.verifyAngle != verifyAngle ||
+        oldDelegate.verifyColor != verifyColor ||
         oldDelegate.highlightedIndex != highlightedIndex ||
         oldDelegate.coveredColor != coveredColor ||
         oldDelegate.partialColor != partialColor ||
