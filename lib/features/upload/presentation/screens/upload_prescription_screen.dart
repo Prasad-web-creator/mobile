@@ -47,8 +47,13 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
 
   String? _formatDisplayDate(dynamic dateVal) {
     if (dateVal == null) return null;
-    final str = dateVal.toString().trim();
+    var str = dateVal.toString().trim();
     if (str.isEmpty || str.toLowerCase() == 'null') return null;
+    // e.g. "15-Jan-2026 00:00 Hrs" -> "15-Jan-2026"
+    str = str.replaceAll(
+      RegExp(r'\s+\d{1,2}:\d{2}(:\d{2})?\s*(hrs|hours)?\.?$', caseSensitive: false),
+      '',
+    );
 
     try {
       final parsed = DateTime.tryParse(str);
@@ -421,11 +426,13 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                                     children: [
                                       Icon(Icons.tag, size: 14, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                                       const SizedBox(width: 4),
-                                      Text(
-                                        "No: $policyNo",
-                                        style: TextStyle(
-                                          fontSize: 12.5,
-                                          color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                                      Expanded(
+                                        child: Text(
+                                          "No: $policyNo",
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -436,11 +443,13 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                                       children: [
                                         Icon(Icons.calendar_today_outlined, size: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                                         const SizedBox(width: 4),
-                                        Text(
-                                          "Validity: $formattedStart to $formattedEnd",
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                        Expanded(
+                                          child: Text(
+                                            "Validity: $formattedStart to $formattedEnd",
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -451,11 +460,13 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                                       children: [
                                         Icon(Icons.calendar_today_outlined, size: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                                         const SizedBox(width: 4),
-                                        Text(
-                                          "Start Date: $formattedStart",
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                        Expanded(
+                                          child: Text(
+                                            "Start Date: $formattedStart",
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -466,11 +477,13 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                                       children: [
                                         Icon(Icons.event_busy_outlined, size: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                                         const SizedBox(width: 4),
-                                        Text(
-                                          "Expiry: $formattedEnd",
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                        Expanded(
+                                          child: Text(
+                                            "Expiry: $formattedEnd",
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                            ),
                                           ),
                                         ),
                                       ],

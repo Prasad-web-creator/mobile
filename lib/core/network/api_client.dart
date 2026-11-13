@@ -1,4 +1,7 @@
+import 'dart:io' show HttpClient;
+
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'auth_interceptor.dart';
 import 'package:flutter/foundation.dart';
 import 'retry_interceptor.dart';
@@ -19,6 +22,14 @@ class ApiClient {
       sendTimeout: const Duration(seconds: 120),
       receiveTimeout: const Duration(seconds: 600),  // 10 min — covers multi-page parallel OCR
     ));
+
+    // The server closes idle keep-alive connections after 5 s, while Dart keeps
+    // them for 15 s by default. Reusing one the server already closed fails with
+    // "Connection closed before full header was received". Drop idle
+    // connections sooner than the server does so a closed one is never reused.
+    dio.httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () => HttpClient()..idleTimeout = const Duration(seconds: 3),
+    );
 
     dio.interceptors.add(AuthInterceptor());
     dio.interceptors.add(RetryInterceptor(dio: dio));

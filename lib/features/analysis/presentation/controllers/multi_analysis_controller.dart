@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'dart:developer' as developer;
 
 import 'package:claimsupport/features/analysis/data/models/multi_analysis_session.dart';
+import 'package:claimsupport/features/analysis/data/repositories/analysis_repository.dart';
 import 'package:claimsupport/features/analysis/presentation/controllers/analysis_controller.dart';
 
 class MultiAnalysisParams {
@@ -32,6 +33,23 @@ class MultiAnalysisNotifier extends Notifier<AsyncValue<MultiAnalysisSession>> {
   MultiAnalysisParams? _params;
   bool _disposed = false;
   bool _polling = false;
+
+  /// Policies whose answer/retry request has been sent but not yet confirmed
+  /// by the server, with the "restarted" row to show meanwhile. A poll that
+  /// was read just before the server received the request must not bring the
+  /// already-answered question back (answering it twice made the policy fail).
+  final Map<String, PolicyAnalysisResult> _inFlight = {};
+
+  /// Publish a server snapshot, keeping in-flight policies in their restarted state.
+  void _publish(MultiAnalysisSession session) {
+    if (_disposed) return;
+    final overrides = <String, PolicyAnalysisResult>{};
+    for (final p in session.policyAnalyses) {
+      final local = _inFlight[p.policyId];
+      if (local != null && (p.isWaitingForUser || p.isFailed)) overrides[p.policyId] = local;
+    }
+    state = AsyncValue.data(session.withPolicies(overrides));
+  }
 
   MultiAnalysisParams? get params => _params;
 
@@ -98,10 +116,10 @@ class MultiAnalysisNotifier extends Notifier<AsyncValue<MultiAnalysisSession>> {
           if (_disposed) break;
 
           consecutiveFailures = 0;
-          final session = MultiAnalysisSession.fromJson(result);
-          state = AsyncValue.data(session);
+          _publish(MultiAnalysisSession.fromJson(result));
+          final session = state.asData!.value;
 
-          if (!session.isWorking) {
+          if (!session.isWorking && _inFlight.isEmpty) {
             developer.log('[MultiAnalysis] session=$sessionId settled '
                 'status=${session.status} '
                 '${session.completedCount}/${session.policyCount} finished');
@@ -125,57 +143,69 @@ class MultiAnalysisNotifier extends Notifier<AsyncValue<MultiAnalysisSession>> {
   }
 
   /// Answer one policy's clarification questions. Other policies keep their results.
+  ///
+  /// The server only records the answers and re-analyses this policy in the
+  /// background, so the request returns quickly; progress is then followed by
+  /// polling like the rest of the comparison.
   Future<void> submitPolicyAnswers(String policyId, Map<String, dynamic> answers) async {
-    final current = state.asData?.value;
-    if (current == null) return;
-
-    _cancelToken = CancelToken();
-    developer.log('[MultiAnalysis] answering policy=$policyId');
-
-    // Reflect the restart straight away, then let polling report the real
-    // stages as the server works through them. The other policies' results stay
-    // on screen throughout.
-    state = AsyncValue.data(current.withPolicyRestarted(policyId, 'reanalyzing'));
-    unawaited(_followProgress(current.sessionId));
-
-    try {
-      final repository = ref.read(analysisRepositoryProvider);
-      final result = await repository.submitPolicyAnswers(
-        current.sessionId,
-        policyId,
-        answers,
-        cancelToken: _cancelToken!,
-      );
-      if (!_disposed) state = AsyncValue.data(MultiAnalysisSession.fromJson(result));
-    } catch (e, st) {
-      developer.log('[MultiAnalysis] answer error: $e');
-      if (!_disposed && state.asData?.value == null) state = AsyncValue.error(e, st);
-    }
+    await _restartPolicy(
+      policyId,
+      'reanalyzing',
+      (repository, sessionId, token) =>
+          repository.submitPolicyAnswers(sessionId, policyId, answers, cancelToken: token),
+      'answer',
+    );
   }
 
   /// Retry a single failed policy. Successful policies are untouched.
   Future<void> retryPolicy(String policyId) async {
+    await _restartPolicy(
+      policyId,
+      'queued',
+      (repository, sessionId, token) =>
+          repository.retryPolicy(sessionId, policyId, cancelToken: token),
+      'retry',
+    );
+  }
+
+  Future<void> _restartPolicy(
+    String policyId,
+    String restartStatus,
+    Future<Map<String, dynamic>> Function(AnalysisRepository repository, String sessionId, CancelToken token)
+        send,
+    String action,
+  ) async {
     final current = state.asData?.value;
-    if (current == null) return;
+    if (current == null || _inFlight.containsKey(policyId)) return;
 
-    _cancelToken = CancelToken();
-    developer.log('[MultiAnalysis] retrying policy=$policyId');
+    final token = CancelToken();
+    _cancelToken = token;
+    developer.log('[MultiAnalysis] $action policy=$policyId');
 
-    state = AsyncValue.data(current.withPolicyRestarted(policyId, 'queued'));
-    unawaited(_followProgress(current.sessionId));
+    // Reflect the restart straight away; the other policies' results stay on
+    // screen throughout.
+    final restarted = current.withPolicyRestarted(policyId, restartStatus);
+    final row = restarted.policyAnalyses.where((p) => p.policyId == policyId).firstOrNull;
+    if (row != null) _inFlight[policyId] = row;
+    state = AsyncValue.data(restarted);
 
     try {
       final repository = ref.read(analysisRepositoryProvider);
-      final result = await repository.retryPolicy(
-        current.sessionId,
-        policyId,
-        cancelToken: _cancelToken!,
-      );
-      if (!_disposed) state = AsyncValue.data(MultiAnalysisSession.fromJson(result));
-    } catch (e, st) {
-      developer.log('[MultiAnalysis] retry error: $e');
-      if (!_disposed && state.asData?.value == null) state = AsyncValue.error(e, st);
+      final result = await send(repository, current.sessionId, token);
+      _inFlight.remove(policyId);
+      _publish(MultiAnalysisSession.fromJson(result));
+    } catch (e) {
+      developer.log('[MultiAnalysis] $action error: $e');
+      _inFlight.remove(policyId);
+      // Show the server's real state for this policy rather than a guess.
+      try {
+        final repository = ref.read(analysisRepositoryProvider);
+        _publish(MultiAnalysisSession.fromJson(
+          await repository.fetchMultiAnalysis(current.sessionId),
+        ));
+      } catch (_) {}
     }
+    if (!_disposed) unawaited(_followProgress(current.sessionId));
   }
 
   /// Re-read the session, e.g. after the user returns to the screen.
@@ -184,9 +214,8 @@ class MultiAnalysisNotifier extends Notifier<AsyncValue<MultiAnalysisSession>> {
       final repository = ref.read(analysisRepositoryProvider);
       final result = await repository.fetchMultiAnalysis(sessionId);
       if (_disposed) return;
-      final session = MultiAnalysisSession.fromJson(result);
-      state = AsyncValue.data(session);
-      if (session.isWorking) unawaited(_followProgress(sessionId));
+      _publish(MultiAnalysisSession.fromJson(result));
+      if (state.asData?.value.isWorking ?? false) unawaited(_followProgress(sessionId));
     } catch (e, st) {
       if (!_disposed) state = AsyncValue.error(e, st);
     }

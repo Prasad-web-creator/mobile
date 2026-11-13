@@ -59,21 +59,28 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
         );
   }
 
-  void _maybeShowClarification(MultiAnalysisSession session) {
+  /// Show the questions of [target] (when the user taps that policy's
+  /// "Answer question"), or of the first policy that is waiting.
+  void _maybeShowClarification(MultiAnalysisSession session, {PolicyAnalysisResult? target}) {
     if (_dialogShowing || !mounted) return;
-    final pending = session.pendingClarification;
+    final pending = (target != null && target.isWaitingForUser && target.questions.isNotEmpty)
+        ? target
+        : session.pendingClarification;
     if (pending == null) return;
 
     _dialogShowing = true;
     _answeringPolicyId = pending.policyId;
 
-    // With several policies in flight, say plainly which one is asking and
-    // whether another policy is still waiting behind this one.
-    final waiting = session.policyAnalyses.where((p) => p.isWaitingForUser).toList();
-    final position = waiting.indexWhere((p) => p.policyId == pending.policyId) + 1;
-    final queueLabel = waiting.length > 1
-        ? 'Policy $position of ${waiting.length} waiting for your input'
-        : null;
+    // With several policies in flight, say plainly which one is asking (by its
+    // number in this comparison) and which others still have questions.
+    final othersWaiting = session.policyAnalyses
+        .where((p) => p.isWaitingForUser && p.policyId != pending.policyId)
+        .map((p) => p.queueNumber)
+        .toList();
+    final queueLabel = othersWaiting.isEmpty
+        ? null
+        : 'Next: ${othersWaiting.map((n) => 'Policy $n').join(', ')} '
+            '${othersWaiting.length == 1 ? 'also has' : 'also have'} questions.';
 
     showDialog<void>(
       context: context,
@@ -83,6 +90,11 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
         contextLabel: pending.displayName,
         contextSubLabel: pending.insuranceCompany,
         queueLabel: queueLabel,
+        // Numbers only mean something when several policies are compared.
+        policyNumber: (session.policyCount > 1 && pending.queueNumber > 0)
+            ? pending.queueNumber
+            : null,
+        policyCount: session.policyCount,
         onSubmit: (answers) {
           Navigator.of(dialogContext).pop();
           _dialogShowing = false;
@@ -131,7 +143,12 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
           }
         }
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _maybeShowClarification(session);
+          if (!mounted) return;
+          // Use the state as it is NOW, not the snapshot this callback was
+          // scheduled with: if the user submitted answers in between, that
+          // snapshot still shows the question and would open it again.
+          final latest = ref.read(multiAnalysisJobProvider).asData?.value;
+          if (latest != null) _maybeShowClarification(latest);
         });
       });
     });
@@ -275,13 +292,23 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => context.go('/dashboard'),
+            ElevatedButton.icon(
+              onPressed: () {
+                // Same prescription and policies as before.
+                _started = false;
+                _start();
+              },
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Try again'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _primaryBlue,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => context.go('/dashboard'),
               child: const Text('Back to Dashboard'),
             ),
           ],
@@ -382,8 +409,10 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
         border: Border.all(
           color: isBest
               ? _primaryBlue
-              : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-          width: isBest ? 1.5 : 1.0,
+              : policy.isWaitingForUser
+                  ? Colors.orange
+                  : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+          width: (isBest || policy.isWaitingForUser) ? 1.5 : 1.0,
         ),
       ),
       child: Column(
@@ -391,10 +420,27 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
         children: [
           Row(
             children: [
+              if (policy.queueNumber > 0) ...[
+                _QueueNumberBadge(
+                  number: policy.queueNumber,
+                  color: policy.isWaitingForUser ? Colors.orange : _primaryBlue,
+                ),
+                const SizedBox(width: 10),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(
+                      policy.queueLabel,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
+                        color: subColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
                     Row(
                       children: [
                         Flexible(
@@ -461,7 +507,7 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
             children: [
               if (policy.isWaitingForUser)
                 TextButton.icon(
-                  onPressed: () => _maybeShowClarification(session),
+                  onPressed: () => _maybeShowClarification(session, target: policy),
                   icon: const Icon(Icons.help_outline, size: 16),
                   label: const Text('Answer question'),
                   style: TextButton.styleFrom(foregroundColor: _primaryBlue),
@@ -475,7 +521,10 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
                   style: TextButton.styleFrom(foregroundColor: Colors.orange),
                 ),
               const Spacer(),
-              if (policy.hasReport)
+              // Reports open only once the whole comparison has finished: every
+              // policy completed, in manual review, or failed. A policy still
+              // running or waiting for an answer keeps all reports hidden.
+              if (policy.hasReport && session.isSettled)
                 TextButton.icon(
                   onPressed: () => _openReport(policy.reportId),
                   icon: const Icon(Icons.arrow_forward, size: 16),
@@ -521,6 +570,32 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
       child: Text(
         policy.statusLabel,
         style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+      ),
+    );
+  }
+}
+
+/// Round badge with a policy's temporary number in this comparison.
+class _QueueNumberBadge extends StatelessWidget {
+  const _QueueNumberBadge({required this.number, required this.color});
+
+  final int number;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 30,
+      height: 30,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color.withAlpha(31),
+        shape: BoxShape.circle,
+        border: Border.all(color: color, width: 1.2),
+      ),
+      child: Text(
+        '$number',
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color),
       ),
     );
   }

@@ -630,6 +630,10 @@ class ClarificationDialog extends StatefulWidget {
   /// waiting, so the user knows another question follows.
   final String? queueLabel;
 
+  /// Temporary number of the asking policy in a comparison (e.g. 2 of 4).
+  final int? policyNumber;
+  final int? policyCount;
+
   const ClarificationDialog({
     super.key,
     required this.clarificationData,
@@ -638,6 +642,8 @@ class ClarificationDialog extends StatefulWidget {
     this.contextLabel,
     this.contextSubLabel,
     this.queueLabel,
+    this.policyNumber,
+    this.policyCount,
   });
 
   @override
@@ -800,6 +806,29 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
                             color: textColor,
                           ),
                         ),
+                        // Multi-policy comparison only: which policy (by its
+                        // number on the comparison screen) is asking.
+                        if (widget.policyNumber != null) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withAlpha(36),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.orange),
+                            ),
+                            child: Text(
+                              (widget.policyCount ?? 0) > 1
+                                  ? 'Policy ${widget.policyNumber} of ${widget.policyCount}'
+                                  : 'Policy ${widget.policyNumber}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.deepOrange,
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 2),
                         Text(
                           widget.contextLabel != null
@@ -830,14 +859,36 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.shield_outlined, size: 18, color: primaryColor),
+                    if (widget.policyNumber != null)
+                      Container(
+                        width: 32,
+                        height: 32,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: primaryColor,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '${widget.policyNumber}',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      )
+                    else
+                      Icon(Icons.shield_outlined, size: 18, color: primaryColor),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Asked about this policy',
+                            widget.policyNumber != null
+                                ? 'Asked about Policy ${widget.policyNumber}'
+                                    '${(widget.policyCount ?? 0) > 1 ? ' of ${widget.policyCount}' : ''}'
+                                : 'Asked about this policy',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,

@@ -8,9 +8,22 @@ class RetryInterceptor extends Interceptor {
 
   RetryInterceptor({this.maxRetries = 3, required this.dio});
 
+  /// The request went out on a kept-alive connection the server had already
+  /// closed, so the server never received it — safe to send again, even a POST.
+  bool _isStaleConnection(DioException err) {
+    if (err.type != DioExceptionType.connectionError &&
+        err.type != DioExceptionType.unknown) {
+      return false;
+    }
+    final text = '${err.error ?? ''} ${err.message ?? ''}';
+    return text.contains('Connection closed before full header was received');
+  }
+
   bool _shouldRetry(DioException err) {
     if (err.requestOptions.method != 'GET' && err.requestOptions.method != 'HEAD') {
-      return false; // Only retry idempotent requests
+      // Only retry idempotent requests — except a send on a dead connection,
+      // retried once.
+      return _isStaleConnection(err) && (err.requestOptions.extra['retryCount'] ?? 0) < 1;
     }
 
     if (err.type == DioExceptionType.connectionTimeout ||

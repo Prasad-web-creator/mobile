@@ -3,6 +3,10 @@
 /// Mirrors the payload returned by `/analysis/start-multi` and
 /// `/analysis/multi/{sessionId}`: one prescription, N independent policy results.
 class PolicyAnalysisResult {
+  /// Temporary number for this comparison (1, 2, 3…), in the order the user
+  /// selected/uploaded the policies. Lets the app say which policy a question
+  /// belongs to even while every row is still called "Uploaded Policy".
+  final int queueNumber;
   final String policyId;
   final String policyName;
   final String insuranceCompany;
@@ -24,6 +28,7 @@ class PolicyAnalysisResult {
   final int totalSteps;
 
   const PolicyAnalysisResult({
+    required this.queueNumber,
     required this.policyId,
     required this.policyName,
     required this.insuranceCompany,
@@ -42,8 +47,9 @@ class PolicyAnalysisResult {
     required this.totalSteps,
   });
 
-  factory PolicyAnalysisResult.fromJson(Map<String, dynamic> json) {
+  factory PolicyAnalysisResult.fromJson(Map<String, dynamic> json, {int fallbackNumber = 0}) {
     return PolicyAnalysisResult(
+      queueNumber: (json['queueNumber'] as num?)?.toInt() ?? fallbackNumber,
       policyId: json['policyId']?.toString() ?? '',
       policyName: json['policyName']?.toString() ?? '',
       insuranceCompany: json['insuranceCompany']?.toString() ?? '',
@@ -89,6 +95,7 @@ class PolicyAnalysisResult {
   /// its steps are finished any more.
   PolicyAnalysisResult restarted(String newStatus) {
     return PolicyAnalysisResult(
+      queueNumber: queueNumber,
       policyId: policyId,
       policyName: policyName,
       insuranceCompany: insuranceCompany,
@@ -107,6 +114,9 @@ class PolicyAnalysisResult {
       totalSteps: totalSteps,
     );
   }
+
+  /// "Policy 2" — the temporary number shown on the card and in questions.
+  String get queueLabel => queueNumber > 0 ? 'Policy $queueNumber' : 'Policy';
 
   String get displayName {
     if (policyName.trim().isNotEmpty) return policyName.trim();
@@ -172,7 +182,12 @@ class MultiAnalysisSession {
       status: json['status']?.toString() ?? 'queued',
       policyCount: (json['policyCount'] as num?)?.toInt() ?? 0,
       policyAnalyses: ((json['policyAnalyses'] as List?) ?? const [])
-          .map((e) => PolicyAnalysisResult.fromJson(Map<String, dynamic>.from(e as Map)))
+          .asMap()
+          .entries
+          .map((e) => PolicyAnalysisResult.fromJson(
+                Map<String, dynamic>.from(e.value as Map),
+                fallbackNumber: e.key + 1,
+              ))
           .toList(),
       comparisonSummary: Map<String, dynamic>.from(
           (json['comparisonSummary'] as Map?) ?? const {}),
@@ -195,6 +210,24 @@ class MultiAnalysisSession {
   bool get isSettled => policyAnalyses.every((p) => p.isDone);
   int get completedCount => policyAnalyses.where((p) => p.isDone).length;
   String get bestPolicyId => comparisonSummary['bestPolicyId']?.toString() ?? '';
+
+  /// The same session with the given policies replaced by [overrides]
+  /// (matched by policy id); every other field is unchanged.
+  MultiAnalysisSession withPolicies(Map<String, PolicyAnalysisResult> overrides) {
+    if (overrides.isEmpty) return this;
+    return MultiAnalysisSession(
+      sessionId: sessionId,
+      prescriptionId: prescriptionId,
+      status: status,
+      policyCount: policyCount,
+      policyAnalyses:
+          policyAnalyses.map((p) => overrides[p.policyId] ?? p).toList(),
+      comparisonSummary: comparisonSummary,
+      prescription: prescription,
+      errorMessage: errorMessage,
+      progress: progress,
+    );
+  }
 
   /// The same session with one policy marked as started again — used the moment
   /// the user answers or retries, so the screen reacts without claiming any
