@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
@@ -19,65 +21,111 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
   bool _otpSent = false;
+  bool _loading = false;
+  int _resendSeconds = 0;
+  Timer? _resendTimer;
 
-  void _sendOtp() {
+  @override
+  void dispose() {
+    _resendTimer?.cancel();
+    _phoneController.dispose();
+    _otpController.dispose();
+    super.dispose();
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _errorFrom(DioException e, String fallback) {
+    final data = e.response?.data;
+    if (data is Map) {
+      final detail = data['detail'] ?? data['message'];
+      if (detail is String && detail.isNotEmpty) return detail;
+      if (detail != null) return 'Please check the details and try again.';
+    }
+    return fallback;
+  }
+
+  void _startResendTimer() {
+    _resendTimer?.cancel();
+    setState(() => _resendSeconds = 30);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return timer.cancel();
+      setState(() => _resendSeconds--);
+      if (_resendSeconds <= 0) timer.cancel();
+    });
+  }
+
+  /// Asks the backend to send an OTP. Whether a real SMS goes out is decided on the
+  /// server (OTP_PROVIDER); in the current "static" mode the OTP is 1234.
+  Future<void> _sendOtp() async {
     final phoneRegex = RegExp(r'^[0-9]{1,10}$');
 
     if (_phoneController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your mobile number.')),
-      );
+      _showMessage('Please enter your mobile number.');
       return;
     }
 
     if (!phoneRegex.hasMatch(_phoneController.text)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid mobile number (1-10 digits).')),
-      );
+      _showMessage('Please enter a valid mobile number (1-10 digits).');
       return;
     }
 
-    setState(() {
-      _otpSent = true;
-    });
+    setState(() => _loading = true);
+    try {
+      await ApiClient().dio.post('/auth/send-otp', data: {
+        'phone': _phoneController.text,
+        'purpose': 'login',
+      });
+      if (!mounted) return;
+      setState(() {
+        _otpSent = true;
+        _otpController.clear();
+      });
+      _startResendTimer();
+      _showMessage('OTP sent to ${_phoneController.text}');
+    } on DioException catch (e) {
+      _showMessage(_errorFrom(e, 'Could not send OTP. Please try again.'));
+    } catch (e) {
+      _showMessage(e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
-  void _verifyOtp() async {
-    if (_otpController.text == '1234') {
-      try {
-        final response = await ApiClient().dio.post('/auth/login', data: {
-          'phone': _phoneController.text,
-          'otp': _otpController.text,
-        });
+  /// The OTP is verified by the backend, not in the app.
+  Future<void> _verifyOtp() async {
+    if (_otpController.text.isEmpty) {
+      _showMessage('Please enter the OTP.');
+      return;
+    }
 
-        if (response.statusCode == 200) {
-          final token = response.data['token'];
-          final refreshToken = response.data['refreshToken'];
-          await AuthStorage.saveToken(token);
-          if (refreshToken != null) {
-            await AuthStorage.saveRefreshToken(refreshToken);
-          }
-          AuthInterceptor.resetSessionExpiredFlag();
-          ref.invalidate(authProvider);
-          if (mounted) context.go('/dashboard');
+    setState(() => _loading = true);
+    try {
+      final response = await ApiClient().dio.post('/auth/login', data: {
+        'phone': _phoneController.text,
+        'otp': _otpController.text,
+      });
+
+      if (response.statusCode == 200) {
+        final token = response.data['token'];
+        final refreshToken = response.data['refreshToken'];
+        await AuthStorage.saveToken(token);
+        if (refreshToken != null) {
+          await AuthStorage.saveRefreshToken(refreshToken);
         }
-      } on DioException catch (e) {
-        String errorMsg = 'Login failed';
-        if (e.response != null && e.response?.data != null) {
-          errorMsg = e.response?.data['detail'] ?? e.response?.data['message'] ?? errorMsg;
-        }
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg)));
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-        }
+        AuthInterceptor.resetSessionExpiredFlag();
+        ref.invalidate(authProvider);
+        if (mounted) context.go('/dashboard');
       }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid OTP. Use 1234 for testing.')),
-      );
+    } on DioException catch (e) {
+      _showMessage(_errorFrom(e, 'Login failed'));
+    } catch (e) {
+      _showMessage(e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -178,7 +226,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     color: textColor,
                   ),
                   decoration: InputDecoration(
-                    hintText: _otpSent ? '0000' : '9876543210',
+                    hintText: _otpSent ? 'Enter OTP' : '9876543210',
                     hintStyle: TextStyle(
                       color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
                     ),
@@ -216,26 +264,53 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ],
                 ),
                 child: ElevatedButton(
-                  onPressed: _otpSent ? _verifyOtp : _sendOtp,
+                  onPressed: _loading ? null : (_otpSent ? _verifyOtp : _sendOtp),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryBlue,
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: primaryBlue.withAlpha(150),
+                    disabledForegroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  child: Text(
-                    _otpSent ? 'Verify OTP & Login' : 'Send OTP',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  child: _loading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                        )
+                      : Text(
+                          _otpSent ? 'Verify OTP & Login' : 'Send OTP',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                 ),
               ),
-              
+
+              if (_otpSent) ...[
+                const SizedBox(height: 16),
+                Center(
+                  child: _resendSeconds > 0
+                      ? Text(
+                          'Resend OTP in ${_resendSeconds}s',
+                          style: TextStyle(color: textSecondaryColor, fontSize: 14),
+                        )
+                      : TextButton(
+                          onPressed: _loading ? null : _sendOtp,
+                          style: TextButton.styleFrom(foregroundColor: primaryBlue),
+                          child: const Text(
+                            'Resend OTP',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                ),
+              ],
+
               const SizedBox(height: 48),
               
               
@@ -276,8 +351,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Center(
                   child: TextButton(
                     onPressed: () {
+                      _resendTimer?.cancel();
                       setState(() {
                         _otpSent = false;
+                        _resendSeconds = 0;
                         _otpController.clear();
                       });
                     },
