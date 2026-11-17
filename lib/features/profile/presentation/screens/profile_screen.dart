@@ -10,7 +10,6 @@ import 'package:claimsupport/features/logs/presentation/controllers/log_controll
 import 'package:claimsupport/features/analysis_reports/presentation/controllers/analysis_report_controller.dart';
 import 'package:claimsupport/core/utils/auth_storage.dart';
 import 'package:claimsupport/core/network/auth_interceptor.dart';
-import 'package:claimsupport/features/profile/presentation/widgets/login_methods_card.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -55,10 +54,6 @@ class ProfileScreen extends ConsumerWidget {
                         textAlign: TextAlign.center,
                         style: const TextStyle(color: Colors.grey),
                       ),
-                      if (user != null) ...[
-                        const SizedBox(height: 24),
-                        LoginMethodsCard(user: user),
-                      ],
                     ],
                   ),
                   loading: () => const Center(child: CircularProgressIndicator()),
