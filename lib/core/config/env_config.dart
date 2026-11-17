@@ -12,7 +12,8 @@ class EnvConfig {
   // "Application not found" page from Railway's edge, not an app error.
   static const _prodApiBaseUrl =
       'https://claim-support-backend-python-production-637d.up.railway.app/api';
-  static const _devApiBaseUrl = 'http://192.168.0.116:8000/api';
+  // Dev machine's Wi-Fi IPv4 (run `ipconfig`); changes when the router assigns a new address.
+  static const _devApiBaseUrl = 'http://192.168.0.173:8000/api';
 
   static Environment _environment = kReleaseMode ? Environment.prod : Environment.dev;
   static String _apiBaseUrl = kReleaseMode

@@ -9,6 +9,7 @@ import 'package:claimsupport/features/authentication/presentation/controllers/au
 import 'package:claimsupport/core/utils/auth_storage.dart';
 import 'package:claimsupport/core/network/auth_interceptor.dart';
 import 'package:flutter/services.dart';
+import 'package:claimsupport/features/authentication/presentation/widgets/otp_method_selector.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -22,10 +23,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
-  bool _otpSent = false;
+  OtpChannel _channel = OtpChannel.email;
+  OtpSendResult? _sent; // non-null once an OTP has been sent
   bool _loading = false;
   int _resendSeconds = 0;
   Timer? _resendTimer;
+
+  bool get _otpSent => _sent != null;
+  String get _email => _emailController.text.trim().toLowerCase();
+  String get _phone => _phoneController.text.trim();
 
   @override
   void dispose() {
@@ -42,19 +48,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  String _errorFrom(DioException e, String fallback) {
-    final data = e.response?.data;
-    if (data is Map) {
-      final detail = data['detail'] ?? data['message'];
-      if (detail is String && detail.isNotEmpty) return detail;
-      if (detail != null) return 'Please check the details and try again.';
-    }
-    return fallback;
-  }
-
-  void _startResendTimer() {
+  void _startResendTimer(int seconds) {
     _resendTimer?.cancel();
-    setState(() => _resendSeconds = 30);
+    setState(() => _resendSeconds = seconds);
+    if (seconds <= 0) return;
     _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return timer.cancel();
       setState(() => _resendSeconds--);
@@ -62,43 +59,47 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     });
   }
 
-  /// Asks the backend to send an OTP. Whether a real SMS goes out is decided on the
-  /// server (OTP_PROVIDER); in the current "static" mode the OTP is 1234.
+  /// Asks the backend to send an OTP to the chosen contact (email or phone). Whether a
+  /// real SMS / email goes out is decided on the server (OTP_PROVIDER / EMAIL_OTP_PROVIDER).
   Future<void> _sendOtp() async {
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
     final phoneRegex = RegExp(r'^[6-9][0-9]{9}$');
 
-    if (_nameController.text.isEmpty || _emailController.text.isEmpty || _phoneController.text.isEmpty) {
+    if (_nameController.text.trim().isEmpty || _email.isEmpty || _phone.isEmpty) {
       _showMessage('Please fill all fields first.');
       return;
     }
 
-    if (!emailRegex.hasMatch(_emailController.text)) {
+    if (!emailPattern.hasMatch(_email)) {
       _showMessage('Please enter a valid email address.');
       return;
     }
 
-    if (!phoneRegex.hasMatch(_phoneController.text)) {
+    if (!phoneRegex.hasMatch(_phone)) {
       _showMessage('Please enter a valid 10-digit mobile number.');
       return;
     }
 
     setState(() => _loading = true);
     try {
-      await ApiClient().dio.post('/auth/send-otp', data: {
-        'phone': _phoneController.text,
+      final response = await ApiClient().dio.post('/auth/send-otp', data: {
+        'channel': _channel.apiValue,
         'purpose': 'register',
-        'email': _emailController.text,
+        'phone': _phone,
+        'email': _email,
       });
       if (!mounted) return;
+      final sent = OtpSendResult.fromResponse(
+        response,
+        fallbackDestination: _channel == OtpChannel.email ? _email : _phone,
+      );
       setState(() {
-        _otpSent = true;
+        _sent = sent;
         _otpController.clear();
       });
-      _startResendTimer();
-      _showMessage('OTP sent to ${_phoneController.text}');
+      _startResendTimer(sent.resendAfterSeconds);
+      _showMessage('OTP sent to ${sent.destination}');
     } on DioException catch (e) {
-      _showMessage(_errorFrom(e, 'Could not send OTP. Please try again.'));
+      _showMessage(otpErrorFrom(e, 'Could not send OTP. Please try again.'));
     } catch (e) {
       _showMessage(e.toString());
     } finally {
@@ -116,9 +117,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     setState(() => _loading = true);
     try {
       final response = await ApiClient().dio.post('/auth/register', data: {
-        'name': _nameController.text,
-        'email': _emailController.text,
-        'phone': _phoneController.text,
+        'name': _nameController.text.trim(),
+        'email': _email,
+        'phone': _phone,
+        'channel': _channel.apiValue,
         'otp': _otpController.text,
       });
 
@@ -134,7 +136,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         if (mounted) context.go('/dashboard');
       }
     } on DioException catch (e) {
-      _showMessage(_errorFrom(e, 'Registration failed'));
+      _showMessage(otpErrorFrom(e, 'Registration failed'));
     } catch (e) {
       _showMessage(e.toString());
     } finally {
@@ -276,16 +278,38 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     LengthLimitingTextInputFormatter(10),
                   ],
                 ),
+                Text(
+                  'Verify with',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: textColor),
+                ),
+                const SizedBox(height: 8),
+                OtpMethodSelector(
+                  selected: _channel,
+                  enabled: !_loading,
+                  onChanged: (channel) => setState(() => _channel = channel),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'You can log in with either method later, once that contact is verified.',
+                  style: TextStyle(fontSize: 13, color: textSecondaryColor),
+                ),
+                const SizedBox(height: 24),
               ] else ...[
+                Text(
+                  'We sent a ${_sent!.otpLength}-digit code by '
+                  '${_channel == OtpChannel.email ? 'email' : 'SMS'} to ${_sent!.destination}.',
+                  style: TextStyle(fontSize: 14, color: textSecondaryColor),
+                ),
+                const SizedBox(height: 16),
                 _buildTextField(
                   context,
                   label: 'Enter OTP',
-                  hint: 'Enter OTP sent to ${_phoneController.text}',
+                  hint: 'Enter ${_sent!.otpLength}-digit OTP',
                   controller: _otpController,
                   keyboardType: TextInputType.number,
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(4),
+                    LengthLimitingTextInputFormatter(_sent!.otpLength),
                   ],
                 ),
               ],
@@ -324,7 +348,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
                         )
                       : Text(
-                          _otpSent ? 'Verify OTP & Register' : 'Send OTP',
+                          _otpSent ? 'Verify OTP & Register' : 'Send ${_channel.label}',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -355,7 +379,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     onPressed: () {
                       _resendTimer?.cancel();
                       setState(() {
-                        _otpSent = false;
+                        _sent = null;
                         _resendSeconds = 0;
                         _otpController.clear();
                       });

@@ -9,6 +9,7 @@ import 'package:claimsupport/features/authentication/presentation/controllers/au
 import 'package:claimsupport/core/utils/auth_storage.dart';
 import 'package:claimsupport/core/network/auth_interceptor.dart';
 import 'package:flutter/services.dart';
+import 'package:claimsupport/features/authentication/presentation/widgets/otp_method_selector.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -19,16 +20,22 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
-  bool _otpSent = false;
+  OtpChannel _channel = OtpChannel.email;
+  OtpSendResult? _sent; // non-null once an OTP has been sent
   bool _loading = false;
   int _resendSeconds = 0;
   Timer? _resendTimer;
+
+  bool get _otpSent => _sent != null;
+  bool get _isEmail => _channel == OtpChannel.email;
 
   @override
   void dispose() {
     _resendTimer?.cancel();
     _phoneController.dispose();
+    _emailController.dispose();
     _otpController.dispose();
     super.dispose();
   }
@@ -38,19 +45,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  String _errorFrom(DioException e, String fallback) {
-    final data = e.response?.data;
-    if (data is Map) {
-      final detail = data['detail'] ?? data['message'];
-      if (detail is String && detail.isNotEmpty) return detail;
-      if (detail != null) return 'Please check the details and try again.';
-    }
-    return fallback;
-  }
-
-  void _startResendTimer() {
+  void _startResendTimer(int seconds) {
     _resendTimer?.cancel();
-    setState(() => _resendSeconds = 30);
+    setState(() => _resendSeconds = seconds);
+    if (seconds <= 0) return;
     _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return timer.cancel();
       setState(() => _resendSeconds--);
@@ -58,36 +56,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
   }
 
-  /// Asks the backend to send an OTP. Whether a real SMS goes out is decided on the
-  /// server (OTP_PROVIDER); in the current "static" mode the OTP is 1234.
+  /// The contact field for the selected method, as sent to the backend.
+  Map<String, String> get _contact => _isEmail
+      ? {'email': _emailController.text.trim().toLowerCase()}
+      : {'phone': _phoneController.text.trim()};
+
+  /// Asks the backend to send an OTP by SMS or email. Whether a real SMS / email goes out
+  /// is decided on the server (OTP_PROVIDER / EMAIL_OTP_PROVIDER).
   Future<void> _sendOtp() async {
-    final phoneRegex = RegExp(r'^[0-9]{1,10}$');
-
-    if (_phoneController.text.isEmpty) {
-      _showMessage('Please enter your mobile number.');
-      return;
-    }
-
-    if (!phoneRegex.hasMatch(_phoneController.text)) {
-      _showMessage('Please enter a valid mobile number (1-10 digits).');
-      return;
+    if (_isEmail) {
+      final email = _emailController.text.trim();
+      if (email.isEmpty) return _showMessage('Please enter your email address.');
+      if (!emailPattern.hasMatch(email)) return _showMessage('Please enter a valid email address.');
+    } else {
+      final phone = _phoneController.text.trim();
+      if (phone.isEmpty) return _showMessage('Please enter your mobile number.');
+      if (!RegExp(r'^[0-9]{1,10}$').hasMatch(phone)) {
+        return _showMessage('Please enter a valid mobile number (1-10 digits).');
+      }
     }
 
     setState(() => _loading = true);
     try {
-      await ApiClient().dio.post('/auth/send-otp', data: {
-        'phone': _phoneController.text,
+      final response = await ApiClient().dio.post('/auth/send-otp', data: {
+        'channel': _channel.apiValue,
         'purpose': 'login',
+        ..._contact,
       });
       if (!mounted) return;
+      final sent = OtpSendResult.fromResponse(response, fallbackDestination: _contact.values.first);
       setState(() {
-        _otpSent = true;
+        _sent = sent;
         _otpController.clear();
       });
-      _startResendTimer();
-      _showMessage('OTP sent to ${_phoneController.text}');
+      _startResendTimer(sent.resendAfterSeconds);
+      _showMessage('OTP sent to ${sent.destination}');
     } on DioException catch (e) {
-      _showMessage(_errorFrom(e, 'Could not send OTP. Please try again.'));
+      _showMessage(otpErrorFrom(e, 'Could not send OTP. Please try again.'));
     } catch (e) {
       _showMessage(e.toString());
     } finally {
@@ -105,7 +110,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _loading = true);
     try {
       final response = await ApiClient().dio.post('/auth/login', data: {
-        'phone': _phoneController.text,
+        'channel': _channel.apiValue,
+        ..._contact,
         'otp': _otpController.text,
       });
 
@@ -121,7 +127,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         if (mounted) context.go('/dashboard');
       }
     } on DioException catch (e) {
-      _showMessage(_errorFrom(e, 'Login failed'));
+      _showMessage(otpErrorFrom(e, 'Login failed'));
     } catch (e) {
       _showMessage(e.toString());
     } finally {
@@ -185,11 +191,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   color: textSecondaryColor,
                 ),
               ),
-              const SizedBox(height: 48),
-              
-              // Phone Number Label
+              const SizedBox(height: 32),
+
+              if (!_otpSent) ...[
+                OtpMethodSelector(
+                  selected: _channel,
+                  enabled: !_loading,
+                  onChanged: (channel) => setState(() => _channel = channel),
+                ),
+                const SizedBox(height: 24),
+              ] else ...[
                 Text(
-                  _otpSent ? 'Enter OTP' : 'Phone Number',
+                  'We sent a ${_sent!.otpLength}-digit code by ${_isEmail ? 'email' : 'SMS'} to ${_sent!.destination}.',
+                  style: TextStyle(fontSize: 14, color: textSecondaryColor),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // Field label
+                Text(
+                  _otpSent ? 'Enter OTP' : (_isEmail ? 'Email Address' : 'Phone Number'),
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -212,11 +233,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ],
                 ),
                 child: TextField(
-                  controller: _otpSent ? _otpController : _phoneController,
-                  keyboardType: _otpSent ? TextInputType.number : TextInputType.phone,
+                  // A new key per field so switching method doesn't carry over keyboard/formatters.
+                  key: ValueKey(_otpSent ? 'otp' : _channel.apiValue),
+                  controller: _otpSent ? _otpController : (_isEmail ? _emailController : _phoneController),
+                  keyboardType: _otpSent
+                      ? TextInputType.number
+                      : (_isEmail ? TextInputType.emailAddress : TextInputType.phone),
+                  autofillHints: _otpSent
+                      ? const [AutofillHints.oneTimeCode]
+                      : [_isEmail ? AutofillHints.email : AutofillHints.telephoneNumber],
                   inputFormatters: _otpSent ? [
                     FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(4),
+                    LengthLimitingTextInputFormatter(_sent!.otpLength),
+                  ] : _isEmail ? [
+                    FilteringTextInputFormatter.deny(RegExp(r'\s')),
                   ] : [
                     FilteringTextInputFormatter.digitsOnly,
                     LengthLimitingTextInputFormatter(10),
@@ -226,7 +256,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     color: textColor,
                   ),
                   decoration: InputDecoration(
-                    hintText: _otpSent ? 'Enter OTP' : '9876543210',
+                    hintText: _otpSent ? 'Enter OTP' : (_isEmail ? 'alex@example.com' : '9876543210'),
                     hintStyle: TextStyle(
                       color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
                     ),
@@ -283,7 +313,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
                         )
                       : Text(
-                          _otpSent ? 'Verify OTP & Login' : 'Send OTP',
+                          _otpSent ? 'Verify OTP & Login' : 'Send ${_channel.label}',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -353,7 +383,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     onPressed: () {
                       _resendTimer?.cancel();
                       setState(() {
-                        _otpSent = false;
+                        _sent = null;
                         _resendSeconds = 0;
                         _otpController.clear();
                       });
@@ -362,7 +392,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       foregroundColor: primaryBlue,
                     ),
                     child: const Text(
-                      'Change Phone Number',
+                      'Change Email / Phone or Method',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
