@@ -171,9 +171,10 @@ class _VerifyContactDialogState extends State<_VerifyContactDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(sent == null
-              ? 'Sending a code to ${widget.value}...'
-              : 'Enter the ${sent.otpLength}-digit code sent to ${sent.destination}.'),
+          if (sent == null)
+            Text('Sending a code to ${widget.value}...')
+          else
+            OtpStatusText(sent: sent, channel: widget.channel),
           const SizedBox(height: 16),
           TextField(
             controller: _otpController,

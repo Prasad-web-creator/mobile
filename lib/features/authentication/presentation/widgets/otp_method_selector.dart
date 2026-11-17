@@ -18,15 +18,79 @@ class OtpSendResult {
   final int otpLength;
   final int resendAfterSeconds;
 
-  const OtpSendResult({required this.destination, required this.otpLength, required this.resendAfterSeconds});
+  /// False when the server did not actually send an SMS/email (no OTP service set up).
+  final bool delivered;
+
+  /// Message to show the user, e.g. "OTP sent to ..." or "OTP could not be sent ... use test OTP 1234."
+  final String message;
+
+  const OtpSendResult({
+    required this.destination,
+    required this.otpLength,
+    required this.resendAfterSeconds,
+    required this.delivered,
+    required this.message,
+  });
+
+  /// One-line status shown above the OTP field.
+  String statusText(OtpChannel channel) => delivered
+      ? 'We sent a $otpLength-digit code by ${channel == OtpChannel.email ? 'email' : 'SMS'} to $destination.'
+      : message;
 
   factory OtpSendResult.fromResponse(Response response, {required String fallbackDestination}) {
     final data = response.data is Map ? response.data as Map : const {};
+    final destination = (data['destination'] as String?) ?? fallbackDestination;
     return OtpSendResult(
-      destination: (data['destination'] as String?) ?? fallbackDestination,
+      destination: destination,
       // Older backends did not send these; their OTP was 4 digits with a 30 s cooldown.
       otpLength: (data['otpLength'] as num?)?.toInt() ?? 4,
       resendAfterSeconds: (data['resendAfterSeconds'] as num?)?.toInt() ?? 30,
+      delivered: data['delivered'] != false,
+      message: (data['message'] as String?) ?? 'OTP sent to $destination',
+    );
+  }
+}
+
+/// Status line above the OTP field; amber warning when the OTP was not actually delivered.
+class OtpStatusText extends StatelessWidget {
+  final OtpSendResult sent;
+  final OtpChannel channel;
+
+  const OtpStatusText({super.key, required this.sent, required this.channel});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (sent.delivered) {
+      return Text(
+        sent.statusText(channel),
+        style: TextStyle(fontSize: 14, color: isDark ? Colors.grey.shade400 : const Color(0xFF6B7280)),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0x33F59E0B) : const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF59E0B)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, color: Color(0xFFB45309), size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              sent.message,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isDark ? const Color(0xFFFCD34D) : const Color(0xFF92400E),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

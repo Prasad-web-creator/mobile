@@ -90,7 +90,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _otpController.clear();
       });
       _startResendTimer(sent.resendAfterSeconds);
-      _showMessage('OTP sent to ${sent.destination}');
+      _showMessage(sent.message);
     } on DioException catch (e) {
       _showMessage(otpErrorFrom(e, 'Could not send OTP. Please try again.'));
     } catch (e) {
@@ -201,10 +201,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
               ] else ...[
-                Text(
-                  'We sent a ${_sent!.otpLength}-digit code by ${_isEmail ? 'email' : 'SMS'} to ${_sent!.destination}.',
-                  style: TextStyle(fontSize: 14, color: textSecondaryColor),
-                ),
+                OtpStatusText(sent: _sent!, channel: _channel),
                 const SizedBox(height: 16),
               ],
 

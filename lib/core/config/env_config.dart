@@ -7,11 +7,9 @@ enum Environment {
 }
 
 class EnvConfig {
-  // Railway's generated domain changes whenever the service is renamed or
-  // recreated, so keep it in one place: a stale copy here fails as an
-  // "Application not found" page from Railway's edge, not an app error.
-  static const _prodApiBaseUrl =
-      'https://claim-support-backend-python-production-637d.up.railway.app/api';
+  // Backend hosted on Render (service: claim-support-backend-python). Keep it in one
+  // place: if the service is renamed or recreated its onrender.com URL changes.
+  static const _prodApiBaseUrl = 'https://claim-support-backend-python.onrender.com/api';
   // Dev machine's Wi-Fi IPv4 (run `ipconfig`); changes when the router assigns a new address.
   static const _devApiBaseUrl = 'http://192.168.0.173:8000/api';
 
