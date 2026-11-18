@@ -15,7 +15,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Privacy Policy for ClaimSupport',
+              'Privacy Policy for Policy Pal',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
@@ -26,11 +26,11 @@ class PrivacyPolicyScreen extends StatelessWidget {
             const SizedBox(height: 24),
             _buildSection(
               '1. Introduction',
-              'Welcome to ClaimSupport. Your privacy is critically important to us. This Privacy Policy outlines the types of personal information that is received and collected and how it is used.',
+              'Welcome to Policy Pal. Your privacy is critically important to us. This Privacy Policy outlines the types of personal information that is received and collected and how it is used.',
             ),
             _buildSection(
               '2. Information We Collect',
-              'When you use ClaimSupport to analyze your medical bills and insurance policies, we collect:\n\n'
+              'When you use Policy Pal to analyze your medical bills and insurance policies, we collect:\n\n'
               '• Personal Identification Information (Name, Email)\n'
               '• Uploaded Documents (Policies, Prescriptions, Bills)\n'
               '• App Activity and Usage Data',

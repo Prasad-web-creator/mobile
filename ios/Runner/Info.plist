@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Claim Support</string>
+	<string>Policy Pal</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>claimsupport</string>
+	<string>Policy Pal</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -67,11 +67,11 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Claim Support accesses your photo library so you can select prescriptions and insurance documents to upload for claim analysis.</string>
+	<string>Policy Pal accesses your photo library so you can select prescriptions and insurance documents to upload for claim analysis.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Claim Support uses the camera to capture prescriptions and insurance documents for claim analysis.</string>
+	<string>Policy Pal uses the camera to capture prescriptions and insurance documents for claim analysis.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Claim Support uses your location to verify claim submission locations and assist with insurance documentation.</string>
+	<string>Policy Pal uses your location to verify claim submission locations and assist with insurance documentation.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>

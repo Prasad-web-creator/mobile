@@ -245,7 +245,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               const SizedBox(height: 8),
               // Subtitle
               Text(
-                'Join Claim Support today.',
+                'Join Policy Pal today.',
                 style: TextStyle(
                   fontSize: 16,
                   color: textSecondaryColor,
