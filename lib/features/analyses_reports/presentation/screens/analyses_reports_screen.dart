@@ -673,7 +673,10 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen> {
       bg = const Color(0xFFF5F3FF);
       fg = const Color(0xFF7C3AED);
       icon = Icons.fact_check_outlined;
-    } else if (lower.contains('needs your input') || lower.contains('manual review') || lower.contains('review')) {
+    } else if (lower.contains('partial') ||
+        lower.contains('needs your input') ||
+        lower.contains('manual review') ||
+        lower.contains('review')) {
       bg = const Color(0xFFFEF3C7);
       fg = const Color(0xFFD97706);
       icon = Icons.error_outline_rounded;

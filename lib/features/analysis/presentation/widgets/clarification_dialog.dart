@@ -513,13 +513,29 @@ class _DateQuestionWidgetState extends State<_DateQuestionWidget> {
     super.dispose();
   }
 
+  /// A YYYY-MM-DD hint the server may send with a date question.
+  DateTime? _hint(String key) {
+    final value = widget.question[key];
+    if (value == null) return null;
+    final parsed = DateTime.tryParse(value.toString());
+    return parsed == null ? null : DateTime(parsed.year, parsed.month, parsed.day);
+  }
+
   Future<void> _pickDate() async {
     final now = DateTime.now();
+    final DateTime firstDate = _hint('minDate') ?? DateTime(2000);
+    final DateTime maxHint = _hint('maxDate') ?? DateTime(2035);
+    final DateTime lastDate = maxHint.isBefore(firstDate) ? firstDate : maxHint;
+    // Open on the date picked before, else the server's suggestion, else today,
+    // kept inside the allowed range so the picker never fails to open.
+    DateTime initialDate = _selectedDate ?? _hint('initialDate') ?? now;
+    if (initialDate.isBefore(firstDate)) initialDate = firstDate;
+    if (initialDate.isAfter(lastDate)) initialDate = lastDate;
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate ?? now,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2035),
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
     );
     if (picked != null) {
       final formatted = DateFormat('dd-MMM-yyyy').format(picked);

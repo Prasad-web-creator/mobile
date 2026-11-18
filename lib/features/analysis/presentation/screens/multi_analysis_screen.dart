@@ -398,8 +398,6 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
   ) {
     final textColor = isDark ? Colors.white : const Color(0xFF111827);
     final subColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
-    final isBest = session.bestPolicyId.isNotEmpty && session.bestPolicyId == policy.policyId;
-
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -407,12 +405,10 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
         color: isDark ? const Color(0xFF1F2937) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isBest
-              ? _primaryBlue
-              : policy.isWaitingForUser
-                  ? Colors.orange
-                  : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-          width: (isBest || policy.isWaitingForUser) ? 1.5 : 1.0,
+          color: policy.isWaitingForUser
+              ? Colors.orange
+              : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+          width: policy.isWaitingForUser ? 1.5 : 1.0,
         ),
       ),
       child: Column(
@@ -441,24 +437,14 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            policy.displayName,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: textColor,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (isBest) ...[
-                          const SizedBox(width: 6),
-                          const Icon(Icons.star_rounded, size: 16, color: _primaryBlue),
-                        ],
-                      ],
+                    Text(
+                      policy.displayName,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: textColor,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                     if (policy.insuranceCompany.isNotEmpty) ...[
                       const SizedBox(height: 2),
@@ -552,8 +538,8 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
         color = Colors.redAccent;
       } else if (lower.contains('verification')) {
         color = const Color(0xFF7C3AED);
-      } else if (lower.contains('partial')) {
-        color = Colors.orange;
+      } else if (lower.contains('partial') || lower.contains('review')) {
+        color = const Color(0xFFD97706);
       } else {
         color = Colors.green;
       }

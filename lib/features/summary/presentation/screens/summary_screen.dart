@@ -1030,9 +1030,11 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                                                 fontWeight: FontWeight.w700,
                                                 color: _isNeedsVerification(item)
                                                     ? verifyPurple
-                                                    : isCovered
-                                                        ? successGreen
-                                                        : dangerRed,
+                                                    : _isPartialOrReview(item)
+                                                        ? warningAmber
+                                                        : isCovered
+                                                            ? successGreen
+                                                            : dangerRed,
                                               ),
                                             ),
                                           ),
@@ -1446,6 +1448,13 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
   bool _isNeedsVerification(dynamic item) {
     if (item is! Map) return false;
     return (item['coverageStatus'] ?? item['status'] ?? '').toString() == _needsVerification;
+  }
+
+  /// Partially Covered / Manual Review rows render amber, never green.
+  bool _isPartialOrReview(dynamic item) {
+    if (item is! Map) return false;
+    final s = (item['status'] ?? item['coverageStatus'] ?? '').toString().toLowerCase();
+    return s.contains('partial') || s.contains('review');
   }
 
   List<Map> _verificationItems(List<dynamic> comparison) =>

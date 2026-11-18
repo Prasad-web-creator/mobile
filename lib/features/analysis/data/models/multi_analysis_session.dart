@@ -233,6 +233,28 @@ class MultiAnalysisSession {
   /// the user answers or retries, so the screen reacts without claiming any
   /// progress the server has not reported yet.
   MultiAnalysisSession withPolicyRestarted(String policyId, String status) {
+    // The restarted policy no longer has any finished steps, so the session
+    // total must drop by whatever that policy was contributing — otherwise the
+    // top card keeps a stale percentage and label until the next poll.
+    PolicyAnalysisResult? previous;
+    for (final p in policyAnalyses) {
+      if (p.policyId == policyId) previous = p;
+    }
+    var nextProgress = progress;
+    if (previous != null && progress.isKnown) {
+      final contributed = previous.isDone
+          ? (previous.totalSteps > 0 ? previous.totalSteps : 0)
+          : previous.completedSteps;
+      nextProgress = AnalysisProgress(
+        completedSteps: (progress.completedSteps - contributed).clamp(0, progress.totalSteps),
+        totalSteps: progress.totalSteps,
+        label: '',
+        policiesFinished: previous.isDone
+            ? (progress.policiesFinished - 1).clamp(0, progress.policyCount)
+            : progress.policiesFinished,
+        policyCount: progress.policyCount,
+      );
+    }
     return MultiAnalysisSession(
       sessionId: sessionId,
       prescriptionId: prescriptionId,
@@ -244,7 +266,7 @@ class MultiAnalysisSession {
       comparisonSummary: comparisonSummary,
       prescription: prescription,
       errorMessage: '',
-      progress: progress,
+      progress: nextProgress,
     );
   }
 
