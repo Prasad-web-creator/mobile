@@ -75,4 +75,44 @@ class PrescriptionRepository {
       );
     }
   }
+
+  Future<void> deletePrescription(String id) async {
+    try {
+      await _dio.delete('/prescriptions/$id');
+    } on DioException catch (e, st) {
+      throw AppException(
+        statusCode: e.response?.statusCode,
+        message: e.response?.data?['message'] ?? e.message ?? 'Unknown error',
+        responseBody: e.response?.data,
+        originalException: e,
+        stackTrace: st,
+      );
+    } catch (e, st) {
+      throw AppException(
+        message: 'Failed to delete prescription: $e',
+        originalException: e,
+        stackTrace: st,
+      );
+    }
+  }
+
+  Future<void> deleteBatchPrescriptions(List<String> ids) async {
+    try {
+      await _dio.post('/prescriptions/batch-delete', data: {'ids': ids});
+    } on DioException catch (e, st) {
+      throw AppException(
+        statusCode: e.response?.statusCode,
+        message: e.response?.data?['message'] ?? e.message ?? 'Unknown error',
+        responseBody: e.response?.data,
+        originalException: e,
+        stackTrace: st,
+      );
+    } catch (e, st) {
+      throw AppException(
+        message: 'Failed to batch delete prescriptions: $e',
+        originalException: e,
+        stackTrace: st,
+      );
+    }
+  }
 }

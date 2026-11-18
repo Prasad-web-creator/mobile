@@ -78,4 +78,15 @@ class PoliciesNotifier extends AsyncNotifier<PaginationResponse<Policy>> {
       rethrow;
     }
   }
+
+  Future<void> deletePolicies(List<String> ids) async {
+    if (ids.isEmpty) return;
+    try {
+      final repository = ref.read(policyRepositoryProvider);
+      await repository.deleteBatchPolicies(ids);
+      fetchPolicies(isRefresh: true);
+    } catch (e) {
+      rethrow;
+    }
+  }
 }
