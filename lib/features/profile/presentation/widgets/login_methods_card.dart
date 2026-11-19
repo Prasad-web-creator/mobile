@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:claimsupport/core/widgets/app_widgets.dart';
 import 'package:claimsupport/core/network/api_client.dart';
 import 'package:claimsupport/features/authentication/data/models/user.dart';
 import 'package:claimsupport/features/authentication/presentation/controllers/auth_controller.dart';
@@ -39,8 +40,6 @@ class LoginMethodsCard extends ConsumerWidget {
               child: Text('Login methods', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
             ),
             _row(context, ref, OtpChannel.email, user.email, user.emailVerified),
-            if (user.phone != null && user.phone!.isNotEmpty)
-              _row(context, ref, OtpChannel.sms, user.phone!, user.phoneVerified),
           ],
         ),
       ),
@@ -150,11 +149,12 @@ class _VerifyContactDialogState extends State<_VerifyContactDialog> {
         'otp': _otpController.text,
       });
       if (!mounted) return;
-      final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop();
-      messenger.showSnackBar(SnackBar(
-        content: Text('Verified. You can now log in with ${widget.channel.label}.'),
-      ));
+      showAppSnackBar(
+        context,
+        'Email verified successfully.',
+        tone: AppTone.success,
+      );
     } on DioException catch (e) {
       if (mounted) setState(() => _error = otpErrorFrom(e, 'Verification failed. Please try again.'));
     } finally {
@@ -166,7 +166,7 @@ class _VerifyContactDialogState extends State<_VerifyContactDialog> {
   Widget build(BuildContext context) {
     final sent = _sent;
     return AlertDialog(
-      title: Text('Verify ${widget.channel == OtpChannel.email ? 'email' : 'mobile number'}'),
+      title: const Text('Verify Email Address'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

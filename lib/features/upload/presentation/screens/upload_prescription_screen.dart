@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:claimsupport/core/network/api_client.dart';
 import 'package:claimsupport/core/utils/shared_prefs.dart';
 import 'package:claimsupport/core/utils/device_app_info.dart';
+import 'package:claimsupport/core/widgets/app_widgets.dart';
 
 class UploadPrescriptionScreen extends ConsumerStatefulWidget {
   const UploadPrescriptionScreen({super.key});
@@ -50,17 +51,14 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
     var str = dateVal.toString().trim();
     if (str.isEmpty || str.toLowerCase() == 'null') return null;
     // e.g. "15-Jan-2026 00:00 Hrs" -> "15-Jan-2026"
-    str = str.replaceAll(
-      RegExp(r'\s+\d{1,2}:\d{2}(:\d{2})?\s*(hrs|hours)?\.?$', caseSensitive: false),
-      '',
-    );
+    str = str.replaceAll(RegExp(r'\s+\d{1,2}:\d{2}(:\d{2})?\s*(hrs|hours)?\.?$', caseSensitive: false), '');
 
     try {
       final parsed = DateTime.tryParse(str);
       if (parsed != null) {
         return DateFormat('dd-MM-yyyy').format(parsed);
       }
-      
+
       final slashParts = str.split('/');
       if (slashParts.length == 3) {
         if (slashParts[0].length == 4) {
@@ -94,34 +92,34 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
       });
 
       try {
-        final formData = FormData.fromMap({
-          'file': await MultipartFile.fromFile(result.files.single.path!),
-        });
+        final formData = FormData.fromMap({'file': await MultipartFile.fromFile(result.files.single.path!)});
 
         final response = await ApiClient().dio.post('/upload', data: formData);
-        
+
         if (response.statusCode == 200) {
           _uploadedPath = response.data['fileId'].toString();
-          final isImageBased = response.data['isImageBased'] == true ||
+          final isImageBased =
+              response.data['isImageBased'] == true ||
               _selectedFileName?.toLowerCase().endsWith('.jpg') == true ||
               _selectedFileName?.toLowerCase().endsWith('.jpeg') == true ||
               _selectedFileName?.toLowerCase().endsWith('.png') == true;
           final prefs = SharedPrefs.instance;
           await prefs.setString('prescription_path', _uploadedPath!);
           await prefs.setBool('prescription_is_image_based', isImageBased);
-          
+
           try {
             final agreementData = await DeviceAppInfo.buildAgreementData();
-            await ApiClient().dio.post('/prescriptions', data: {
-              'hospitalName': '',
-              'gridFsFileId': _uploadedPath,
-              'originalFileName': _selectedFileName,
-              'agreement': agreementData,
-            });
-            
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Upload successful')));
-            }
+            await ApiClient().dio.post(
+              '/prescriptions',
+              data: {
+                'hospitalName': '',
+                'gridFsFileId': _uploadedPath,
+                'originalFileName': _selectedFileName,
+                'agreement': agreementData,
+              },
+            );
+
+            // File card shows the inline success state directly without obscuring action buttons.
           } catch (e) {
             debugPrint("Failed to save prescription record: $e");
             try {
@@ -130,7 +128,11 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
               debugPrint("Failed to rollback uploaded file: $deleteError");
             }
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save prescription record. Please try again.')));
+              showAppSnackBar(
+                context,
+                'Failed to save prescription record. Please try again.',
+                tone: AppTone.danger,
+              );
               setState(() {
                 _isUploading = false;
                 _uploadedPath = null;
@@ -143,16 +145,22 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
       } on DioException catch (e) {
         if (mounted) {
           String msg;
-          if (e.type == DioExceptionType.connectionError || e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.receiveTimeout) {
+          if (e.type == DioExceptionType.connectionError ||
+              e.type == DioExceptionType.connectionTimeout ||
+              e.type == DioExceptionType.receiveTimeout) {
             msg = "Unable to connect to the server. Please check your internet connection and try again.";
           } else {
             msg = "Our servers are experiencing issues processing your upload. Please try again later.";
           }
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+          showAppSnackBar(context, msg, tone: AppTone.danger);
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('An unexpected error occurred during upload. Please try again later.')));
+          showAppSnackBar(
+            context,
+            'An unexpected error occurred during upload. Please try again later.',
+            tone: AppTone.danger,
+          );
         }
       } finally {
         if (mounted) {
@@ -170,18 +178,19 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
     final bool hasManualText = manualText.isNotEmpty;
 
     if (hasUploadedFile && hasManualText) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please choose only one prescription input method: either upload a prescription PDF or enter your prescription manually.'),
-          backgroundColor: Colors.redAccent,
-        ),
+      showAppSnackBar(
+        context,
+        'Please choose only one prescription input method: either upload a prescription PDF or enter your prescription manually.',
+        tone: AppTone.warning,
       );
       return;
     }
 
     if (!hasUploadedFile && !hasManualText) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please upload a prescription PDF or enter your prescription manually.')),
+      showAppSnackBar(
+        context,
+        'Please upload a prescription PDF or enter your prescription manually.',
+        tone: AppTone.warning,
       );
       return;
     }
@@ -196,18 +205,24 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
       if (hasManualText) {
         try {
           final agreementData = await DeviceAppInfo.buildAgreementData();
-          final response = await ApiClient().dio.post('/prescriptions', data: {
-            'hospitalName': '',
-            'isManual': true,
-            'extractedPrescriptionText': manualText,
-            'originalFileName': 'Manual Prescription',
-            'agreement': agreementData,
-          });
+          final response = await ApiClient().dio.post(
+            '/prescriptions',
+            data: {
+              'hospitalName': '',
+              'isManual': true,
+              'extractedPrescriptionText': manualText,
+              'originalFileName': 'Manual Prescription',
+              'agreement': agreementData,
+            },
+          );
 
           String? rxId;
           if (response.statusCode == 200 || response.statusCode == 201) {
             if (response.data is Map) {
-              rxId = response.data['id']?.toString() ?? response.data['data']?['id']?.toString() ?? response.data['_id']?.toString();
+              rxId =
+                  response.data['id']?.toString() ??
+                  response.data['data']?['id']?.toString() ??
+                  response.data['_id']?.toString();
             }
           }
 
@@ -261,35 +276,42 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
         context: context,
         barrierDismissible: false,
         builder: (BuildContext dialogContext) {
-          final isDark = Theme.of(context).brightness == Brightness.dark;
+          final p = dialogContext.palette;
           return AlertDialog(
-            title: const Text("Existing Policy Found", style: TextStyle(fontWeight: FontWeight.bold)),
+            icon: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(color: p.primarySoft, shape: BoxShape.circle),
+              child: Icon(Icons.policy_outlined, color: p.primary),
+            ),
+            title: const Text("Existing Policy Found", textAlign: TextAlign.center),
             content: const Text(
               "We found existing policies in your account. Would you like to analyze this prescription using one of your saved policies?",
+              textAlign: TextAlign.center,
             ),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            actionsPadding: const EdgeInsets.fromLTRB(AppSpacing.xl, 0, AppSpacing.xl, AppSpacing.lg),
             actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                  context.push('/upload-policy');
-                },
-                child: Text(
-                  "Upload New Policy",
-                  style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade700),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                  _showPolicySelectionDialog(policiesList);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: const Text("Continue Existing Policy"),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                      _showPolicySelectionDialog(policiesList);
+                    },
+                    style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+                    child: const Text("Continue Existing Policy"),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  OutlinedButton(
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                      context.push('/upload-policy');
+                    },
+                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+                    child: const Text("Upload New Policy"),
+                  ),
+                ],
               ),
             ],
           );
@@ -298,9 +320,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
     } catch (err) {
       debugPrint("Error in _processNext: $err");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('An error occurred: $err')),
-        );
+        showAppSnackBar(context, friendlyErrorMessage(err), tone: AppTone.danger);
       }
     } finally {
       if (mounted && _isExtracting) {
@@ -315,30 +335,30 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
     // Multiple policies may be selected: the prescription is analysed against
     // each one independently.
     final Set<String> localSelectedPolicyIds = {};
-    
+
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (BuildContext dialogContext) {
-        final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
         return StatefulBuilder(
           builder: (dialogCtx, setDialogState) {
+            final pal = dialogCtx.palette;
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              titlePadding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.sm),
+              contentPadding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xs),
               title: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text("Select Policies", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text("Select Policies"),
                   const SizedBox(height: 4),
                   Text(
                     localSelectedPolicyIds.isEmpty
                         ? "Choose one or more policies to compare"
                         : "${localSelectedPolicyIds.length} selected",
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.normal,
-                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                    style: dialogCtx.text.bodySmall?.copyWith(
+                      color: localSelectedPolicyIds.isEmpty ? pal.textTertiary : pal.primary,
+                      fontWeight: localSelectedPolicyIds.isEmpty ? FontWeight.w400 : FontWeight.w600,
                     ),
                   ),
                 ],
@@ -348,11 +368,11 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: policies.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 10),
+                  separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.xs),
                   itemBuilder: (context, index) {
                     final p = policies[index];
                     final isSelected = localSelectedPolicyIds.contains(p['id']);
-                    
+
                     final String provider = p['providerName'] ?? 'Insurance Policy';
                     final String policyType = p['policyType'] ?? '';
                     final String? holderName = p['policyHolderName'];
@@ -361,634 +381,544 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                     final String policyNo = p['displayId'] ?? p['policyNumber'] ?? 'Unknown';
                     final String? fileName = p['originalFileName'];
 
-                    return InkWell(
-                      onTap: () {
-                        setDialogState(() {
-                          final id = p['id']?.toString();
-                          if (id == null) return;
-                          if (localSelectedPolicyIds.contains(id)) {
-                            localSelectedPolicyIds.remove(id);
-                          } else {
-                            localSelectedPolicyIds.add(id);
-                          }
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? (isDark ? const Color(0x4D1E3A8A) : const Color(0xFFEFF6FF))
-                              : (isDark ? Colors.grey.shade900 : Colors.grey.shade50),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFF2563EB)
-                                : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-                            width: isSelected ? 1.5 : 1.0,
+                    ({String label, String value})? validity;
+                    if (formattedStart != null && formattedEnd != null) {
+                      validity = (label: 'Validity', value: '$formattedStart to $formattedEnd');
+                    } else if (formattedStart != null) {
+                      validity = (label: 'Start Date', value: formattedStart);
+                    } else if (formattedEnd != null) {
+                      validity = (label: 'Expiry', value: formattedEnd);
+                    }
+
+                    return Material(
+                      color: isSelected ? pal.primarySoft : pal.surface,
+                      borderRadius: AppRadius.mdAll,
+                      child: InkWell(
+                        onTap: () {
+                          setDialogState(() {
+                            final id = p['id']?.toString();
+                            if (id == null) return;
+                            if (localSelectedPolicyIds.contains(id)) {
+                              localSelectedPolicyIds.remove(id);
+                            } else {
+                              localSelectedPolicyIds.add(id);
+                            }
+                          });
+                        },
+                        borderRadius: AppRadius.mdAll,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.all(AppSpacing.sm),
+                          decoration: BoxDecoration(
+                            borderRadius: AppRadius.mdAll,
+                            border: Border.all(
+                              color: isSelected ? pal.primary : pal.border,
+                              width: isSelected ? 1.5 : 1.0,
+                            ),
                           ),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    policyType.isNotEmpty ? "$provider - $policyType" : provider,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  if (holderName != null && holderName.isNotEmpty) ...[
-                                    Row(
-                                      children: [
-                                        Icon(Icons.person_outline, size: 14, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                                        const SizedBox(width: 4),
-                                        Expanded(
-                                          child: Text(
-                                            "Holder: $holderName",
-                                            style: TextStyle(
-                                              fontSize: 12.5,
-                                              fontWeight: FontWeight.w500,
-                                              color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 3),
-                                  ],
-                                  Row(
-                                    children: [
-                                      Icon(Icons.tag, size: 14, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                                      const SizedBox(width: 4),
-                                      Expanded(
-                                        child: Text(
-                                          "No: $policyNo",
-                                          style: TextStyle(
-                                            fontSize: 12.5,
-                                            color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 3),
-                                  if (formattedStart != null && formattedEnd != null) ...[
-                                    Row(
-                                      children: [
-                                        Icon(Icons.calendar_today_outlined, size: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                                        const SizedBox(width: 4),
-                                        Expanded(
-                                          child: Text(
-                                            "Validity: $formattedStart to $formattedEnd",
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 3),
-                                  ] else if (formattedStart != null) ...[
-                                    Row(
-                                      children: [
-                                        Icon(Icons.calendar_today_outlined, size: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                                        const SizedBox(width: 4),
-                                        Expanded(
-                                          child: Text(
-                                            "Start Date: $formattedStart",
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 3),
-                                  ] else if (formattedEnd != null) ...[
-                                    Row(
-                                      children: [
-                                        Icon(Icons.event_busy_outlined, size: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                                        const SizedBox(width: 4),
-                                        Expanded(
-                                          child: Text(
-                                            "Expiry: $formattedEnd",
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 3),
-                                  ],
-                                  if (fileName != null && fileName.isNotEmpty)
-                                    Row(
-                                      children: [
-                                        Icon(Icons.description_outlined, size: 13, color: isDark ? Colors.grey.shade500 : Colors.grey.shade500),
-                                        const SizedBox(width: 4),
-                                        Expanded(
-                                          child: Text(
-                                            "File: $fileName",
-                                            style: TextStyle(
-                                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                                              fontSize: 11,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                ],
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                isSelected ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                                color: isSelected ? pal.primary : pal.borderStrong,
+                                size: 22,
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: isSelected
-                                  ? const Icon(Icons.check_box, color: Color(0xFF2563EB), size: 22)
-                                  : Icon(Icons.check_box_outline_blank, color: isDark ? Colors.grey.shade600 : Colors.grey.shade400, size: 22),
-                            ),
-                          ],
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(provider, style: dialogCtx.text.titleSmall?.copyWith(height: 1.35)),
+                                    if (policyType.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Text(policyType, style: dialogCtx.text.bodySmall),
+                                    ],
+                                    const SizedBox(height: AppSpacing.xs),
+                                    Divider(height: 1, color: pal.border),
+                                    const SizedBox(height: AppSpacing.xxs),
+                                    if (holderName != null && holderName.isNotEmpty)
+                                      _PolicyMetaLine(label: 'Holder', value: holderName),
+                                    _PolicyMetaLine(label: 'Policy No', value: policyNo),
+                                    if (validity != null) _PolicyMetaLine(label: validity.label, value: validity.value),
+                                    if (fileName != null && fileName.isNotEmpty)
+                                      _PolicyMetaLine(label: 'File', value: fileName, ellipsize: true),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     );
                   },
                 ),
               ),
+              actionsPadding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: Text("Cancel", style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade700)),
-                ),
-                ElevatedButton(
-                  onPressed: localSelectedPolicyIds.isEmpty ? null : () async {
-                    Navigator.of(dialogContext).pop();
-                    final prefs = SharedPrefs.instance;
-                    final selected = localSelectedPolicyIds.toList();
-                    await prefs.remove('policy_path'); // Ensure policy_path is cleared
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FilledButton(
+                      onPressed: localSelectedPolicyIds.isEmpty
+                          ? null
+                          : () async {
+                              Navigator.of(dialogContext).pop();
+                              final prefs = SharedPrefs.instance;
+                              final selected = localSelectedPolicyIds.toList();
+                              await prefs.remove('policy_path'); // Ensure policy_path is cleared
 
-                    if (selected.length == 1) {
-                      // Unchanged single-policy flow
-                      await prefs.setString('policy_id', selected.first);
-                      await prefs.remove('policy_ids');
-                      if (mounted) context.push('/analysis');
-                    } else {
-                      await prefs.setString('policy_ids', jsonEncode(selected));
-                      await prefs.remove('policy_id');
-                      if (mounted) context.push('/analysis-multi');
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: Text(
-                    localSelectedPolicyIds.length > 1
-                        ? "Analyze With ${localSelectedPolicyIds.length} Policies"
-                        : "Analyze With Selected Policy",
-                  ),
+                              if (selected.length == 1) {
+                                // Unchanged single-policy flow
+                                await prefs.setString('policy_id', selected.first);
+                                await prefs.remove('policy_ids');
+                                if (mounted) context.push('/analysis');
+                              } else {
+                                await prefs.setString('policy_ids', jsonEncode(selected));
+                                await prefs.remove('policy_id');
+                                if (mounted) context.push('/analysis-multi');
+                              }
+                            },
+                      style: FilledButton.styleFrom(minimumSize: const Size(0, 50)),
+                      child: Text(
+                        localSelectedPolicyIds.length > 1
+                            ? "Analyze With ${localSelectedPolicyIds.length} Policies"
+                            : "Analyze With Selected Policy",
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+                      child: const Text("Cancel"),
+                    ),
+                  ],
                 ),
               ],
             );
-          }
+          },
         );
-      }
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final Color primaryBlue = const Color(0xFF2563EB);
-    final Color textColor = isDark ? Colors.white : const Color(0xFF111827);
-    final Color textSecondary = isDark ? Colors.grey.shade400 : const Color(0xFF6B7280);
+    final p = context.palette;
+    final bool hasFile = _selectedFileName != null && _uploadedPath != null;
+    final bool hasManual = _manualTextController.text.trim().isNotEmpty;
+    final bool isValid = (hasFile ^ hasManual);
+    final bool canSubmit = isValid && !_isUploading && !_isExtracting;
+    final bool bothMethods = _selectedFileName != null && hasManual;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          onPressed: () => context.pop(),
+        ),
+        title: const Text('Add Prescription'),
+      ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(left: 24.0, right: 24.0, top: 16.0, bottom: 100.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => context.pop(),
-                    child: Icon(Icons.arrow_back, color: textColor, size: 28),
-                  ),
-                  const SizedBox(width: 16),
-                  Text(
-                    'Add Prescription',
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              
-              // Progress Bars (Step 2 of 3)
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: primaryBlue,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: primaryBlue,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-              
-              // Description
-              Text(
-                "Step 2: Upload your doctor's prescription, diagnosis, or medical bills.",
-                style: TextStyle(
-                  color: textSecondary,
-                  fontSize: 15,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 24),
-              
-              // Upload Area with Dashed Border
-              GestureDetector(
-                onTap: _isUploading ? null : _pickAndUploadFile,
-                child: CustomPaint(
-                  painter: DashedBorderPainter(
-                    color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
-                    strokeWidth: 2,
-                    gap: 6,
-                    radius: 24,
-                  ),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF374151) : const Color(0xFFEEF2F6),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFE0E7FF), // light blue bg for icon
-                            shape: BoxShape.circle,
-                          ),
-                          child: _isUploading 
-                              ? const CircularProgressIndicator()
-                              : const Icon(
-                                  Icons.find_in_page_outlined, // magnifying glass on doc
-                                  size: 32,
-                                  color: Color(0xFF4338CA), // indigo darker blue
-                                ),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          _selectedFileName ?? 'Tap to upload Medical Docs',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: textColor,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _selectedFileName == null ? 'PDF, JPG, PNG or DOCX' : 'File uploaded successfully',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: textSecondary,
-                          ),
-                        ),
-                        if (_selectedFileName != null) ...[
-                          const SizedBox(height: 12),
-                          InkWell(
-                            onTap: _clearUploadedFile,
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: isDark ? Colors.grey.shade800 : Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.red.shade300, width: 1),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.close, size: 14, color: Colors.red.shade600),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Remove file',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.red.shade600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
+        bottom: false,
+        child: ContentWidth(
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.xs, AppSpacing.page, AppSpacing.xl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _StepHeader(current: 2, total: 3, label: 'Prescription'),
+                const SizedBox(height: AppSpacing.xl),
+                Text('Add your prescription', style: context.text.headlineSmall),
+                const SizedBox(height: AppSpacing.xs),
+                Text("Upload your doctor's prescription, diagnosis, or medical bills.", style: context.text.bodyMedium),
+                const SizedBox(height: AppSpacing.xl),
 
-              // Manual Input Divider
-              Row(
-                children: [
-                  Expanded(child: Divider(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300)),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(
-                      'Or Enter Your Prescription Manually',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: textSecondary,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
+                // Option 1: upload a document
+                _OptionLabel(index: 1, title: 'Upload a document'),
+                const SizedBox(height: AppSpacing.sm),
+                if (_selectedFileName == null || _isUploading)
+                  _UploadDropZone(
+                    title: _isUploading
+                        ? 'Uploading ${_selectedFileName ?? 'document'}…'
+                        : 'Tap to upload medical documents',
+                    subtitle: _isUploading ? 'Please keep the app open' : 'PDF, JPG, PNG or DOCX',
+                    icon: Icons.find_in_page_outlined,
+                    loading: _isUploading,
+                    onTap: _isUploading ? null : _pickAndUploadFile,
+                  )
+                else
+                  _SelectedFileCard(
+                    fileName: _selectedFileName!,
+                    status: 'File uploaded successfully',
+                    onRemove: _clearUploadedFile,
+                    onReplace: _pickAndUploadFile,
                   ),
-                  Expanded(child: Divider(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300)),
-                ],
-              ),
-              const SizedBox(height: 16),
 
-              // Manual Input Text Area
-              Container(
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: (_selectedFileName != null && _manualTextController.text.trim().isNotEmpty)
-                        ? Colors.red.shade400
-                        : (_manualTextController.text.trim().isNotEmpty
-                            ? primaryBlue.withAlpha(160)
-                            : (isDark ? Colors.grey.shade700 : Colors.grey.shade300)),
-                    width: (_selectedFileName != null && _manualTextController.text.trim().isNotEmpty)
-                        ? 1.5
-                        : (_manualTextController.text.trim().isNotEmpty ? 1.5 : 1.0),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(8),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+                const SizedBox(height: AppSpacing.xl),
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: p.border)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                      child: Text('OR', style: context.text.labelSmall),
                     ),
+                    Expanded(child: Divider(color: p.border)),
                   ],
                 ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: primaryBlue.withAlpha(20),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.edit_note_rounded,
-                            size: 18,
-                            color: primaryBlue,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Prescription / Diagnosis Details',
-                            style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                              color: textColor,
-                              letterSpacing: 0.1,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        if (_manualTextController.text.trim().isNotEmpty)
-                          InkWell(
-                            onTap: () {
-                              _manualTextController.clear();
-                              setState(() {});
-                            },
-                            borderRadius: BorderRadius.circular(6),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.close_rounded, size: 14, color: Colors.red.shade600),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    'Clear',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.red.shade600,
-                                    ),
-                                  ),
-                                ],
+                const SizedBox(height: AppSpacing.xl),
+
+                // Option 2: describe it manually
+                _OptionLabel(index: 2, title: 'Enter your prescription manually'),
+                const SizedBox(height: AppSpacing.sm),
+                AppCard(
+                  borderColor: bothMethods ? p.warning.border : (hasManual ? p.primary.withAlpha(160) : null),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const IconTile(icon: Icons.edit_note_rounded, size: 32),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(child: Text('Prescription / Diagnosis Details', style: context.text.titleSmall)),
+                          if (hasManual)
+                            TextButton.icon(
+                              onPressed: () {
+                                _manualTextController.clear();
+                                setState(() {});
+                              },
+                              style: TextButton.styleFrom(
+                                foregroundColor: p.danger.fg,
+                                minimumSize: const Size(44, 40),
+                                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
                               ),
+                              icon: const Icon(Icons.close_rounded, size: 16),
+                              label: const Text('Clear'),
                             ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                          width: 1.0,
-                        ),
+                        ],
                       ),
-                      child: TextField(
+                      const SizedBox(height: AppSpacing.sm),
+                      TextField(
                         controller: _manualTextController,
                         minLines: 4,
                         maxLines: 8,
                         onChanged: (val) => setState(() {}),
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: textColor,
-                          height: 1.45,
-                        ),
+                        style: context.text.bodyLarge?.copyWith(fontSize: 14),
                         decoration: InputDecoration(
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          errorBorder: InputBorder.none,
-                          focusedErrorBorder: InputBorder.none,
-                          disabledBorder: InputBorder.none,
+                          fillColor: p.surfaceMuted,
                           hintText: "Describe your diagnosis, symptoms, doctor's findings, or prescribed treatment...",
-                          hintStyle: TextStyle(
-                            fontSize: 13.5,
-                            color: textSecondary,
-                            height: 1.45,
-                          ),
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
+                          hintMaxLines: 3,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Mutual Exclusivity Error Banner
-              if (_selectedFileName != null && _manualTextController.text.trim().isNotEmpty) ...[
-                const SizedBox(height: 14),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF451A1A) : const Color(0xFFFEF2F2),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.red.shade300),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Please choose only one prescription input method: either upload a prescription PDF or enter your prescription manually.',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w500,
-                            color: isDark ? Colors.red.shade200 : Colors.red.shade900,
-                            height: 1.35,
+                      // Only one input method can be used at a time.
+                      if (bothMethods) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 10),
+                          decoration: BoxDecoration(color: p.warning.bg, borderRadius: AppRadius.smAll),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 1),
+                                child: Icon(Icons.info_outline_rounded, size: 16, color: p.warning.fg),
+                              ),
+                              const SizedBox(width: AppSpacing.xs),
+                              Expanded(
+                                child: Text(
+                                  'Please choose only one prescription input method: either upload a prescription PDF or enter your prescription manually.',
+                                  textAlign: TextAlign.start,
+                                  style: context.text.bodySmall?.copyWith(color: p.textPrimary, height: 1.45),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
               ],
-              const SizedBox(height: 28),
-              
-              // Process Button
-              Builder(
-                builder: (context) {
-                  final bool hasFile = _selectedFileName != null && _uploadedPath != null;
-                  final bool hasManual = _manualTextController.text.trim().isNotEmpty;
-                  final bool isValid = (hasFile ^ hasManual);
-                  final bool canSubmit = isValid && !_isUploading && !_isExtracting;
-
-                  return Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: canSubmit
-                          ? [
-                              BoxShadow(
-                                color: primaryBlue.withAlpha(60),
-                                blurRadius: 16,
-                                offset: const Offset(0, 8),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: ElevatedButton(
-                      onPressed: canSubmit ? _processNext : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryBlue,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
-                        disabledForegroundColor: isDark ? Colors.grey.shade600 : Colors.grey.shade500,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (_isExtracting) ...[
-                            const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            ),
-                            const SizedBox(width: 12),
-                            const Text(
-                              'Processing...',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ] else ...[
-                            Text(
-                              hasManual ? 'Process Manual Prescription' : 'Process Prescription',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Icon(Icons.chevron_right, size: 20),
-                          ],
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
+            ),
           ),
         ),
       ),
+      bottomNavigationBar: BottomActionBar(
+        children: [
+          FilledButton(
+            onPressed: canSubmit ? _processNext : null,
+            style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 52)),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (_isExtracting) ...[
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2.4, color: p.onPrimary),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  const Text('Processing...'),
+                ] else ...[
+                  Flexible(
+                    child: Text(
+                      hasManual ? 'Process Manual Prescription' : 'Process Prescription',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  const Icon(Icons.chevron_right_rounded, size: 20),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Aligned "Label   Value" line used in the policy selection list.
+class _PolicyMetaLine extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool ellipsize;
+
+  const _PolicyMetaLine({required this.label, required this.value, this.ellipsize = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xxs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 70,
+            child: Text(label, style: context.text.bodySmall?.copyWith(color: p.textTertiary)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: ellipsize ? 1 : null,
+              overflow: ellipsize ? TextOverflow.ellipsis : null,
+              style: context.text.bodySmall?.copyWith(color: p.textPrimary, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Numbered label introducing one of the input options.
+class _OptionLabel extends StatelessWidget {
+  final int index;
+  final String title;
+
+  const _OptionLabel({required this.index, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Row(
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: p.primarySoft, shape: BoxShape.circle),
+          child: Text(
+            '$index',
+            style: context.text.labelSmall?.copyWith(color: p.primary, fontWeight: FontWeight.w700, letterSpacing: 0),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(child: Text(title, style: context.text.titleSmall)),
+      ],
+    );
+  }
+}
+
+/// Dashed upload target.
+class _UploadDropZone extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool loading;
+  final VoidCallback? onTap;
+
+  const _UploadDropZone({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.loading,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Semantics(
+      button: true,
+      label: title,
+      child: Material(
+        color: p.surface,
+        borderRadius: AppRadius.lgAll,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: AppRadius.lgAll,
+          child: CustomPaint(
+            painter: DashedBorderPainter(color: p.borderStrong, strokeWidth: 1.5, gap: 6, radius: AppRadius.lg),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxl, horizontal: AppSpacing.lg),
+              child: Column(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(color: p.primarySoft, shape: BoxShape.circle),
+                    alignment: Alignment.center,
+                    child: loading
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.6))
+                        : Icon(icon, size: 28, color: p.primary),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.titleSmall,
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(subtitle, textAlign: TextAlign.center, style: context.text.bodySmall),
+                  if (loading) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    const ClipRRect(borderRadius: AppRadius.pillAll, child: LinearProgressIndicator(minHeight: 4)),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Card shown once a document has been uploaded.
+class _SelectedFileCard extends StatelessWidget {
+  final String fileName;
+  final String status;
+  final VoidCallback onRemove;
+  final VoidCallback? onReplace;
+
+  const _SelectedFileCard({required this.fileName, required this.status, required this.onRemove, this.onReplace});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final lower = fileName.toLowerCase();
+    final isImage = lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png');
+    return AppCard(
+      borderColor: p.success.border,
+      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.xs, AppSpacing.sm),
+      child: Row(
+        children: [
+          IconTile(icon: isImage ? Icons.image_outlined : Icons.description_outlined, size: 44),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(fileName, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.text.titleSmall),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.check_circle_rounded, size: 14, color: p.success.fg),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        status,
+                        style: context.text.bodySmall?.copyWith(color: p.success.fg, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (onReplace != null)
+            IconButton(
+              onPressed: onReplace,
+              tooltip: 'Replace file',
+              icon: Icon(Icons.swap_horiz_rounded, color: p.textSecondary),
+            ),
+          IconButton(
+            onPressed: onRemove,
+            tooltip: 'Remove file',
+            icon: Icon(Icons.delete_outline_rounded, color: p.danger.fg),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Visual-only progress indicator for the Consent → Prescription → Policy flow.
+class _StepHeader extends StatelessWidget {
+  final int current;
+  final int total;
+  final String label;
+
+  const _StepHeader({required this.current, required this.total, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'STEP $current OF $total',
+              style: context.text.labelSmall?.copyWith(color: p.primary, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Flexible(
+              child: Text(
+                '· $label',
+                overflow: TextOverflow.ellipsis,
+                style: context.text.labelSmall?.copyWith(color: p.textTertiary),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: [
+            for (int i = 1; i <= total; i++) ...[
+              if (i > 1) const SizedBox(width: 6),
+              Expanded(
+                child: Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: i <= current ? p.primary : p.border,
+                    borderRadius: AppRadius.pillAll,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
     );
   }
 }
@@ -1000,12 +930,7 @@ class DashedBorderPainter extends CustomPainter {
   final double gap;
   final double radius;
 
-  DashedBorderPainter({
-    required this.color,
-    this.strokeWidth = 2.0,
-    this.gap = 5.0,
-    this.radius = 16.0,
-  });
+  DashedBorderPainter({required this.color, this.strokeWidth = 2.0, this.gap = 5.0, this.radius = 16.0});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1015,9 +940,7 @@ class DashedBorderPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     final Path path = Path()
-      ..addRRect(RRect.fromRectAndRadius(
-          Rect.fromLTWH(0, 0, size.width, size.height),
-          Radius.circular(radius)));
+      ..addRRect(RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, size.width, size.height), Radius.circular(radius)));
 
     final Path dashedPath = Path();
     for (PathMetric measurePath in path.computeMetrics()) {

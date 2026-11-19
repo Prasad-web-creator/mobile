@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:claimsupport/core/widgets/app_widgets.dart';
 
 class ConsentScreen extends StatefulWidget {
   const ConsentScreen({super.key});
@@ -20,268 +21,189 @@ class _ConsentScreenState extends State<ConsentScreen> {
     'I consent to processing my uploaded documents for analysis.',
   ];
 
+  static const List<IconData> _bulletIcons = [
+    Icons.badge_outlined,
+    Icons.info_outline_rounded,
+    Icons.send_outlined,
+    Icons.verified_user_outlined,
+    Icons.description_outlined,
+    Icons.lock_outline_rounded,
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final Color primaryBlue = const Color(0xFF2563EB);
-    final Color textColor = isDark ? Colors.white : const Color(0xFF111827);
-    final Color textSecondary = isDark ? Colors.grey.shade400 : const Color(0xFF4B5563);
+    final p = context.palette;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          onPressed: () => context.pop(),
+        ),
+        title: const Text('Consent & Agreement'),
+      ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.only(left: 24.0, right: 24.0, top: 16.0, bottom: 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+        bottom: false,
+        child: ContentWidth(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.xs, AppSpacing.page, AppSpacing.xl),
             children: [
-              // Header
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => context.pop(),
-                    child: Icon(Icons.arrow_back, color: textColor, size: 28),
-                  ),
-                  const SizedBox(width: 16),
-                  Text(
-                    'Consent & Agreement',
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              
-              // Progress Bars
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: primaryBlue,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-              
-              // Description
+              const _StepHeader(current: 1, total: 3, label: 'Consent'),
+              const SizedBox(height: AppSpacing.xl),
+              Text('Before we begin', style: context.text.headlineSmall),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 'Please review and accept the Terms & Conditions before the system analyzes your uploaded documents.',
-                style: TextStyle(
-                  color: textSecondary,
-                  fontSize: 15,
-                  height: 1.5,
-                ),
+                style: context.text.bodyMedium,
               ),
-              const SizedBox(height: 24),
-              
-              // Bullet Points Container
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.only(top: 16, bottom: 16, left: 16, right: 4),
-                  decoration: BoxDecoration(
-                    color: theme.cardTheme.color ?? theme.cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-                  ),
-                  child: RawScrollbar(
-                    thumbColor: Colors.grey.shade400,
-                    radius: const Radius.circular(4),
-                    thickness: 6,
-                    child: ListView.separated(
-                      padding: const EdgeInsets.only(right: 12),
-                      itemCount: _bulletPoints.length,
-                      separatorBuilder: (context, index) => const SizedBox(height: 20),
-                      itemBuilder: (context, index) {
-                        return Row(
+              const SizedBox(height: AppSpacing.xl),
+              AppCard(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xs),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const CardTitle(title: 'Terms of use', icon: Icons.gavel_rounded),
+                    const SizedBox(height: AppSpacing.sm),
+                    for (int i = 0; i < _bulletPoints.length; i++) ...[
+                      if (i > 0) Divider(height: 1, color: p.border),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6.0),
-                              child: Icon(Icons.circle, size: 6, color: isDark ? Colors.grey.shade400 : const Color(0xFF374151)),
-                            ),
-                            const SizedBox(width: 12),
+                            Icon(_bulletIcons[i % _bulletIcons.length], size: 20, color: p.textTertiary),
+                            const SizedBox(width: AppSpacing.sm),
                             Expanded(
                               child: Text(
-                                _bulletPoints[index],
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: isDark ? Colors.grey.shade300 : const Color(0xFF374151),
-                                  height: 1.4,
-                                ),
+                                _bulletPoints[i],
+                                style: context.text.bodyMedium?.copyWith(color: p.textPrimary),
                               ),
                             ),
                           ],
-                        );
-                      },
-                    ),
-                  ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              const SizedBox(height: 24),
-              
-              // Checkbox Container
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: BottomActionBar(
+        children: [
+          Material(
+            color: _agreed ? p.primarySoft : p.surfaceMuted,
+            borderRadius: AppRadius.mdAll,
+            child: InkWell(
+              borderRadius: AppRadius.mdAll,
+              onTap: () => setState(() => _agreed = !_agreed),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.xs),
                 decoration: BoxDecoration(
-                  color: theme.cardTheme.color ?? theme.cardColor,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+                  borderRadius: AppRadius.mdAll,
+                  border: Border.all(color: _agreed ? p.primary.withAlpha(90) : p.border),
                 ),
                 child: Row(
                   children: [
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: Checkbox(
-                        value: _agreed,
-                        activeColor: primaryBlue,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                        side: BorderSide(color: isDark ? Colors.grey.shade600 : Colors.grey.shade400, width: 1.5),
-                        onChanged: (value) {
-                          setState(() {
-                            _agreed = value ?? false;
-                          });
-                        },
-                      ),
+                    Checkbox(
+                      value: _agreed,
+                      onChanged: (value) {
+                        setState(() {
+                          _agreed = value ?? false;
+                        });
+                      },
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpacing.xxs),
                     Expanded(
                       child: Text(
-                        'I have read and agree to the Terms & Conditions and Privacy Policy.',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : const Color(0xFF1F2937),
-                        ),
+                        'I have read and agree to the Terms & Conditions.',
+                        style: context.text.titleSmall,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
-              
-              // Action Buttons
-              Row(
-                children: [
-                  // Cancel Button
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF374151) : Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withAlpha(5),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton(
-                        onPressed: () => context.pop(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark ? const Color(0xFF374151) : Colors.white,
-                          foregroundColor: isDark ? Colors.white : const Color(0xFF374151),
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 18),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  // Continue Button
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: _agreed
-                            ? [
-                                BoxShadow(
-                                  color: primaryBlue.withAlpha(60),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: ElevatedButton(
-                        onPressed: _agreed ? () => context.push('/upload') : null, // Go to upload options on success
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _agreed ? primaryBlue : const Color(0xFF94A3B8),
-                          disabledBackgroundColor: const Color(0xFF94A3B8),
-                          foregroundColor: Colors.white,
-                          disabledForegroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 18),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Text(
-                              'Continue',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            SizedBox(width: 4),
-                            Icon(Icons.chevron_right, size: 20),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(onPressed: () => context.pop(), child: const Text('Cancel')),
               ),
-              const SizedBox(height: 72), // extra space for bottom nav bar
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: _agreed ? () => context.push('/upload') : null, // Go to upload options on success
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(child: Text('Continue', overflow: TextOverflow.ellipsis)),
+                      SizedBox(width: 4),
+                      Icon(Icons.chevron_right_rounded, size: 20),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
-        ),
+        ],
       ),
+    );
+  }
+}
+
+/// Visual-only progress indicator for the Consent → Prescription → Policy flow.
+class _StepHeader extends StatelessWidget {
+  final int current;
+  final int total;
+  final String label;
+
+  const _StepHeader({required this.current, required this.total, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'STEP $current OF $total',
+              style: context.text.labelSmall?.copyWith(color: p.primary, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Flexible(
+              child: Text(
+                '· $label',
+                overflow: TextOverflow.ellipsis,
+                style: context.text.labelSmall?.copyWith(color: p.textTertiary),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: [
+            for (int i = 1; i <= total; i++) ...[
+              if (i > 1) const SizedBox(width: 6),
+              Expanded(
+                child: Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: i <= current ? p.primary : p.border,
+                    borderRadius: AppRadius.pillAll,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
     );
   }
 }

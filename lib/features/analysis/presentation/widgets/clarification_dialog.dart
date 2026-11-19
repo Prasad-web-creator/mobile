@@ -1,6 +1,7 @@
 // ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:claimsupport/core/widgets/app_widgets.dart';
 import 'dart:developer' as developer;
 
 // ─── Individual Question Widgets ────────────────────────────────────────────
@@ -12,12 +13,7 @@ class _SingleChoiceQuestion extends StatefulWidget {
   final String? currentValue;
   final ValueChanged<String?> onChanged;
 
-  const _SingleChoiceQuestion({
-    super.key,
-    required this.question,
-    required this.currentValue,
-    required this.onChanged,
-  });
+  const _SingleChoiceQuestion({super.key, required this.question, required this.currentValue, required this.onChanged});
 
   @override
   State<_SingleChoiceQuestion> createState() => _SingleChoiceQuestionState();
@@ -66,10 +62,7 @@ class _SingleChoiceQuestionState extends State<_SingleChoiceQuestion> {
     final qText = (q['question'] ?? '').toString().toLowerCase();
     final optLower = optStr.toLowerCase();
 
-    return id.contains('date') ||
-        title.contains('date') ||
-        qText.contains('date') ||
-        optLower.contains('date');
+    return id.contains('date') || title.contains('date') || qText.contains('date') || optLower.contains('date');
   }
 
   Future<void> _pickDateForOption(String optStr) async {
@@ -112,16 +105,11 @@ class _SingleChoiceQuestionState extends State<_SingleChoiceQuestion> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final surfaceColor = isDark ? const Color(0xFF1F2937) : const Color(0xFFF3F4F6);
+    final p = context.palette;
     final options = List<dynamic>.from(widget.question['options'] ?? []);
 
     if (options.isEmpty) {
-      return _TextInputWidget(
-        question: widget.question,
-        onChanged: (val) => widget.onChanged(val),
-      );
+      return _TextInputWidget(question: widget.question, onChanged: (val) => widget.onChanged(val));
     }
 
     return Column(
@@ -132,122 +120,134 @@ class _SingleChoiceQuestionState extends State<_SingleChoiceQuestion> {
         final isDate = _isDateContext(optStr);
 
         return Padding(
-          padding: const EdgeInsets.only(bottom: 8.0),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => _handleOptionSelection(optStr),
-              borderRadius: BorderRadius.circular(12),
-              child: Ink(
-                decoration: BoxDecoration(
-                  color: isSelected ? theme.colorScheme.primary.withAlpha(25) : surfaceColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isSelected ? theme.colorScheme.primary : Colors.transparent,
-                    width: 1.5,
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Radio<String>(
-                            value: optStr,
-                            groupValue: _selected,
-                            onChanged: (val) {
-                              if (val != null) _handleOptionSelection(val);
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              optStr,
-                              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (isSelected && requiresInput) ...[
-                        const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.only(left: 48, right: 8, bottom: 8),
-                          child: isDate
-                              ? Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    OutlinedButton.icon(
-                                      onPressed: () => _pickDateForOption(optStr),
-                                      icon: const Icon(Icons.calendar_month_rounded, size: 18),
-                                      label: Text(
-                                        _pickedDate != null
-                                            ? DateFormat('dd-MMM-yyyy').format(_pickedDate!)
-                                            : 'Select Date from Calendar',
-                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                                      ),
-                                      style: OutlinedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    TextFormField(
-                                      controller: _customInputController,
-                                      style: const TextStyle(fontSize: 13),
-                                      decoration: InputDecoration(
-                                        hintText: 'Or enter date (e.g. 15-Feb-2026)',
-                                        hintStyle: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                                        isDense: true,
-                                        filled: true,
-                                        fillColor: isDark ? const Color(0xFF111827) : Colors.white,
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                        prefixIcon: const Icon(Icons.edit_calendar_rounded, size: 16),
-                                        suffixIcon: IconButton(
-                                          icon: const Icon(Icons.calendar_today_rounded, size: 16),
-                                          onPressed: () => _pickDateForOption(optStr),
-                                        ),
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                          borderSide: BorderSide(color: Colors.grey.withAlpha(50)),
-                                        ),
-                                      ),
-                                      onChanged: (val) {
-                                        widget.onChanged(val.trim().isEmpty ? null : val.trim());
-                                      },
-                                    ),
-                                  ],
-                                )
-                              : TextFormField(
-                                  controller: _customInputController,
-                                  style: const TextStyle(fontSize: 13),
-                                  decoration: InputDecoration(
-                                    hintText: 'Please specify details...',
-                                    hintStyle: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                                    isDense: true,
-                                    filled: true,
-                                    fillColor: isDark ? const Color(0xFF111827) : Colors.white,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: Colors.grey.withAlpha(50)),
-                                    ),
-                                  ),
-                                  onChanged: (val) {
-                                    widget.onChanged(val.trim().isEmpty ? null : "$optStr: ${val.trim()}");
-                                  },
-                                ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
+          padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+          child: _OptionTile(
+            selected: isSelected,
+            onTap: () => _handleOptionSelection(optStr),
+            indicator: Icon(
+              isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+              size: 22,
+              color: isSelected ? p.primary : p.borderStrong,
             ),
+            label: optStr,
+            mutuallyExclusive: true,
+            footer: (isSelected && requiresInput)
+                ? (isDate
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: () => _pickDateForOption(optStr),
+                              icon: Icon(Icons.calendar_month_rounded, size: 18, color: p.primary),
+                              label: Text(
+                                _pickedDate != null
+                                    ? DateFormat('dd-MMM-yyyy').format(_pickedDate!)
+                                    : 'Select Date from Calendar',
+                              ),
+                              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            TextFormField(
+                              controller: _customInputController,
+                              decoration: InputDecoration(
+                                hintText: 'Or enter date (e.g. 15-Feb-2026)',
+                                isDense: true,
+                                prefixIcon: Icon(Icons.edit_calendar_rounded, size: 18, color: p.primary),
+                                suffixIcon: IconButton(
+                                  tooltip: 'Open calendar',
+                                  icon: Icon(Icons.calendar_month_rounded, size: 18, color: p.primary),
+                                  onPressed: () => _pickDateForOption(optStr),
+                                ),
+                              ),
+                              onChanged: (val) {
+                                widget.onChanged(val.trim().isEmpty ? null : val.trim());
+                              },
+                            ),
+                          ],
+                        )
+                      : TextFormField(
+                          controller: _customInputController,
+                          decoration: const InputDecoration(hintText: 'Please specify details...', isDense: true),
+                          onChanged: (val) {
+                            widget.onChanged(val.trim().isEmpty ? null : "$optStr: ${val.trim()}");
+                          },
+                        ))
+                : null,
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+/// Selectable answer tile used by single- and multi-choice questions.
+class _OptionTile extends StatelessWidget {
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget indicator;
+  final String label;
+  final Widget? footer;
+  final bool mutuallyExclusive;
+
+  const _OptionTile({
+    required this.selected,
+    required this.onTap,
+    required this.indicator,
+    required this.label,
+    this.footer,
+    this.mutuallyExclusive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Semantics(
+      button: true,
+      selected: selected,
+      checked: selected,
+      inMutuallyExclusiveGroup: mutuallyExclusive,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: AppRadius.mdAll,
+          child: Ink(
+            decoration: BoxDecoration(
+              color: selected ? p.primarySoft : p.surface,
+              borderRadius: AppRadius.mdAll,
+              border: Border.all(color: selected ? p.primary : p.border, width: selected ? 1.5 : 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(padding: const EdgeInsets.only(top: 1), child: indicator),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: context.text.bodyMedium?.copyWith(
+                            color: p.textPrimary,
+                            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (footer != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Padding(padding: const EdgeInsets.only(left: 34), child: footer),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -257,12 +257,7 @@ class _MultiChoiceQuestion extends StatefulWidget {
   final List<String> currentValues;
   final ValueChanged<List<String>> onChanged;
 
-  const _MultiChoiceQuestion({
-    super.key,
-    required this.question,
-    required this.currentValues,
-    required this.onChanged,
-  });
+  const _MultiChoiceQuestion({super.key, required this.question, required this.currentValues, required this.onChanged});
 
   @override
   State<_MultiChoiceQuestion> createState() => _MultiChoiceQuestionState();
@@ -279,9 +274,7 @@ class _MultiChoiceQuestionState extends State<_MultiChoiceQuestion> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final surfaceColor = isDark ? const Color(0xFF1F2937) : const Color(0xFFF3F4F6);
+    final p = context.palette;
     final options = List<dynamic>.from(widget.question['options'] ?? []);
 
     if (options.isEmpty) {
@@ -296,36 +289,26 @@ class _MultiChoiceQuestionState extends State<_MultiChoiceQuestion> {
         final optStr = opt.toString();
         final isSelected = _selected.contains(optStr);
         return Padding(
-          padding: const EdgeInsets.only(bottom: 8.0),
-          child: Material(
-            color: Colors.transparent,
-            child: Ink(
-              decoration: BoxDecoration(
-                color: isSelected ? theme.colorScheme.primary.withAlpha(25) : surfaceColor,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isSelected ? theme.colorScheme.primary : Colors.transparent,
-                  width: 1.5,
-                ),
-              ),
-              child: CheckboxListTile(
-                dense: true,
-                title: Text(optStr, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
-                value: isSelected,
-                activeColor: theme.colorScheme.primary,
-                onChanged: (val) {
-                  setState(() {
-                    if (val == true) {
-                      _selected.add(optStr);
-                    } else {
-                      _selected.remove(optStr);
-                    }
-                  });
-                  widget.onChanged(List<String>.from(_selected));
-                  developer.log('[Clarification] Multi-choice updated: $_selected for question ${widget.question['id']}');
-                },
-              ),
+          padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+          child: _OptionTile(
+            selected: isSelected,
+            label: optStr,
+            indicator: Icon(
+              isSelected ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+              size: 22,
+              color: isSelected ? p.primary : p.borderStrong,
             ),
+            onTap: () {
+              setState(() {
+                if (!isSelected) {
+                  _selected.add(optStr);
+                } else {
+                  _selected.remove(optStr);
+                }
+              });
+              widget.onChanged(List<String>.from(_selected));
+              developer.log('[Clarification] Multi-choice updated: $_selected for question ${widget.question['id']}');
+            },
           ),
         );
       }).toList(),
@@ -338,12 +321,7 @@ class _BooleanQuestion extends StatefulWidget {
   final bool? currentValue;
   final ValueChanged<bool> onChanged;
 
-  const _BooleanQuestion({
-    super.key,
-    required this.question,
-    required this.currentValue,
-    required this.onChanged,
-  });
+  const _BooleanQuestion({super.key, required this.question, required this.currentValue, required this.onChanged});
 
   @override
   State<_BooleanQuestion> createState() => _BooleanQuestionState();
@@ -360,27 +338,27 @@ class _BooleanQuestionState extends State<_BooleanQuestion> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final surfaceColor = isDark ? const Color(0xFF1F2937) : const Color(0xFFF3F4F6);
+    final p = context.palette;
 
-    return Material(
-      color: Colors.transparent,
-      child: Ink(
-        decoration: BoxDecoration(
-          color: surfaceColor,
-          borderRadius: BorderRadius.circular(12),
+    return Container(
+      decoration: BoxDecoration(
+        color: _value ? p.primarySoft : p.surface,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: _value ? p.primary : p.border),
+      ),
+      child: SwitchListTile(
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
+        title: Text(
+          'Yes / No',
+          style: context.text.bodyMedium?.copyWith(color: p.textPrimary, fontWeight: FontWeight.w600),
         ),
-        child: SwitchListTile(
-          dense: true,
-          title: const Text('Yes / No', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
-          value: _value,
-          onChanged: (val) {
-            setState(() => _value = val);
-            widget.onChanged(val);
-            developer.log('[Clarification] Boolean changed: $val for question ${widget.question['id']}');
-          },
-        ),
+        subtitle: Text(_value ? 'Yes' : 'No', style: context.text.bodySmall),
+        value: _value,
+        onChanged: (val) {
+          setState(() => _value = val);
+          widget.onChanged(val);
+          developer.log('[Clarification] Boolean changed: $val for question ${widget.question['id']}');
+        },
       ),
     );
   }
@@ -444,9 +422,7 @@ class _TextInputWidgetState extends State<_TextInputWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final surfaceColor = isDark ? const Color(0xFF1F2937) : const Color(0xFFF3F4F6);
+    final p = context.palette;
     final type = widget.question['type'] ?? 'text';
     final isDate = _isDateContext;
 
@@ -457,25 +433,15 @@ class _TextInputWidgetState extends State<_TextInputWidget> {
         widget.onChanged(val.isEmpty ? null : val);
       },
       decoration: InputDecoration(
-        filled: true,
-        fillColor: surfaceColor,
-        hintText: isDate ? 'e.g., 15-Feb-2026 (or tap calendar)' : null,
-        prefixIcon: isDate ? const Icon(Icons.edit_calendar_rounded, size: 18) : null,
+        hintText: isDate ? 'e.g., 15-Feb-2026 (or tap calendar)' : 'Type your answer',
+        prefixIcon: isDate ? Icon(Icons.edit_calendar_rounded, size: 18, color: p.primary) : null,
         suffixIcon: isDate
             ? IconButton(
-                icon: const Icon(Icons.calendar_today_rounded, size: 20),
+                tooltip: 'Open calendar',
+                icon: Icon(Icons.calendar_month_rounded, size: 20, color: p.primary),
                 onPressed: _pickDate,
               )
             : null,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
-        ),
       ),
     );
   }
@@ -486,12 +452,7 @@ class _DateQuestionWidget extends StatefulWidget {
   final String? currentValue;
   final ValueChanged<String?> onChanged;
 
-  const _DateQuestionWidget({
-    super.key,
-    required this.question,
-    required this.currentValue,
-    required this.onChanged,
-  });
+  const _DateQuestionWidget({super.key, required this.question, required this.currentValue, required this.onChanged});
 
   @override
   State<_DateQuestionWidget> createState() => _DateQuestionWidgetState();
@@ -550,79 +511,40 @@ class _DateQuestionWidgetState extends State<_DateQuestionWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final surfaceColor = isDark ? const Color(0xFF1F2937) : const Color(0xFFF3F4F6);
+    final p = context.palette;
+    final hasValue = _controller.text.isNotEmpty;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        InkWell(
-          onTap: _pickDate,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: surfaceColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: _selectedDate != null ? theme.colorScheme.primary : Colors.transparent,
-                width: 1.5,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.calendar_month_rounded,
-                  color: _selectedDate != null ? theme.colorScheme.primary : Colors.grey,
-                  size: 22,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _controller.text.isNotEmpty ? _controller.text : 'Select Date from Calendar',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: _controller.text.isNotEmpty ? FontWeight.w600 : FontWeight.w400,
-                      color: _controller.text.isNotEmpty
-                          ? (isDark ? Colors.white : Colors.black87)
-                          : Colors.grey,
-                    ),
+    return Material(
+      color: p.surfaceMuted,
+      borderRadius: AppRadius.mdAll,
+      child: InkWell(
+        onTap: _pickDate,
+        borderRadius: AppRadius.mdAll,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+          decoration: BoxDecoration(
+            borderRadius: AppRadius.mdAll,
+            border: Border.all(color: hasValue ? p.primary : p.border),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.calendar_month_rounded, size: 20, color: p.primary),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  hasValue ? _controller.text : 'Select date *',
+                  style: context.text.bodyMedium?.copyWith(
+                    fontWeight: hasValue ? FontWeight.w600 : FontWeight.w400,
+                    color: hasValue ? p.textPrimary : p.textTertiary,
                   ),
                 ),
-                TextButton.icon(
-                  onPressed: _pickDate,
-                  icon: const Icon(Icons.arrow_drop_down, size: 20),
-                  label: const Text('Pick', style: TextStyle(fontWeight: FontWeight.w600)),
-                ),
-              ],
-            ),
+              ),
+              Icon(Icons.expand_more_rounded, color: p.textTertiary),
+            ],
           ),
         ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _controller,
-          onChanged: (val) {
-            widget.onChanged(val.trim().isEmpty ? null : val.trim());
-          },
-          decoration: InputDecoration(
-            hintText: 'Or enter date manually (e.g. 15-Feb-2026)',
-            hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-            filled: true,
-            fillColor: surfaceColor,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            prefixIcon: const Icon(Icons.edit_calendar_rounded, size: 18),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -676,8 +598,10 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
   void initState() {
     super.initState();
     _questions = widget.clarificationData['questions'] ?? [];
-    developer.log('[Clarification] Dialog opened with ${_questions.length} questions: '
-        '${_questions.map((q) => q['id']).toList()}');
+    developer.log(
+      '[Clarification] Dialog opened with ${_questions.length} questions: '
+      '${_questions.map((q) => q['id']).toList()}',
+    );
   }
 
   bool _canSubmit() {
@@ -699,6 +623,18 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
     developer.log('[Clarification] Answer stored: $questionId = $value');
   }
 
+  /// Splits backend question text into lead-in context and the final question
+  /// sentence, so the question itself can be shown prominently. Text is unchanged.
+  ({String context, String question}) _splitQuestion(String text) {
+    final trimmed = text.trim();
+    final qMark = trimmed.lastIndexOf('?');
+    if (qMark <= 0) return (context: '', question: trimmed);
+    final before = trimmed.substring(0, qMark);
+    final boundary = RegExp(r'[.!?]\s+').allMatches(before).fold<int>(-1, (_, m) => m.end);
+    if (boundary <= 0) return (context: '', question: trimmed);
+    return (context: trimmed.substring(0, boundary).trim(), question: trimmed.substring(boundary).trim());
+  }
+
   void _handleSubmit() {
     developer.log('[Clarification] Submit pressed. Payload: $_answers');
     widget.onSubmit(Map<String, dynamic>.from(_answers));
@@ -711,7 +647,8 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
     final String qText = (q['question'] ?? '').toString();
     final options = List<dynamic>.from(q['options'] ?? []);
 
-    final bool isDate = type == 'date' ||
+    final bool isDate =
+        type == 'date' ||
         type == 'datetime' ||
         (options.isEmpty &&
             (id.toLowerCase().contains('date') ||
@@ -760,97 +697,58 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
       case 'text':
       case 'number':
       default:
-        return _TextInputWidget(
-          key: ValueKey('text_$id'),
-          question: q,
-          onChanged: (val) => _onAnswerChanged(id, val),
-        );
+        return _TextInputWidget(key: ValueKey('text_$id'), question: q, onChanged: (val) => _onAnswerChanged(id, val));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final Color textColor = isDark ? Colors.white : const Color(0xFF111827);
-    final Color textSecondary = isDark ? Colors.grey.shade400 : const Color(0xFF6B7280);
-    final Color primaryColor = theme.colorScheme.primary;
+    final p = context.palette;
+    final t = context.text;
+    final canSubmit = _canSubmit();
+    final hasRequired = _questions.any((q) => q is Map && q['required'] == true);
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.0)),
-      elevation: 8,
-      backgroundColor: isDark ? const Color(0xFF1F2937) : Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      child: SizedBox(
-        width: double.infinity,
+      insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xl),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ── Header ──────────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF111827) : const Color(0xFFF9FAFB),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                ),
-                border: Border(
-                  bottom: BorderSide(color: Colors.grey.withAlpha(38)),
-                ),
-              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.md),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: primaryColor.withAlpha(31),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.help_outline_rounded, color: primaryColor, size: 22),
-                  ),
-                  const SizedBox(width: 14),
+                  const IconTile(icon: Icons.quiz_outlined, size: 44),
+                  const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Clarification Needed',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: textColor,
-                          ),
-                        ),
+                        Text('Clarification Needed', style: t.titleLarge),
                         // Multi-policy comparison only: which policy (by its
                         // number on the comparison screen) is asking.
                         if (widget.policyNumber != null) ...[
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withAlpha(36),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.orange),
-                            ),
-                            child: Text(
-                              (widget.policyCount ?? 0) > 1
-                                  ? 'Policy ${widget.policyNumber} of ${widget.policyCount}'
-                                  : 'Policy ${widget.policyNumber}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.deepOrange,
-                              ),
-                            ),
+                          const SizedBox(height: AppSpacing.xxs),
+                          StatusBadge(
+                            dense: true,
+                            tone: AppTone.warning,
+                            icon: Icons.shield_outlined,
+                            label: (widget.policyCount ?? 0) > 1
+                                ? 'Policy ${widget.policyNumber} of ${widget.policyCount}'
+                                : 'Policy ${widget.policyNumber}',
                           ),
                         ],
-                        const SizedBox(height: 2),
+                        const SizedBox(height: AppSpacing.xxs),
                         Text(
                           widget.contextLabel != null
                               ? 'These questions are about one policy only.'
                               : 'Answer to complete your coverage analysis.',
-                          style: TextStyle(fontSize: 12, color: textSecondary),
+                          style: t.bodySmall,
                         ),
                       ],
                     ),
@@ -858,20 +756,15 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
                 ],
               ),
             ),
+            Divider(height: 1, color: p.border),
 
             // ── Which policy is asking ───────────────────────────────
             // In a multi-policy comparison the answers only apply to this one
             // policy, so it is named up front rather than in fine print.
-            if (widget.contextLabel != null)
+            if (widget.contextLabel != null) ...[
               Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-                decoration: BoxDecoration(
-                  color: primaryColor.withAlpha(isDark ? 38 : 20),
-                  border: Border(
-                    bottom: BorderSide(color: Colors.grey.withAlpha(38)),
-                  ),
-                ),
+                color: p.primarySoft,
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -880,22 +773,15 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
                         width: 32,
                         height: 32,
                         alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: primaryColor,
-                          shape: BoxShape.circle,
-                        ),
+                        decoration: BoxDecoration(color: p.primary, shape: BoxShape.circle),
                         child: Text(
                           '${widget.policyNumber}',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
+                          style: t.titleSmall?.copyWith(color: p.onPrimary, fontWeight: FontWeight.w700),
                         ),
                       )
                     else
-                      Icon(Icons.shield_outlined, size: 18, color: primaryColor),
-                    const SizedBox(width: 10),
+                      Icon(Icons.shield_outlined, size: 20, color: p.primary),
+                    const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -903,142 +789,105 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
                           Text(
                             widget.policyNumber != null
                                 ? 'Asked about Policy ${widget.policyNumber}'
-                                    '${(widget.policyCount ?? 0) > 1 ? ' of ${widget.policyCount}' : ''}'
+                                      '${(widget.policyCount ?? 0) > 1 ? ' of ${widget.policyCount}' : ''}'
                                 : 'Asked about this policy',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.3,
-                              color: textSecondary,
-                            ),
+                            style: t.labelSmall,
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            widget.contextLabel!,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: textColor,
-                            ),
-                          ),
+                          const SizedBox(height: 2),
+                          Text(widget.contextLabel!, style: t.titleSmall),
                           if ((widget.contextSubLabel ?? '').isNotEmpty) ...[
                             const SizedBox(height: 2),
-                            Text(
-                              widget.contextSubLabel!,
-                              style: TextStyle(fontSize: 12, color: textSecondary),
-                            ),
+                            Text(widget.contextSubLabel!, style: t.bodySmall),
                           ],
-                          const SizedBox(height: 6),
-                          Text(
-                            widget.queueLabel ?? 'Your other policies are unaffected.',
-                            style: TextStyle(fontSize: 11, color: textSecondary),
-                          ),
+                          const SizedBox(height: AppSpacing.xxs),
+                          Text(widget.queueLabel ?? 'Your other policies are unaffected.', style: t.bodySmall),
                         ],
                       ),
                     ),
                   ],
                 ),
               ),
+              Divider(height: 1, color: p.border),
+            ],
 
             // ── Scrollable Questions ─────────────────────────────────
             Flexible(
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+              child: ListView.separated(
+                padding: const EdgeInsets.all(AppSpacing.lg),
                 shrinkWrap: true,
-                physics: const BouncingScrollPhysics(),
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                 itemCount: _questions.length,
+                separatorBuilder: (context, index) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                  child: Divider(height: 1, color: p.border),
+                ),
                 itemBuilder: (context, index) {
                   final q = _questions[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 24.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Question header
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              margin: const EdgeInsets.only(top: 1, right: 10),
-                              width: 22,
-                              height: 22,
-                              decoration: BoxDecoration(
-                                color: primaryColor,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  '${index + 1}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                  final reason = q['reason'];
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Question header: topic, any context sentences, then the question itself.
+                      Builder(
+                        builder: (context) {
+                          final parts = _splitQuestion((q['question'] ?? '').toString());
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 children: [
-                                  Text(
-                                    q['title'] ?? 'Question ${index + 1}',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: textColor,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    q['question'] ?? '',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: textColor.withAlpha(191),
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                  if (q['reason'] != null && (q['reason'] as String).isNotEmpty) ...[
-                                    const SizedBox(height: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: Colors.amber.withAlpha(25),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: Colors.amber.withAlpha(77)),
-                                      ),
-                                      child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Padding(
-                                            padding: const EdgeInsets.only(top: 1.0),
-                                            child: Icon(Icons.info_outline, size: 13, color: Colors.amber.shade700),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Expanded(
-                                            child: Text(
-                                              q['reason'],
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
-                                                height: 1.4,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                                  Container(
+                                    width: 22,
+                                    height: 22,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(color: p.primarySoft, shape: BoxShape.circle),
+                                    child: Text(
+                                      '${index + 1}',
+                                      style: t.labelSmall?.copyWith(
+                                        color: p.primary,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0,
                                       ),
                                     ),
-                                  ],
+                                  ),
+                                  const SizedBox(width: AppSpacing.xs),
+                                  Expanded(
+                                    child: Text(
+                                      (q['title'] ?? 'Question ${index + 1}').toString(),
+                                      style: t.labelMedium?.copyWith(color: p.primary, fontWeight: FontWeight.w700),
+                                    ),
+                                  ),
                                 ],
                               ),
-                            ),
-                          ],
+                              if (parts.context.isNotEmpty) ...[
+                                const SizedBox(height: AppSpacing.sm),
+                                Text(parts.context, textAlign: TextAlign.start, style: t.bodyMedium),
+                              ],
+                              if (parts.question.isNotEmpty) ...[
+                                const SizedBox(height: AppSpacing.xs),
+                                Text(parts.question, style: t.titleMedium?.copyWith(height: 1.35)),
+                              ],
+                            ],
+                          );
+                        },
+                      ),
+                      if (reason != null && (reason as String).isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        InfoBanner(
+                          tone: AppTone.warning,
+                          icon: Icons.info_outline_rounded,
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                          child: Text(
+                            reason,
+                            textAlign: TextAlign.start,
+                            style: t.bodySmall?.copyWith(color: p.textPrimary.withAlpha(220)),
+                          ),
                         ),
-                        const SizedBox(height: 12),
-                        // Input widget — isolated StatefulWidget per question
-                        _buildQuestionInput(q),
                       ],
-                    ),
+                      const SizedBox(height: AppSpacing.sm),
+                      // Input widget — isolated StatefulWidget per question
+                      _buildQuestionInput(q),
+                    ],
                   );
                 },
               ),
@@ -1046,46 +895,43 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
 
             // ── Footer ───────────────────────────────────────────────
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
               decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: Colors.grey.withAlpha(38))),
+                border: Border(top: BorderSide(color: p.border)),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        developer.log('[Clarification] Cancel pressed');
-                        widget.onCancel();
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        foregroundColor: textSecondary,
-                        side: BorderSide(color: Colors.grey.withAlpha(102)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
+                  if (hasRequired && !canSubmit) ...[
+                    Text(
+                      'Please answer the questions above to continue.',
+                      textAlign: TextAlign.center,
+                      style: t.bodySmall,
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton(
-                      onPressed: _canSubmit() ? _handleSubmit : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: primaryColor.withAlpha(77),
-                        disabledForegroundColor: Colors.white.withAlpha(153),
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    const SizedBox(height: AppSpacing.xs),
+                  ],
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            developer.log('[Clarification] Cancel pressed');
+                            widget.onCancel();
+                          },
+                          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+                          child: const Text('Cancel'),
+                        ),
                       ),
-                      child: const Text(
-                        'Submit Answers',
-                        style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.2),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton(
+                          onPressed: canSubmit ? _handleSubmit : null,
+                          style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+                          child: const Text('Submit Answers', overflow: TextOverflow.ellipsis),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),

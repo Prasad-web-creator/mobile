@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:claimsupport/core/network/api_client.dart';
 import 'package:claimsupport/core/utils/shared_prefs.dart';
 import 'package:claimsupport/core/utils/device_app_info.dart';
+import 'package:claimsupport/core/widgets/app_widgets.dart';
 
 class UploadPolicyScreen extends StatefulWidget {
   const UploadPolicyScreen({super.key});
@@ -27,30 +28,33 @@ class UploadPolicyScreen extends StatefulWidget {
 /// new or renewed → start date (new) / first start date (renewed) →
 /// (renewed) renewed every year without a break.
 class _UploadedPolicy {
-  _UploadedPolicy({
-    required this.fileName,
-    required this.fileId,
-    required this.policyId,
-  });
+  _UploadedPolicy({required this.fileName, required this.fileId, required this.policyId});
 
   final String fileName;
   final String fileId;
   final String policyId;
   DateTime? inceptionDate;
+
   /// false for a new (first-year) policy, true for a renewed one.
   bool? isRenewal;
   bool? renewedWithoutBreak;
 
+  /// Auto-extraction state tracking
+  bool isExtracting = false;
+  bool isRenewalAutoExtracted = false;
+  bool startDateAutoExtracted = false;
+  bool noBreakAutoExtracted = false;
+
   /// Clear the answers that no longer apply after an earlier answer changed.
   void clearAfterRenewalAnswer() {
-    if (isRenewal != true) renewedWithoutBreak = null;
+    if (isRenewal != true && !noBreakAutoExtracted) renewedWithoutBreak = null;
   }
 
   /// Set new / renewed. The date means something different for each (the
   /// policy's start date vs the very first start date), so a date picked for
   /// the other answer is cleared and asked again.
   void setRenewal(bool value) {
-    if (isRenewal != null && isRenewal != value) inceptionDate = null;
+    if (isRenewal != null && isRenewal != value && !startDateAutoExtracted) inceptionDate = null;
     isRenewal = value;
     clearAfterRenewalAnswer();
   }
@@ -70,9 +74,7 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
     final current = policy.inceptionDate;
     final firstDate = DateTime(1970);
     final helpText = policy.isRenewal == true ? 'Date this policy was first taken' : 'Policy start date';
-    final initialDate = (current != null && !current.isAfter(today) && !current.isBefore(firstDate))
-        ? current
-        : today;
+    final initialDate = (current != null && !current.isAfter(today) && !current.isBefore(firstDate)) ? current : today;
 
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -82,20 +84,6 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
       helpText: helpText,
       confirmText: 'Confirm',
       cancelText: 'Cancel',
-      builder: (context, child) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: const Color(0xFF2563EB),
-              onPrimary: Colors.white,
-              surface: isDark ? const Color(0xFF1F2937) : Colors.white,
-              onSurface: isDark ? Colors.white : const Color(0xFF111827),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (picked == null) return;
@@ -124,13 +112,16 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
       // Answers that do not apply are sent as null so an earlier answer is cleared.
       // Break dates are no longer asked: after a break, the analysis counts cover
       // from the uploaded policy document's start date.
-      await ApiClient().dio.put('/policies/${policy.policyId}', data: {
-        'inceptionDate': policy.inceptionDate!.toIso8601String(),
-        'isRenewal': policy.isRenewal,
-        'continuousRenewal': policy.isRenewal == true ? policy.renewedWithoutBreak : null,
-        'breakStartDate': null,
-        'coverRestartDate': null,
-      });
+      await ApiClient().dio.put(
+        '/policies/${policy.policyId}',
+        data: {
+          'inceptionDate': policy.inceptionDate!.toIso8601String(),
+          'isRenewal': policy.isRenewal,
+          'continuousRenewal': policy.isRenewal == true ? policy.renewedWithoutBreak : null,
+          'breakStartDate': null,
+          'coverRestartDate': null,
+        },
+      );
     } catch (e) {
       debugPrint("Failed to save policy continuity details: $e");
     }
@@ -154,11 +145,24 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
     final picked = result?.files.where((f) => f.path != null).toList() ?? [];
     if (picked.isEmpty) return;
 
-    var files = picked;
-    if (files.length > remaining) {
-      files = files.sublist(0, remaining);
-      _toast('Only the first $remaining added — you can compare up to $_maxPolicies policies.');
+    // The system file picker cannot cap how many files are ticked, so an
+    // over-limit selection is rejected as a whole (never silently trimmed)
+    // and the user can pick again.
+    if (picked.length > remaining) {
+      if (!mounted) return;
+      final pickAgain = await showConfirmDialog(
+        context,
+        title: 'Too many files selected',
+        message: 'You selected ${picked.length} files, but you can add only $remaining more '
+            '${remaining == 1 ? 'policy' : 'policies'} (up to $_maxPolicies in total). '
+            'Please select up to $remaining ${remaining == 1 ? 'file' : 'files'}.',
+        confirmLabel: 'Select again',
+        icon: Icons.filter_5_rounded,
+      );
+      if (pickAgain && mounted) await _pickAndUploadFiles();
+      return;
     }
+    final files = picked;
 
     setState(() => _isUploading = true);
     try {
@@ -175,57 +179,107 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
   Future<void> _uploadOne(PlatformFile file) async {
     String? fileId;
     try {
-      final formData = FormData.fromMap({
-        'file': await MultipartFile.fromFile(file.path!),
-      });
+      final formData = FormData.fromMap({'file': await MultipartFile.fromFile(file.path!)});
 
       final response = await ApiClient().dio.post('/upload', data: formData);
       if (response.statusCode != 200) {
-        _toast('Could not upload ${file.name}.');
+        _toast('Could not upload ${file.name}.', tone: AppTone.danger);
         return;
       }
 
       fileId = response.data['fileId'].toString();
-      final isImageBased = response.data['isImageBased'] == true ||
+      final isImageBased =
+          response.data['isImageBased'] == true ||
           file.name.toLowerCase().endsWith('.jpg') ||
           file.name.toLowerCase().endsWith('.jpeg') ||
           file.name.toLowerCase().endsWith('.png');
 
       final agreementData = await DeviceAppInfo.buildAgreementData();
-      final policyResponse = await ApiClient().dio.post('/policies', data: {
-        'insuranceCompany': '',
-        'policyNumber': '',
-        'policyName': 'Uploaded Policy',
-        'gridFsFileId': fileId,
-        'originalFileName': file.name,
-        'agreement': agreementData,
-      });
+      final policyResponse = await ApiClient().dio.post(
+        '/policies',
+        data: {
+          'insuranceCompany': '',
+          'policyNumber': '',
+          'policyName': 'Uploaded Policy',
+          'gridFsFileId': fileId,
+          'originalFileName': file.name,
+          'agreement': agreementData,
+        },
+      );
 
-      final newPolicyId =
-          (policyResponse.data['_id'] ?? policyResponse.data['id']).toString();
+      final newPolicyId = (policyResponse.data['_id'] ?? policyResponse.data['id']).toString();
 
       await SharedPrefs.instance.setBool('policy_is_image_based', isImageBased);
 
       if (!mounted) return;
+      final newPolicy = _UploadedPolicy(fileName: file.name, fileId: fileId!, policyId: newPolicyId);
       setState(() {
-        _policies.add(_UploadedPolicy(
-          fileName: file.name,
-          fileId: fileId!,
-          policyId: newPolicyId,
-        ));
+        _policies.add(newPolicy);
       });
+
+      // Extract details automatically from the uploaded document
+      _extractPolicyDetails(newPolicy);
     } on DioException catch (e) {
       await _rollbackUpload(fileId);
-      final offline = e.type == DioExceptionType.connectionError ||
+      final offline =
+          e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout;
-      _toast(offline
-          ? 'Unable to connect to the server. Please check your internet connection and try again.'
-          : 'Our servers could not process ${file.name}. Please try again later.');
+      _toast(
+        offline
+            ? 'Unable to connect to the server. Please check your internet connection and try again.'
+            : 'Our servers could not process ${file.name}. Please try again later.',
+        tone: AppTone.danger,
+      );
     } catch (e) {
       debugPrint("Failed to save policy record: $e");
       await _rollbackUpload(fileId);
-      _toast('Could not add ${file.name}. Please try again.');
+      _toast('Could not add ${file.name}. Please try again.', tone: AppTone.danger);
+    }
+  }
+
+  Future<void> _extractPolicyDetails(_UploadedPolicy policy) async {
+    setState(() => policy.isExtracting = true);
+    try {
+      final response = await ApiClient().dio.post('/policies/${policy.policyId}/extract-details');
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data;
+        final extractedFields = data['extractedFields'] as Map<String, dynamic>? ?? {};
+
+        DateTime? parsedDate;
+        if (data['startDate'] != null) {
+          try {
+            parsedDate = DateTime.parse(data['startDate'].toString());
+          } catch (_) {
+            try {
+              parsedDate = DateFormat('dd-MM-yyyy').parse(data['startDate'].toString());
+            } catch (_) {}
+          }
+        }
+
+        if (mounted && _policies.contains(policy)) {
+          setState(() {
+            if (extractedFields['isRenewal'] == true && data['isRenewal'] != null) {
+              policy.isRenewal = data['isRenewal'] == true;
+              policy.isRenewalAutoExtracted = true;
+            }
+            if (extractedFields['startDate'] == true && parsedDate != null) {
+              policy.inceptionDate = parsedDate;
+              policy.startDateAutoExtracted = true;
+            }
+            if (extractedFields['renewedWithoutBreak'] == true && data['renewedWithoutBreak'] != null) {
+              policy.renewedWithoutBreak = data['renewedWithoutBreak'] == true;
+              policy.noBreakAutoExtracted = true;
+            }
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Policy detail extraction failed: $e");
+    } finally {
+      if (mounted && _policies.contains(policy)) {
+        setState(() => policy.isExtracting = false);
+      }
     }
   }
 
@@ -247,12 +301,13 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
     }
   }
 
-  void _toast(String message) {
+  void _toast(String message, {AppTone tone = AppTone.warning}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    showAppSnackBar(context, message, tone: tone);
   }
 
   Future<void> _analyzeDocuments() async {
+    if (_isUploading) return;
     if (_policies.isEmpty) {
       _toast('Please upload at least one policy document.');
       return;
@@ -261,9 +316,7 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
     for (final policy in _policies) {
       final missing = _missingAnswer(policy);
       if (missing != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(missing), backgroundColor: Colors.red),
-        );
+        showAppSnackBar(context, missing, tone: AppTone.warning);
         return;
       }
     }
@@ -283,10 +336,7 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
       await prefs.remove('policy_ids');
       if (mounted) context.push('/analysis');
     } else {
-      await prefs.setString(
-        'policy_ids',
-        jsonEncode(_policies.map((p) => p.policyId).toList()),
-      );
+      await prefs.setString('policy_ids', jsonEncode(_policies.map((p) => p.policyId).toList()));
       await prefs.remove('policy_id');
       if (mounted) context.push('/analysis-multi');
     }
@@ -294,338 +344,290 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final Color primaryBlue = const Color(0xFF2563EB);
-    final Color textColor = isDark ? Colors.white : const Color(0xFF111827);
-    final Color textSecondary = isDark ? Colors.grey.shade400 : const Color(0xFF6B7280);
+    final p = context.palette;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          onPressed: () => context.pop(),
+        ),
+        title: const Text('Upload Policy'),
+      ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(left: 24.0, right: 24.0, top: 16.0, bottom: 100.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => context.pop(),
-                    child: Icon(Icons.arrow_back, color: textColor, size: 28),
-                  ),
-                  const SizedBox(width: 16),
-                  Text(
-                    'Upload Policy',
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              
-              // Progress Bars (Step 3 of 3)
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: primaryBlue,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: primaryBlue,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: primaryBlue,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-              
-              // Description
-              Text(
-                "Step 3: Upload one or more insurance policy documents. Add several to compare them against the same prescription.",
-                style: TextStyle(
-                  color: textSecondary,
-                  fontSize: 15,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Uploaded policies — each one keeps its own start date, because
-              // the waiting-period checks are per policy.
-              if (_policies.isNotEmpty) ...[
+        bottom: false,
+        child: ContentWidth(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.xs, AppSpacing.page, AppSpacing.xl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _StepHeader(current: 3, total: 3, label: 'Policy'),
+                const SizedBox(height: AppSpacing.xl),
+                Text('Add your insurance policy', style: context.text.headlineSmall),
+                const SizedBox(height: AppSpacing.xs),
                 Text(
-                  _policies.length == 1
-                      ? "1 policy added"
-                      : "${_policies.length} policies added",
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: textColor,
-                  ),
+                  "Upload one or more insurance policy documents. Add several to compare them against the same prescription.",
+                  style: context.text.bodyMedium,
                 ),
-                const SizedBox(height: 12),
-                ..._policies.map((policy) => _buildPolicyTile(
-                      policy: policy,
-                      isDark: isDark,
-                      textColor: textColor,
-                      textSecondary: textSecondary,
-                      primaryBlue: primaryBlue,
-                    )),
-                const SizedBox(height: 12),
-              ],
+                const SizedBox(height: AppSpacing.xl),
 
-              // Upload Area with Dashed Border
-              GestureDetector(
-                onTap: _isUploading ? null : _pickAndUploadFiles,
-                child: CustomPaint(
-                  painter: DashedBorderPainter(
-                    color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
-                    strokeWidth: 2,
-                    gap: 6,
-                    radius: 24,
-                  ),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 40),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF374151) : const Color(0xFFEEF2F6),
-                      borderRadius: BorderRadius.circular(24),
+                // Uploaded policies — each one keeps its own start date, because
+                // the waiting-period checks are per policy.
+                if (_policies.isNotEmpty) ...[
+                  SectionHeader(
+                    title: _policies.length == 1 ? "1 policy added" : "${_policies.length} policies added",
+                    subtitle: 'Answer the questions below for each policy',
+                    trailing: Text(
+                      '${_policies.length}/$_maxPolicies',
+                      style: context.text.labelMedium?.copyWith(color: p.textTertiary),
                     ),
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFE0E7FF),
-                            shape: BoxShape.circle,
+                  ),
+                  ..._policies.map((policy) => _buildPolicyTile(policy: policy)),
+                  const SizedBox(height: AppSpacing.xs),
+                ],
+
+                // Upload Area with Dashed Border
+                Semantics(
+                  button: true,
+                  label: _policies.isEmpty ? 'Tap to upload PDF or Image' : 'Tap to add another policy',
+                  child: Material(
+                    color: p.surface,
+                    borderRadius: AppRadius.lgAll,
+                    child: InkWell(
+                      onTap: _isUploading ? null : _pickAndUploadFiles,
+                      borderRadius: AppRadius.lgAll,
+                      child: CustomPaint(
+                        painter: DashedBorderPainter(
+                          color: p.borderStrong,
+                          strokeWidth: 1.5,
+                          gap: 6,
+                          radius: AppRadius.lg,
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            vertical: _policies.isEmpty ? AppSpacing.xxl : AppSpacing.lg,
+                            horizontal: AppSpacing.lg,
                           ),
-                          child: _isUploading
-                              ? const CircularProgressIndicator()
-                              : const Icon(
-                                  Icons.note_add_outlined,
-                                  size: 32,
-                                  color: Color(0xFF4338CA),
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 56,
+                                height: 56,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(color: p.primarySoft, shape: BoxShape.circle),
+                                child: _isUploading
+                                    ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(strokeWidth: 2.6),
+                                      )
+                                    : Icon(
+                                        _policies.isEmpty ? Icons.note_add_outlined : Icons.add_rounded,
+                                        size: 28,
+                                        color: p.primary,
+                                      ),
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              Text(
+                                _isUploading
+                                    ? 'Uploading…'
+                                    : (_policies.isEmpty ? 'Tap to upload PDF or Image' : 'Tap to add another policy'),
+                                textAlign: TextAlign.center,
+                                style: context.text.titleSmall,
+                              ),
+                              const SizedBox(height: AppSpacing.xxs),
+                              Text(
+                                'Select up to ${_maxPolicies - _policies.length} '
+                                '${_maxPolicies - _policies.length == 1 ? 'file' : 'files'} · '
+                                'max $_maxPolicies policies · 10MB each',
+                                textAlign: TextAlign.center,
+                                style: context.text.bodySmall,
+                              ),
+                              if (_isUploading) ...[
+                                const SizedBox(height: AppSpacing.md),
+                                const ClipRRect(
+                                  borderRadius: AppRadius.pillAll,
+                                  child: LinearProgressIndicator(minHeight: 4),
                                 ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          _policies.isEmpty
-                              ? 'Tap to upload PDF or Image'
-                              : 'Tap to add another policy',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: textColor,
+                              ],
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'You can select several files at once · up to $_maxPolicies policies · max 10MB each',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
-              
-              // Analyze Documents Button
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: primaryBlue.withAlpha(60),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: ElevatedButton(
-                  onPressed: _analyzeDocuments, // Finalize and go to analysis loading/results
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryBlue,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _policies.length > 1
-                            ? 'Compare ${_policies.length} Policies'
-                            : 'Analyze Documents',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.show_chart, size: 20),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
+      ),
+      bottomNavigationBar: BottomActionBar(
+        children: [
+          FilledButton(
+            onPressed: _analyzeDocuments, // Finalize and go to analysis loading/results
+            style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 52)),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    _policies.length > 1 ? 'Compare ${_policies.length} Policies' : 'Analyze Coverage',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                const Icon(Icons.insights_rounded, size: 20),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
   /// One uploaded policy: its file name, its own start date and a way to drop it.
-  Widget _buildPolicyTile({
-    required _UploadedPolicy policy,
-    required bool isDark,
-    required Color textColor,
-    required Color textSecondary,
-    required Color primaryBlue,
-  }) {
-    final hasDate = _missingAnswer(policy) == null;
+  Widget _buildPolicyTile({required _UploadedPolicy policy}) {
+    final p = context.palette;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF374151) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: hasDate
-              ? primaryBlue
-              : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
-          width: hasDate ? 1.5 : 1.0,
-        ),
-      ),
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      borderColor: p.border,
+      padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(Icons.description_outlined, size: 18, color: primaryBlue),
-              const SizedBox(width: 10),
+              const IconTile(icon: Icons.description_outlined, size: 40),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
                   policy.fileName,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                  ),
+                  style: context.text.titleSmall?.copyWith(height: 1.35, fontWeight: FontWeight.w600),
                 ),
               ),
-              IconButton(
-                onPressed: () => _removePolicy(policy),
-                icon: const Icon(Icons.close, size: 18),
-                color: textSecondary,
-                tooltip: 'Remove',
-                visualDensity: VisualDensity.compact,
+              const SizedBox(width: AppSpacing.xxs),
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () => _removePolicy(policy),
+                  icon: Icon(Icons.delete_outline_rounded, color: p.danger.fg, size: 22),
+                  tooltip: 'Remove',
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          if (policy.isExtracting) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: p.primary),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  'Reading document details...',
+                  style: context.text.bodySmall?.copyWith(color: p.primary, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          Divider(height: 1, color: p.border),
+
           // 1. New or renewed decides which date is asked next.
-          _fieldLabel('Is this a new policy or a renewed policy? *', textColor),
-          _twoChoice(
-            value: policy.isRenewal,
-            firstLabel: 'New (first year)',
-            firstValue: false,
-            secondLabel: 'Renewed',
-            secondValue: true,
-            onChanged: (v) => setState(() => policy.setRenewal(v)),
-            primaryBlue: primaryBlue,
+          _questionBlock(
+            label: 'Is this a new policy or a renewed policy? *',
+            child: policy.isRenewalAutoExtracted
+                ? _readOnlyField(
+                    value: policy.isRenewal == true ? 'Renewed' : 'New (first year)',
+                    icon: policy.isRenewal == true ? Icons.autorenew_rounded : Icons.fiber_new_rounded,
+                  )
+                : _twoChoice(
+                    value: policy.isRenewal,
+                    firstLabel: 'New (first year)',
+                    firstValue: false,
+                    secondLabel: 'Renewed',
+                    secondValue: true,
+                    onChanged: (v) => setState(() => policy.setRenewal(v)),
+                  ),
           ),
+
           // 2. The date: the policy's start date (new), or the very first start date (renewed).
           //    Waiting periods are counted from this date, not from the current renewal.
-          if (policy.isRenewal != null) ...[
-            const SizedBox(height: 12),
-            _fieldLabel(
-              policy.isRenewal == true
-                  ? 'When was this policy first taken? *'
-                  : 'Policy Start Date *',
-              textColor,
-            ),
-            Text(
-              policy.isRenewal == true
+          if (policy.isRenewal != null)
+            _questionBlock(
+              label: policy.isRenewal == true ? 'When was this policy first taken? *' : 'Policy Start Date *',
+              helper: policy.isRenewal == true
                   ? 'The very first start date of this policy, before any renewals.'
                   : 'The date this policy started, as shown on your policy document.',
-              style: TextStyle(fontSize: 11.5, height: 1.35, color: textSecondary),
+              child: policy.startDateAutoExtracted && policy.inceptionDate != null
+                  ? _readOnlyField(
+                      value: DateFormat('dd-MM-yyyy').format(policy.inceptionDate!),
+                      icon: Icons.calendar_month_rounded,
+                    )
+                  : _dateField(
+                      value: policy.inceptionDate,
+                      placeholder: policy.isRenewal == true ? 'Select first start date *' : 'Select policy start date *',
+                      onTap: () => _pickDate(policy),
+                    ),
             ),
-            const SizedBox(height: 6),
-            _dateField(
-              value: policy.inceptionDate,
-              placeholder: policy.isRenewal == true ? 'Select first start date *' : 'Select policy start date *',
-              onTap: () => _pickDate(policy),
-              isDark: isDark,
-              textColor: textColor,
-              textSecondary: textSecondary,
-              primaryBlue: primaryBlue,
-            ),
-          ],
+
           // 3. Renewed only: renewed every year without a break?
-          if (policy.isRenewal == true) ...[
-            const SizedBox(height: 12),
-            _fieldLabel('Has this policy been renewed every year without a break? *', textColor),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                'Answer Yes if you moved from another insurance company without any gap (portability).',
-                style: TextStyle(fontSize: 11.5, height: 1.35, color: textSecondary),
-              ),
+          if (policy.isRenewal == true)
+            _questionBlock(
+              label: 'Has this policy been renewed every year without a break? *',
+              helper: 'Answer Yes if you moved from another insurance company without any gap (portability).',
+              child: policy.noBreakAutoExtracted && policy.renewedWithoutBreak != null
+                  ? _readOnlyField(
+                      value: policy.renewedWithoutBreak == true ? 'Yes' : 'No',
+                      icon: policy.renewedWithoutBreak == true ? Icons.verified_user_outlined : Icons.warning_amber_rounded,
+                    )
+                  : _twoChoice(
+                      value: policy.renewedWithoutBreak,
+                      firstLabel: 'Yes',
+                      firstValue: true,
+                      secondLabel: 'No',
+                      secondValue: false,
+                      onChanged: (v) => setState(() {
+                        policy.renewedWithoutBreak = v;
+                        policy.clearAfterRenewalAnswer();
+                      }),
+                    ),
             ),
-            _twoChoice(
-              value: policy.renewedWithoutBreak,
-              firstLabel: 'Yes',
-              firstValue: true,
-              secondLabel: 'No',
-              secondValue: false,
-              onChanged: (v) => setState(() {
-                policy.renewedWithoutBreak = v;
-                policy.clearAfterRenewalAnswer();
-              }),
-              primaryBlue: primaryBlue,
-            ),
-          ],
           if (policy.isRenewal == true && policy.renewedWithoutBreak == false) ...[
-            const SizedBox(height: 12),
-            _coverageGapNotice(isDark),
+            const SizedBox(height: AppSpacing.md),
+            _coverageGapNotice(),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// One question: label, optional helper text, then its input — same spacing everywhere.
+  Widget _questionBlock({required String label, String? helper, required Widget child}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(label, style: context.text.titleSmall?.copyWith(height: 1.4)),
+          if (helper != null) ...[
+            const SizedBox(height: 2),
+            Text(helper, textAlign: TextAlign.start, style: context.text.bodySmall),
+          ],
+          const SizedBox(height: AppSpacing.xs),
+          child,
         ],
       ),
     );
@@ -633,78 +635,84 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
 
   /// Shown when a renewed policy had a break: cover is counted from the uploaded
   /// policy's own start date instead of the first start date.
-  Widget _coverageGapNotice(bool isDark) {
-    const amber = Color(0xFFD97706);
+  Widget _coverageGapNotice() {
+    return const InfoBanner(
+      tone: AppTone.warning,
+      icon: Icons.info_outline_rounded,
+      padding: EdgeInsets.all(AppSpacing.sm),
+      message:
+          'You have a coverage gap in your policy continuity. So the coverage analysis will check '
+          'your prescription against this policy from the start date of the uploaded policy document.',
+    );
+  }
+
+  Widget _readOnlyField({required String value, required IconData icon}) {
+    final p = context.palette;
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
       decoration: BoxDecoration(
-        color: amber.withValues(alpha: isDark ? 0.15 : 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: amber.withValues(alpha: 0.4)),
+        color: p.surfaceMuted,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: p.border),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline, size: 18, color: amber),
-          const SizedBox(width: 8),
+          Icon(icon, size: 20, color: p.primary),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              'You have a coverage gap in your policy continuity. So the coverage analysis will check '
-              'your prescription against this policy from the start date of the uploaded policy document.',
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.4,
-                color: isDark ? const Color(0xFFFCD34D) : const Color(0xFF92400E),
+              value,
+              style: context.text.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: p.textPrimary,
               ),
             ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          const StatusBadge(
+            label: 'Auto-extracted from PDF',
+            tone: AppTone.verify,
+            icon: Icons.lock_outline_rounded,
+            dense: true,
           ),
         ],
       ),
     );
   }
 
-  Widget _fieldLabel(String text, Color textColor) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Text(text, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: textColor)),
-    );
-  }
-
-  Widget _dateField({
-    required DateTime? value,
-    required String placeholder,
-    required VoidCallback onTap,
-    required bool isDark,
-    required Color textColor,
-    required Color textSecondary,
-    required Color primaryBlue,
-  }) {
+  Widget _dateField({required DateTime? value, required String placeholder, required VoidCallback onTap}) {
+    final p = context.palette;
     final hasValue = value != null;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1F2937) : const Color(0xFFEEF2F6),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.calendar_month_rounded, size: 18, color: primaryBlue),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                hasValue ? DateFormat('dd-MM-yyyy').format(value) : placeholder,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: hasValue ? FontWeight.w600 : FontWeight.w400,
-                  color: hasValue ? textColor : Colors.red.shade400,
+    return Material(
+      color: p.surfaceMuted,
+      borderRadius: AppRadius.mdAll,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadius.mdAll,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+          decoration: BoxDecoration(
+            borderRadius: AppRadius.mdAll,
+            border: Border.all(color: p.border),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.calendar_month_rounded, size: 20, color: p.primary),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  hasValue ? DateFormat('dd-MM-yyyy').format(value) : placeholder,
+                  style: context.text.bodyMedium?.copyWith(
+                    fontWeight: hasValue ? FontWeight.w600 : FontWeight.w400,
+                    color: hasValue ? p.textPrimary : p.textTertiary,
+                  ),
                 ),
               ),
-            ),
-            Icon(Icons.arrow_drop_down, color: textSecondary),
-          ],
+              Icon(Icons.expand_more_rounded, color: p.textTertiary),
+            ],
+          ),
         ),
       ),
     );
@@ -717,19 +725,110 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
     required String secondLabel,
     required bool secondValue,
     required ValueChanged<bool> onChanged,
-    required Color primaryBlue,
   }) {
-    Widget chip(String label, bool option) => ChoiceChip(
-          label: Text(label),
-          selected: value == option,
-          onSelected: (_) => onChanged(option),
-          selectedColor: primaryBlue.withAlpha(40),
-          labelStyle: TextStyle(
-            fontWeight: value == option ? FontWeight.w700 : FontWeight.w500,
-            color: value == option ? primaryBlue : null,
+    final p = context.palette;
+    Widget option(String label, bool option) {
+      final selected = value == option;
+      return Expanded(
+        child: Material(
+          color: selected ? p.primarySoft : p.surface,
+          borderRadius: AppRadius.mdAll,
+          child: InkWell(
+            onTap: () => onChanged(option),
+            borderRadius: AppRadius.mdAll,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              constraints: const BoxConstraints(minHeight: 46),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+              alignment: Alignment.centerLeft,
+              decoration: BoxDecoration(
+                borderRadius: AppRadius.mdAll,
+                border: Border.all(color: selected ? p.primary : p.border, width: selected ? 1.5 : 1),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    selected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                    size: 18,
+                    color: selected ? p.primary : p.textTertiary,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: context.text.bodyMedium?.copyWith(
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                        color: selected ? p.primary : p.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        );
-    return Wrap(spacing: 8, children: [chip(firstLabel, firstValue), chip(secondLabel, secondValue)]);
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        option(firstLabel, firstValue),
+        const SizedBox(width: AppSpacing.xs),
+        option(secondLabel, secondValue),
+      ],
+    );
+  }
+}
+
+/// Visual-only progress indicator for the Consent → Prescription → Policy flow.
+class _StepHeader extends StatelessWidget {
+  final int current;
+  final int total;
+  final String label;
+
+  const _StepHeader({required this.current, required this.total, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'STEP $current OF $total',
+              style: context.text.labelSmall?.copyWith(color: p.primary, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Flexible(
+              child: Text(
+                '· $label',
+                overflow: TextOverflow.ellipsis,
+                style: context.text.labelSmall?.copyWith(color: p.textTertiary),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: [
+            for (int i = 1; i <= total; i++) ...[
+              if (i > 1) const SizedBox(width: 6),
+              Expanded(
+                child: Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: i <= current ? p.primary : p.border,
+                    borderRadius: AppRadius.pillAll,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
   }
 }
 
@@ -740,12 +839,7 @@ class DashedBorderPainter extends CustomPainter {
   final double gap;
   final double radius;
 
-  DashedBorderPainter({
-    required this.color,
-    this.strokeWidth = 2.0,
-    this.gap = 5.0,
-    this.radius = 16.0,
-  });
+  DashedBorderPainter({required this.color, this.strokeWidth = 2.0, this.gap = 5.0, this.radius = 16.0});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -755,9 +849,7 @@ class DashedBorderPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     final Path path = Path()
-      ..addRRect(RRect.fromRectAndRadius(
-          Rect.fromLTWH(0, 0, size.width, size.height),
-          Radius.circular(radius)));
+      ..addRRect(RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, size.width, size.height), Radius.circular(radius)));
 
     final Path dashedPath = Path();
     for (PathMetric measurePath in path.computeMetrics()) {

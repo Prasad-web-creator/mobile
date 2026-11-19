@@ -1,0 +1,258 @@
+{
+ "policyId": "6afeb74f917e1463c734bfe1",
+ "overview": {
+  "policyName": "Prakriti Family Health Secure",
+  "insuranceCompany": "Prakriti General Insurance Co. Ltd.",
+  "policyNumber": "PGI/HL/26/4410287",
+  "policyHolderName": "Test Holder",
+  "policyType": "Individual Health (Family Floater)",
+  "startDate": "2026-04-01",
+  "endDate": "2027-03-31",
+  "status": "active"
+ },
+ "hasDetails": true,
+ "keyBenefits": {
+  "sumInsured": {
+   "key": "sumInsured",
+   "title": "Sum Insured",
+   "value": null,
+   "description": "The most your policy pays, subject to its terms.",
+   "conditions": [],
+   "wording": null,
+   "reference": null,
+   "available": true,
+   "amount": 1000000.0,
+   "source": "policy document"
+  },
+  "coPayment": {
+   "key": "coPayment",
+   "title": "Co-payment",
+   "value": "Applies",
+   "description": "A co-payment applies, but the percentage isn't stated in your policy details.",
+   "conditions": [],
+   "wording": "Applied on the admissible claim amount",
+   "reference": null,
+   "available": true
+  },
+  "deductible": {
+   "key": "deductible",
+   "title": "Deductible",
+   "value": null,
+   "description": "Your policy details don't mention a deductible.",
+   "conditions": [],
+   "wording": null,
+   "reference": null,
+   "available": false
+  }
+ },
+ "waitingPeriods": {
+  "periods": [
+   {
+    "key": "initial",
+    "title": "Initial waiting period",
+    "duration": "30 days",
+    "description": "Illness claims are not paid during this time from the start of cover.",
+    "endDate": "2024-05-01",
+    "status": "over",
+    "wording": null,
+    "reference": null,
+    "conditions": []
+   },
+   {
+    "key": "preExisting",
+    "title": "Pre-existing diseases",
+    "duration": "36 months",
+    "description": "Illnesses you had before buying the policy are covered only after this time.",
+    "endDate": "2027-04-01",
+    "status": "running",
+    "wording": "Covered after 36 months of continuous coverage",
+    "reference": null,
+    "conditions": []
+   }
+  ],
+  "startDate": "2024-04-01",
+  "basis": "Based on your inputs, this policy was first taken on 01-Apr-2024 and renewed every year without a break",
+  "notes": [
+   "Within the policy period, the waiting period shall apply afresh to the extent of sum insured increase"
+  ]
+ },
+ "roomRent": {
+  "key": "roomRent",
+  "title": "Room rent",
+  "value": "1% of SI / day",
+  "description": "Up to ₹10,000 per day.",
+  "conditions": [],
+  "wording": "Up to 1% of Sum Insured per day (Rs. 10,000 per day)",
+  "reference": null,
+  "available": true
+ },
+ "limits": [
+  {
+   "key": "icu",
+   "title": "ICU charges",
+   "value": "2% of SI / day",
+   "description": "Up to 2% of Sum Insured per day (₹20,000 per day), including nursing and monitoring charges",
+   "conditions": [],
+   "wording": "Up to 2% of Sum Insured per day (Rs. 20,000 per day), including nursing and monitoring charges",
+   "reference": null,
+   "available": true
+  },
+  {
+   "key": "modernTreatments",
+   "title": "Modern treatments",
+   "value": "50% of SI",
+   "description": "Robotic surgery, immunotherapy and similar advanced treatments.",
+   "conditions": [],
+   "wording": "Up to 50% of Sum Insured",
+   "reference": null,
+   "available": true
+  }
+ ],
+ "additionalBenefits": [
+  {
+   "key": "preHospitalization",
+   "title": "Before hospitalisation",
+   "value": "60 days",
+   "description": "Tests and medicines up to 60 days before admission.",
+   "conditions": [],
+   "wording": null,
+   "reference": null,
+   "available": true
+  },
+  {
+   "key": "postHospitalization",
+   "title": "After hospitalisation",
+   "value": "90 days",
+   "description": "Follow-up costs up to 90 days after discharge.",
+   "conditions": [],
+   "wording": null,
+   "reference": null,
+   "available": true
+  },
+  {
+   "key": "dayCare",
+   "title": "Daycare procedures",
+   "value": "Covered",
+   "description": "Treatments that need less than 24 hours in hospital.",
+   "conditions": [],
+   "wording": "All day care procedures listed in Annexure",
+   "reference": null,
+   "available": true
+  },
+  {
+   "key": "emergency",
+   "title": "Emergency care",
+   "value": "Covered",
+   "description": "Covered for emergency care",
+   "conditions": [],
+   "wording": "Covered for emergency care",
+   "reference": null,
+   "available": true
+  },
+  {
+   "key": "cashless",
+   "title": "Cashless hospitalisation",
+   "value": "Available",
+   "description": "At network hospitals, the insurer pays the hospital directly.",
+   "conditions": [],
+   "wording": "Cashless facility at network hospitals or reimbursement",
+   "reference": null,
+   "available": true
+  },
+  {
+   "key": "hospitalization",
+   "title": "In-patient hospitalisation",
+   "value": "Covered",
+   "description": "Needs at least 24 hours in hospital.",
+   "conditions": [],
+   "wording": "Minimum 24 hours admission",
+   "reference": null,
+   "available": true
+  },
+  {
+   "key": "benefit_ayush",
+   "title": "AYUSH treatment",
+   "value": "Covered",
+   "description": "Ayurveda, Yoga, Unani, Siddha and Homeopathy treatment.",
+   "conditions": [],
+   "wording": "AYUSH treatment",
+   "reference": null,
+   "available": true
+  },
+  {
+   "key": "benefit_organ_donor",
+   "title": "Organ donor expenses",
+   "value": "Covered",
+   "description": "Costs of the organ donor's surgery.",
+   "conditions": [],
+   "wording": "Organ donor expenses",
+   "reference": null,
+   "available": true
+  },
+  {
+   "key": "benefit_domiciliary",
+   "title": "Treatment at home",
+   "value": "Covered",
+   "description": "Hospital-level treatment taken at home (domiciliary).",
+   "conditions": [],
+   "wording": "Domiciliary hospitalisation",
+   "reference": null,
+   "available": true
+  },
+  {
+   "key": "benefit_health_check",
+   "title": "Health check-up",
+   "value": "₹2,500",
+   "description": "Preventive health check-up.",
+   "conditions": [
+    "Covered under in-patient hospitalisation and annual health check-up up to ₹2,500 per insured adult"
+   ],
+   "wording": "Covered under in-patient hospitalisation and annual health check-up up to Rs. 2,500 per insured adult",
+   "reference": null,
+   "available": true
+  }
+ ],
+ "conditions": {
+  "special": [
+   "Non-medical items listed in Annexure I shall not be payable unless specifically stated as payable",
+   "For cosmetic surgery to be considered a medical necessity, it must be certified by the attending Medical Practitioner",
+   "After completion of sixty continuous months of coverage, no policy and claim shall be contestable on grounds of non-disclosure or misrepresentation, except on grounds of established fraud"
+  ],
+  "exclusions": [
+   "Degenerative disorders of the spine, Prolapsed intervertebral disc (unless arising from accident)",
+   "Hysterectomy for benign conditions, Fibroids (fibromyoma), Endometriosis",
+   "Chronic Suppurative Otitis Media, Perforation of tympanic membrane",
+   "Treatment for alcoholism, drug or substance abuse or any addictive condition and consequences thereof",
+   "Expenses related to any admission primarily for enforced bed rest and not for receiving treatment, including custodial care and services for assistance with activities of daily living",
+   "Aesthetic procedures including rhinoplasty, blepharoplasty, liposuction and abdominoplasty undertaken to improve appearance are not payable",
+   "Expenses for treatment directly arising from or consequent upon any Insured Person committing or attempting to commit a breach of law with criminal intent",
+   "Expenses related to the surgical treatment of obesity that does not fulfil the conditions specified (BMI of 40 or more, or 35 or more with severe co-morbidities, and failure of less invasive methods)",
+   "Expenses related to the treatment for correction of eye sight due to refractive error less than 7.5 dioptres",
+   "Expenses related to any unproven treatment, services and supplies for or in connection with any treatment",
+   "Dietary supplements and substances that can be purchased without prescription, including vitamins, minerals and organic substances, unless prescribed by a medical practitioner as part of hospitalisation",
+   "Expenses related to any admission primarily for diagnostics and evaluation purposes only",
+   "Medical treatment expenses traceable to childbirth (including complicated deliveries and caesarean sections incurred during hospitalisation) except ectopic pregnancy, and expenses towards miscarriage or termination of pregnancy",
+   "Any diagnostic expenses which are not related or not incidental to the current diagnosis and treatment",
+   "Expenses related to any treatment, including surgical management, to change characteristics of the body to those of the opposite sex",
+   "Treatments received in health hydros, nature cure clinics, spas or similar establishments, or private beds registered as a nursing home attached to such establishments, or where admission is arranged wholly or partly for domestic reasons",
+   "Expenses related to sterility and infertility, including contraception, assisted reproduction services, gestational surrogacy and reversal of sterilisation",
+   "Dental treatment unless requiring hospitalisation due to an accident",
+   "Expenses incurred towards treatment in any hospital or by any Medical Practitioner or any other provider specifically excluded by the Company and disclosed on its website, except in case of life threatening situations",
+   "Expenses for cosmetic or plastic surgery or any treatment to change appearance unless for reconstruction following an accident, burn(s) or cancer or as part of medically necessary treatment to remove a direct and immediate health risk to the insured",
+   "War, invasion, acts of foreign enemies, nuclear, chemical or biological contamination",
+   "Expenses related to any treatment necessitated due to participation as a professional in hazardous or adventure sports, including para-jumping, rock climbing, mountaineering, rafting, motor racing, horse racing, scuba diving and deep-sea diving"
+  ],
+  "nonPayableItems": [
+   "Joint replacement surgery (unless arising from accident)",
+   "Benign ear, nose and throat (ENT) disorders and surgeries",
+   "Non-infective arthritis, Gout, Rheumatism, Osteoporosis",
+   "Cysts, polyps, nodules and benign tumours of any kind",
+   "Varicose veins and varicose ulcers",
+   "Treatment taken outside India",
+   "All non-medical items specified in Annexure I",
+   "External durable medical equipment",
+   "Out-patient treatment"
+  ]
+ },
+ "hasSourceReferences": false
+}

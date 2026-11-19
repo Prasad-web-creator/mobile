@@ -11,7 +11,7 @@ class EnvConfig {
   // place: if the service is renamed or recreated its onrender.com URL changes.
   static const _prodApiBaseUrl = 'https://claim-support-backend-python.onrender.com/api';
   // Dev machine's Wi-Fi IPv4 (run `ipconfig`); changes when the router assigns a new address.
-  static const _devApiBaseUrl = 'http://192.168.0.173:8000/api';
+  static const _devApiBaseUrl = 'http://192.168.0.145:8000/api';
 
   static Environment _environment = kReleaseMode ? Environment.prod : Environment.dev;
   static String _apiBaseUrl = kReleaseMode

@@ -1,17 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:claimsupport/core/widgets/app_widgets.dart';
 
 class FloatingAdItem {
   final String imageAsset;
   final String targetUrl;
   final String headline;
 
-  const FloatingAdItem({
-    required this.imageAsset,
-    required this.targetUrl,
-    required this.headline,
-  });
+  const FloatingAdItem({required this.imageAsset, required this.targetUrl, required this.headline});
 }
 
 class FloatingLiveAd extends StatefulWidget {
@@ -47,17 +44,13 @@ class _FloatingLiveAdState extends State<FloatingLiveAd> with SingleTickerProvid
   void initState() {
     super.initState();
     // Subtle floating animation (moves up and down by 4px over 2 seconds)
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat(reverse: true);
+    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000))
+      ..repeat(reverse: true);
 
-    _floatAnimation = Tween<double>(begin: 0, end: -4).animate(
-      CurvedAnimation(
-        parent: _animController,
-        curve: Curves.easeInOut,
-      ),
-    );
+    _floatAnimation = Tween<double>(
+      begin: 0,
+      end: -4,
+    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeInOut));
 
     // Timer to cycle ads every 4 seconds
     _carouselTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
@@ -81,23 +74,14 @@ class _FloatingLiveAdState extends State<FloatingLiveAd> with SingleTickerProvid
     final uri = Uri.parse(url);
     debugPrint('[FloatingLiveAd] Tapped live ad. Launching $url');
     try {
-      final launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!launched) {
-        await launchUrl(
-          uri,
-          mode: LaunchMode.platformDefault,
-        );
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
       }
     } catch (e) {
       debugPrint('[FloatingLiveAd] Launch error: $e');
       try {
-        await launchUrl(
-          uri,
-          mode: LaunchMode.platformDefault,
-        );
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
       } catch (_) {}
     }
   }
@@ -126,8 +110,9 @@ class _FloatingLiveAdState extends State<FloatingLiveAd> with SingleTickerProvid
     final double maxX = screenSize.width - adWidth - 8.0;
     final double minY = padding.top + 8.0;
     final double maxY = screenSize.height - adHeight - padding.bottom - bottomNavbarHeight - 8.0;
-    
+
     final currentAd = _adItems[_currentIndex];
+    final p = context.palette;
 
     return Positioned(
       left: _offset!.dx,
@@ -145,28 +130,19 @@ class _FloatingLiveAdState extends State<FloatingLiveAd> with SingleTickerProvid
         child: AnimatedBuilder(
           animation: _floatAnimation,
           builder: (context, child) {
-            return Transform.translate(
-              offset: Offset(0, _floatAnimation.value),
-              child: child,
-            );
+            return Transform.translate(offset: Offset(0, _floatAnimation.value), child: child);
           },
           child: Container(
             width: adWidth,
             height: adHeight,
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha(45),
-                  blurRadius: 14,
-                  spreadRadius: 1,
-                  offset: const Offset(0, 5),
-                ),
-              ],
+              color: p.surface,
+              borderRadius: AppRadius.mdAll,
+              border: Border.all(color: p.border),
+              boxShadow: [BoxShadow(color: Colors.black.withAlpha(40), blurRadius: 16, offset: const Offset(0, 6))],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppRadius.mdAll,
               child: Stack(
                 children: [
                   // ── Main Card Structure ────────────────────────────────
@@ -190,9 +166,9 @@ class _FloatingLiveAdState extends State<FloatingLiveAd> with SingleTickerProvid
                                 errorBuilder: (context, error, stackTrace) {
                                   return Container(
                                     key: ValueKey('error_${currentAd.imageAsset}'),
-                                    color: const Color(0xFF1E293B),
-                                    child: const Center(
-                                      child: Icon(Icons.shopping_bag_outlined, color: Colors.white70, size: 28),
+                                    color: p.surfaceMuted,
+                                    child: Center(
+                                      child: Icon(Icons.shopping_bag_outlined, color: p.textTertiary, size: 28),
                                     ),
                                   );
                                 },
@@ -208,10 +184,7 @@ class _FloatingLiveAdState extends State<FloatingLiveAd> with SingleTickerProvid
                               child: Container(
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
-                                    colors: [
-                                      Colors.black.withAlpha(200),
-                                      Colors.transparent,
-                                    ],
+                                    colors: [Colors.black.withAlpha(200), Colors.transparent],
                                     begin: Alignment.bottomCenter,
                                     end: Alignment.topCenter,
                                   ),
@@ -231,14 +204,9 @@ class _FloatingLiveAdState extends State<FloatingLiveAd> with SingleTickerProvid
                                   key: ValueKey(currentAd.headline),
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 9.5,
+                                    fontSize: 10.5,
                                     fontWeight: FontWeight.w600,
-                                    shadows: [
-                                      Shadow(
-                                        color: Color(0x80000000),
-                                        blurRadius: 3,
-                                      ),
-                                    ],
+                                    shadows: [Shadow(color: Color(0x80000000), blurRadius: 3)],
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -254,18 +222,13 @@ class _FloatingLiveAdState extends State<FloatingLiveAd> with SingleTickerProvid
                         flex: 28,
                         child: Container(
                           width: double.infinity,
-                          color: const Color(0xFFDCFCE7), // Light Mint Green
+                          color: p.primarySoft,
                           alignment: Alignment.center,
                           padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: const Text(
+                          child: Text(
                             'Visit Now',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Color(0xFF15803D), // Deep Green Text
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.2,
-                            ),
+                            style: TextStyle(color: p.primary, fontSize: 11, fontWeight: FontWeight.w700),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -276,9 +239,9 @@ class _FloatingLiveAdState extends State<FloatingLiveAd> with SingleTickerProvid
 
                   // ── Top Header Controls Overlay ────────────────────────
                   Positioned(
-                    top: 6,
+                    top: 2,
                     left: 6,
-                    right: 6,
+                    right: 0,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -286,7 +249,7 @@ class _FloatingLiveAdState extends State<FloatingLiveAd> with SingleTickerProvid
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEF4444), // Vibrant Red
+                            color: const Color(0xFFDC2626),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Row(
@@ -295,10 +258,7 @@ class _FloatingLiveAdState extends State<FloatingLiveAd> with SingleTickerProvid
                               Container(
                                 width: 5,
                                 height: 5,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                ),
+                                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                               ),
                               const SizedBox(width: 3),
                               const Text(
@@ -322,17 +282,25 @@ class _FloatingLiveAdState extends State<FloatingLiveAd> with SingleTickerProvid
                             });
                             debugPrint('[FloatingLiveAd] User closed the floating ad widget.');
                           },
-                          child: Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: Colors.black.withAlpha(120),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.close_rounded,
-                              color: Colors.white,
-                              size: 13,
+                          behavior: HitTestBehavior.opaque,
+                          child: Semantics(
+                            button: true,
+                            label: 'Close advertisement',
+                            child: SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: Center(
+                                child: Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withAlpha(140),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white.withAlpha(90)),
+                                  ),
+                                  child: const Icon(Icons.close_rounded, color: Colors.white, size: 14),
+                                ),
+                              ),
                             ),
                           ),
                         ),

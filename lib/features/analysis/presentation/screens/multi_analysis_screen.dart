@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:claimsupport/core/network/api_client.dart';
 import 'package:claimsupport/core/utils/shared_prefs.dart';
+import 'package:claimsupport/core/widgets/app_widgets.dart';
 import 'package:claimsupport/features/analysis/data/models/multi_analysis_session.dart';
 import 'package:claimsupport/features/analysis/presentation/controllers/multi_analysis_controller.dart';
 import 'package:claimsupport/features/analysis/presentation/widgets/clarification_dialog.dart';
@@ -20,8 +21,6 @@ class MultiAnalysisScreen extends ConsumerStatefulWidget {
 }
 
 class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
-  static const Color _primaryBlue = Color(0xFF2563EB);
-
   bool _started = false;
   bool _dialogShowing = false;
   String? _answeringPolicyId;
@@ -54,9 +53,9 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
       return;
     }
 
-    await ref.read(multiAnalysisJobProvider.notifier).startAnalysis(
-          MultiAnalysisParams(prescriptionPath: prescriptionPath, policyIds: policyIds),
-        );
+    await ref
+        .read(multiAnalysisJobProvider.notifier)
+        .startAnalysis(MultiAnalysisParams(prescriptionPath: prescriptionPath, policyIds: policyIds));
   }
 
   /// Show the questions of [target] (when the user taps that policy's
@@ -80,7 +79,7 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
     final queueLabel = othersWaiting.isEmpty
         ? null
         : 'Next: ${othersWaiting.map((n) => 'Policy $n').join(', ')} '
-            '${othersWaiting.length == 1 ? 'also has' : 'also have'} questions.';
+              '${othersWaiting.length == 1 ? 'also has' : 'also have'} questions.';
 
     showDialog<void>(
       context: context,
@@ -91,16 +90,12 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
         contextSubLabel: pending.insuranceCompany,
         queueLabel: queueLabel,
         // Numbers only mean something when several policies are compared.
-        policyNumber: (session.policyCount > 1 && pending.queueNumber > 0)
-            ? pending.queueNumber
-            : null,
+        policyNumber: (session.policyCount > 1 && pending.queueNumber > 0) ? pending.queueNumber : null,
         policyCount: session.policyCount,
         onSubmit: (answers) {
           Navigator.of(dialogContext).pop();
           _dialogShowing = false;
-          ref
-              .read(multiAnalysisJobProvider.notifier)
-              .submitPolicyAnswers(pending.policyId, answers);
+          ref.read(multiAnalysisJobProvider.notifier).submitPolicyAnswers(pending.policyId, answers);
         },
         onCancel: () {
           Navigator.of(dialogContext).pop();
@@ -120,24 +115,18 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
       if (mounted) context.push('/summary/$reportId');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open report: $e')),
-      );
+      showAppSnackBar(context, 'Could not open report. ${friendlyErrorMessage(e)}', tone: AppTone.danger);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final state = ref.watch(multiAnalysisJobProvider);
 
     ref.listen(multiAnalysisJobProvider, (previous, next) {
       next.whenData((session) {
         if (_answeringPolicyId != null) {
-          final answered = session.policyAnalyses
-              .where((p) => p.policyId == _answeringPolicyId)
-              .firstOrNull;
+          final answered = session.policyAnalyses.where((p) => p.policyId == _answeringPolicyId).firstOrNull;
           if (answered != null && !answered.isWaitingForUser) {
             _answeringPolicyId = null;
           }
@@ -154,18 +143,21 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
     });
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF111827) : const Color(0xFFF9FAFB),
       appBar: AppBar(
         title: const Text('Policy Comparison'),
         leading: IconButton(
-          icon: const Icon(Icons.close),
+          tooltip: 'Close',
+          icon: const Icon(Icons.close_rounded),
           onPressed: () => context.go('/dashboard'),
         ),
       ),
-      body: state.when(
-        loading: () => _buildLoading(isDark),
-        error: (error, _) => _buildError(isDark, error),
-        data: (session) => _buildSession(isDark, session),
+      body: SafeArea(
+        top: false,
+        child: state.when(
+          loading: () => _buildLoading(),
+          error: (error, _) => _buildError(error),
+          data: (session) => _buildSession(session),
+        ),
       ),
     );
   }
@@ -173,395 +165,304 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
   /// Shown only while the session itself is being created — a single request,
   /// with genuinely nothing to measure yet. Once it returns, every indicator on
   /// this screen is driven by steps the backend reports as finished.
-  Widget _buildLoading(bool isDark) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const CircularProgressIndicator(color: _primaryBlue),
-          const SizedBox(height: 20),
-          Text(
-            'Setting up your comparison…',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-            ),
-          ),
-        ],
-      ),
-    );
+  Widget _buildLoading() {
+    return const LoadingState(message: 'Setting up your comparison…');
   }
 
   /// Session-wide progress: steps the backend has actually completed out of the
   /// steps it plans to run. No value here is estimated or time-driven, and when
   /// the server reports no counts the bar falls back to indeterminate rather
   /// than showing a number it cannot stand behind.
-  Widget _buildProgressCard(bool isDark, MultiAnalysisSession session) {
-    final textColor = isDark ? Colors.white : const Color(0xFF111827);
-    final subColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
+  Widget _buildProgressCard(MultiAnalysisSession session) {
+    final p = context.palette;
+    final t = context.text;
     final progress = session.progress;
     final fraction = progress.fraction;
     final blocked = session.isBlockedOnUser;
+    final accent = blocked ? p.warning.fg : p.primary;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1F2937) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-        ),
-      ),
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      borderColor: blocked ? p.warning.border : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                blocked ? Icons.help_outline : Icons.sync,
-                size: 18,
-                color: blocked ? Colors.orange : _primaryBlue,
-              ),
-              const SizedBox(width: 8),
+              Icon(blocked ? Icons.help_outline_rounded : Icons.sync_rounded, size: 20, color: accent),
+              const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
-                  progress.label.isNotEmpty
-                      ? progress.label
-                      : (blocked ? 'Waiting for your answer' : 'Working…'),
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                  ),
+                  progress.label.isNotEmpty ? progress.label : (blocked ? 'Waiting for your answer' : 'Working…'),
+                  style: t.titleSmall,
                 ),
               ),
-              if (progress.isKnown)
-                _AnimatedPercentText(
-                  value: fraction ?? 0,
-                  color: blocked ? Colors.orange : _primaryBlue,
-                ),
+              if (progress.isKnown) ...[
+                const SizedBox(width: AppSpacing.xs),
+                _AnimatedPercentText(value: fraction ?? 0, color: accent),
+              ],
             ],
           ),
-          const SizedBox(height: 12),
-          _AnimatedProgressBar(
-            value: fraction,
-            height: 6,
-            radius: 4,
-            color: blocked ? Colors.orange : _primaryBlue,
-            backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.sm),
+          _AnimatedProgressBar(value: fraction, height: 6, radius: 4, color: accent, backgroundColor: p.surfaceMuted),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             progress.isKnown
                 ? '${progress.completedSteps} of ${progress.totalSteps} steps done · '
-                    '${session.completedCount}/${session.policyCount} '
-                    '${session.policyCount == 1 ? 'policy' : 'policies'} finished'
+                      '${session.completedCount}/${session.policyCount} '
+                      '${session.policyCount == 1 ? 'policy' : 'policies'} finished'
                 : 'Following the analysis…',
-            style: TextStyle(fontSize: 12, color: subColor),
+            style: t.bodySmall,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildError(bool isDark, Object error) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, color: Colors.redAccent, size: 44),
-            const SizedBox(height: 14),
-            Text(
-              'Analysis could not be completed',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white : const Color(0xFF111827),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '$error',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: () {
-                // Same prescription and policies as before.
-                _started = false;
-                _start();
-              },
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Try again'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primaryBlue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () => context.go('/dashboard'),
-              child: const Text('Back to Dashboard'),
-            ),
-          ],
-        ),
+  Widget _buildError(Object error) {
+    return EmptyState(
+      icon: Icons.error_outline_rounded,
+      title: 'Analysis could not be completed',
+      message: friendlyErrorMessage(error),
+      action: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FilledButton.icon(
+            onPressed: () {
+              // Same prescription and policies as before.
+              _started = false;
+              _start();
+            },
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('Try again'),
+            style: FilledButton.styleFrom(minimumSize: const Size(200, 48)),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          TextButton(onPressed: () => context.go('/dashboard'), child: const Text('Back to Dashboard')),
+        ],
       ),
     );
   }
 
-  Widget _buildSession(bool isDark, MultiAnalysisSession session) {
-    final textColor = isDark ? Colors.white : const Color(0xFF111827);
-    final subColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
+  Widget _buildSession(MultiAnalysisSession session) {
+    final p = context.palette;
+    final t = context.text;
 
     final diagnosis = session.prescription['diagnosis']?.toString() ?? '';
     final visitDate = session.prescription['visitDate']?.toString() ?? '';
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.xs, AppSpacing.page, AppSpacing.xxl),
       children: [
-        // ── Prescription header ────────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1F2937) : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-            ),
-          ),
+        ContentWidth(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.description_outlined, size: 18, color: _primaryBlue),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Prescription',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
+              // ── Prescription header ──────────────────────────────────────
+              AppCard(
+                margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const CardTitle(title: 'Prescription', icon: Icons.description_outlined),
+                    if (diagnosis.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(diagnosis, style: t.bodyLarge),
+                    ],
+                    if (visitDate.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xxs),
+                      Row(
+                        children: [
+                          Icon(Icons.event_outlined, size: 14, color: p.textTertiary),
+                          const SizedBox(width: AppSpacing.xxs),
+                          Expanded(child: Text(visitDate, style: t.bodySmall)),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.sm),
+                    Divider(height: 1, color: p.border),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      'Analyzed against ${session.policyCount} '
+                      '${session.policyCount == 1 ? 'policy' : 'policies'}',
+                      style: t.labelMedium,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              if (diagnosis.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(diagnosis, style: TextStyle(fontSize: 15, color: textColor)),
-              ],
-              if (visitDate.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(visitDate, style: TextStyle(fontSize: 12, color: subColor)),
-              ],
-              const SizedBox(height: 10),
-              Text(
-                'Analyzed against ${session.policyCount} '
-                '${session.policyCount == 1 ? 'policy' : 'policies'}',
-                style: TextStyle(fontSize: 12, color: subColor),
-              ),
+
+              // Only while something is actually outstanding — a finished comparison
+              // has no progress left to report.
+              if (session.isWorking || session.isBlockedOnUser) _buildProgressCard(session),
+
+              const SectionHeader(title: 'Policies'),
+
+              ...session.policyAnalyses.map((policy) => _buildPolicyCard(session, policy)),
             ],
           ),
-        ),
-        const SizedBox(height: 16),
-
-        // Only while something is actually outstanding — a finished comparison
-        // has no progress left to report.
-        if (session.isWorking || session.isBlockedOnUser)
-          _buildProgressCard(isDark, session),
-
-        Text(
-          'Policies',
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: subColor),
-        ),
-        const SizedBox(height: 8),
-
-        ...session.policyAnalyses.map(
-          (policy) => _buildPolicyCard(isDark, session, policy),
         ),
       ],
     );
   }
 
-  Widget _buildPolicyCard(
-    bool isDark,
-    MultiAnalysisSession session,
-    PolicyAnalysisResult policy,
-  ) {
-    final textColor = isDark ? Colors.white : const Color(0xFF111827);
-    final subColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
+  Widget _buildPolicyCard(MultiAnalysisSession session, PolicyAnalysisResult policy) {
+    final p = context.palette;
+    final t = context.text;
+    final waiting = policy.isWaitingForUser;
+    final showAnswer = policy.isWaitingForUser;
+    final showRetry = policy.isFailed;
+    // Reports open only once the whole comparison has finished: every
+    // policy completed, in manual review, or failed. A policy still
+    // running or waiting for an answer keeps all reports hidden.
+    final showReport = policy.hasReport && session.isSettled;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1F2937) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: policy.isWaitingForUser
-              ? Colors.orange
-              : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-          width: policy.isWaitingForUser ? 1.5 : 1.0,
-        ),
+        color: p.surface,
+        borderRadius: AppRadius.lgAll,
+        border: Border.all(color: waiting ? p.warning.fg : p.border, width: waiting ? 1.5 : 1),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              if (policy.queueNumber > 0) ...[
-                _QueueNumberBadge(
-                  number: policy.queueNumber,
-                  color: policy.isWaitingForUser ? Colors.orange : _primaryBlue,
-                ),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                child: Column(
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      policy.queueLabel,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.3,
-                        color: subColor,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      policy.displayName,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: textColor,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (policy.insuranceCompany.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        policy.insuranceCompany,
-                        style: TextStyle(fontSize: 12, color: subColor),
-                      ),
+                    if (policy.queueNumber > 0) ...[
+                      _QueueNumberBadge(number: policy.queueNumber, color: waiting ? p.warning.fg : p.primary),
+                      const SizedBox(width: AppSpacing.sm),
                     ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(policy.queueLabel, style: t.labelSmall),
+                          const SizedBox(height: 2),
+                          Text(policy.displayName, style: t.titleSmall, maxLines: 2, overflow: TextOverflow.ellipsis),
+                          if (policy.insuranceCompany.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(policy.insuranceCompany, style: t.bodySmall),
+                          ],
+                        ],
+                      ),
+                    ),
                   ],
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                Align(alignment: Alignment.centerLeft, child: _buildStatusChip(policy)),
+
+                if (policy.isFailed && policy.errorMessage.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  InfoBanner(
+                    tone: AppTone.danger,
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                    child: Text(
+                      friendlyErrorMessage(policy.errorMessage),
+                      style: t.bodySmall?.copyWith(color: p.textPrimary),
+                    ),
+                  ),
+                ],
+
+                // What this policy is doing, and how far through its own steps it is.
+                if (policy.isRunning) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _AnimatedProgressBar(
+                    value: policy.stepProgress,
+                    height: 4,
+                    radius: 3,
+                    color: p.primary,
+                    backgroundColor: p.surfaceMuted,
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    policy.totalSteps > 0
+                        ? '${policy.progressLabel} · step ${policy.completedSteps + 1} of ${policy.totalSteps}'
+                        : policy.progressLabel,
+                    style: t.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (showAnswer || showRetry || showReport) ...[
+            Divider(height: 1, color: p.border),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.xxs),
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                spacing: AppSpacing.xs,
+                children: [
+                  if (showAnswer)
+                    TextButton.icon(
+                      onPressed: () => _maybeShowClarification(session, target: policy),
+                      icon: const Icon(Icons.help_outline_rounded, size: 18),
+                      label: const Text('Answer question'),
+                    ),
+                  if (showRetry)
+                    TextButton.icon(
+                      onPressed: () => ref.read(multiAnalysisJobProvider.notifier).retryPolicy(policy.policyId),
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('Retry'),
+                      style: TextButton.styleFrom(foregroundColor: p.warning.fg),
+                    ),
+                  if (showReport)
+                    TextButton.icon(
+                      onPressed: () => _openReport(policy.reportId),
+                      icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                      label: const Text('View report'),
+                    ),
+                ],
               ),
-              const SizedBox(width: 10),
-              _buildStatusChip(policy),
-            ],
-          ),
-
-          if (policy.isFailed && policy.errorMessage.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              policy.errorMessage,
-              style: const TextStyle(fontSize: 12, color: Colors.redAccent),
             ),
           ],
-
-          // What this policy is doing, and how far through its own steps it is.
-          if (policy.isRunning) ...[
-            const SizedBox(height: 10),
-            _AnimatedProgressBar(
-              value: policy.stepProgress,
-              height: 4,
-              radius: 3,
-              color: _primaryBlue,
-              backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              policy.totalSteps > 0
-                  ? '${policy.progressLabel} · step ${policy.completedSteps + 1} of ${policy.totalSteps}'
-                  : policy.progressLabel,
-              style: TextStyle(fontSize: 11, color: subColor),
-            ),
-          ],
-
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              if (policy.isWaitingForUser)
-                TextButton.icon(
-                  onPressed: () => _maybeShowClarification(session, target: policy),
-                  icon: const Icon(Icons.help_outline, size: 16),
-                  label: const Text('Answer question'),
-                  style: TextButton.styleFrom(foregroundColor: _primaryBlue),
-                ),
-              if (policy.isFailed)
-                TextButton.icon(
-                  onPressed: () =>
-                      ref.read(multiAnalysisJobProvider.notifier).retryPolicy(policy.policyId),
-                  icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Retry'),
-                  style: TextButton.styleFrom(foregroundColor: Colors.orange),
-                ),
-              const Spacer(),
-              // Reports open only once the whole comparison has finished: every
-              // policy completed, in manual review, or failed. A policy still
-              // running or waiting for an answer keeps all reports hidden.
-              if (policy.hasReport && session.isSettled)
-                TextButton.icon(
-                  onPressed: () => _openReport(policy.reportId),
-                  icon: const Icon(Icons.arrow_forward, size: 16),
-                  label: const Text('View report'),
-                  style: TextButton.styleFrom(foregroundColor: _primaryBlue),
-                ),
-            ],
-          ),
         ],
       ),
     );
   }
 
   Widget _buildStatusChip(PolicyAnalysisResult policy) {
-    Color color;
+    AppTone tone;
+    IconData icon;
     if (policy.isFailed) {
-      color = Colors.redAccent;
+      tone = AppTone.danger;
+      icon = Icons.error_outline_rounded;
     } else if (policy.isWaitingForUser) {
-      color = Colors.orange;
+      tone = AppTone.warning;
+      icon = Icons.help_outline_rounded;
     } else if (policy.status == 'manual_review_required') {
-      color = Colors.amber.shade700;
+      tone = AppTone.warning;
+      icon = Icons.hourglass_top_rounded;
     } else if (policy.status == 'completed') {
       final lower = policy.overallStatus.toLowerCase();
       if (lower.contains('not covered') || lower.contains('rejected')) {
-        color = Colors.redAccent;
+        tone = AppTone.danger;
+        icon = Icons.cancel_outlined;
       } else if (lower.contains('verification')) {
-        color = const Color(0xFF7C3AED);
+        tone = AppTone.verify;
+        icon = Icons.fact_check_outlined;
       } else if (lower.contains('partial') || lower.contains('review')) {
-        color = const Color(0xFFD97706);
+        tone = AppTone.warning;
+        icon = Icons.rule_rounded;
       } else {
-        color = Colors.green;
+        tone = AppTone.success;
+        icon = Icons.check_circle_outline_rounded;
       }
     } else {
-      color = Colors.blueGrey;
+      tone = AppTone.neutral;
+      icon = Icons.schedule_rounded;
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withAlpha(31),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        policy.statusLabel,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
-      ),
-    );
+    return StatusBadge(label: policy.statusLabel, tone: tone, icon: icon);
   }
 }
 
-/// Round badge with a policy's temporary number in this comparison.
+// Round badge with a policy's temporary number in this comparison.
 class _QueueNumberBadge extends StatelessWidget {
   const _QueueNumberBadge({required this.number, required this.color});
 
@@ -575,7 +476,7 @@ class _QueueNumberBadge extends StatelessWidget {
       height: 30,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: color.withAlpha(31),
+        color: color.withAlpha(context.isDark ? 45 : 26),
         shape: BoxShape.circle,
         border: Border.all(color: color, width: 1.2),
       ),

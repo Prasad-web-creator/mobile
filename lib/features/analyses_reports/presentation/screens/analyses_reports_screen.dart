@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:claimsupport/core/widgets/app_widgets.dart';
 import 'package:claimsupport/features/analysis_reports/presentation/controllers/analysis_report_controller.dart';
 import 'package:claimsupport/features/analysis_reports/data/models/analysis_report_group.dart';
 
 /// Coverage Analysis Reports screen.
 ///
 /// Groups policies analyzed against the same prescription under one clean,
-/// expandable parent report card matching the reference design.
+/// expandable parent report card.
 class AnalysesReportsScreen extends ConsumerStatefulWidget {
   const AnalysesReportsScreen({super.key});
 
@@ -17,8 +18,6 @@ class AnalysesReportsScreen extends ConsumerStatefulWidget {
 }
 
 class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen> {
-  static const Color _primaryBlue = Color(0xFF2563EB);
-
   bool _isSelectionMode = false;
   final Set<String> _selectedGroupIds = {};
   final Set<String> _expandedGroupIds = {};
@@ -77,27 +76,15 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen> {
   Future<void> _confirmBatchDelete() async {
     if (_selectedGroupIds.isEmpty) return;
     final count = _selectedGroupIds.length;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Selected Analyses', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text(
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete Selected Analyses',
+      message:
           'Are you sure you want to permanently delete $count selected analysis/analyses? '
           'All policy reports inside them will be removed. This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Delete All'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Delete All',
+      destructive: true,
+      icon: Icons.delete_outline_rounded,
     );
 
     if (confirmed == true) {
@@ -105,19 +92,12 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen> {
         final idsToDelete = _selectedGroupIds.toList();
         await ref.read(analysisReportProvider.notifier).deleteReports(idsToDelete);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('$count analyses deleted successfully.'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          showAppSnackBar(context, '$count analyses deleted successfully.', tone: AppTone.success);
           _exitSelectionMode();
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete analyses: $e'), backgroundColor: Colors.red),
-          );
+          showAppSnackBar(context, 'Failed to delete analyses: ${friendlyErrorMessage(e)}', tone: AppTone.danger);
         }
       }
     }
@@ -128,48 +108,51 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen> {
     final extra = group.isMultiPolicy
         ? ' All ${group.policyCount} policy reports in this analysis will be removed.'
         : '';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Analysis', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text('Are you sure you want to delete "$label"?$extra This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete Analysis',
+      message: 'Are you sure you want to delete "$label"?$extra This action cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+      icon: Icons.delete_outline_rounded,
     );
     if (confirmed == true) {
       try {
         await ref.read(analysisReportProvider.notifier).deleteReport(group.groupId);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Analysis deleted successfully.'), backgroundColor: Colors.green),
-          );
+          showAppSnackBar(context, 'Analysis deleted successfully.', tone: AppTone.success);
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.red),
-          );
+          showAppSnackBar(context, 'Failed to delete: ${friendlyErrorMessage(e)}', tone: AppTone.danger);
         }
       }
     }
   }
 
+  /// Tone + icon for a report / job status label. Job states (failed, analyzing,
+  /// needs your input, completed) are handled here; coverage outcomes use the
+  /// shared [coverageStatusStyle] so they match the rest of the app.
+  CoverageStatusStyle _statusStyle(String label) {
+    final lower = label.toLowerCase();
+    if (lower.contains('fail')) return const CoverageStatusStyle(AppTone.danger, Icons.cancel_outlined);
+    if (lower.contains('invalid')) return const CoverageStatusStyle(AppTone.danger, Icons.error_outline_rounded);
+    if (lower.contains('analyzing') || lower.contains('queued') || lower.contains('extracting')) {
+      return const CoverageStatusStyle(AppTone.neutral, Icons.hourglass_empty_rounded);
+    }
+    if (lower.contains('needs your input')) {
+      return const CoverageStatusStyle(AppTone.warning, Icons.edit_note_rounded);
+    }
+    if (lower == 'completed') {
+      return const CoverageStatusStyle(AppTone.success, Icons.check_circle_outline_rounded);
+    }
+    return coverageStatusStyle(label, fallback: AppTone.success);
+  }
+
   @override
   Widget build(BuildContext context) {
     final reportState = ref.watch(analysisReportProvider);
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final p = context.palette;
 
     // Every group starts collapsed: a card opens only when the user taps it.
     final currentGroups = reportState.value?.docs ?? [];
@@ -178,148 +161,121 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen> {
     final allSelected = validIds.isNotEmpty && _selectedGroupIds.containsAll(validIds);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
-        leading: _isSelectionMode
-            ? IconButton(
+      appBar: _isSelectionMode
+          ? AppBar(
+              toolbarHeight: 72,
+              leading: IconButton(
                 icon: const Icon(Icons.close_rounded),
                 onPressed: _exitSelectionMode,
                 tooltip: 'Cancel Selection',
-              )
-            : (Navigator.of(context).canPop()
-                ? IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    tooltip: 'Back',
-                  )
-                : null),
-        title: Text(
-          _isSelectionMode ? '${_selectedGroupIds.length} Selected' : 'Coverage Analysis Reports',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-            color: isDark ? Colors.white : const Color(0xFF0F172A),
-          ),
-        ),
-        actions: [
-          if (_isSelectionMode) ...[
-            TextButton(
-              onPressed: () => _toggleSelectAll(currentGroups),
-              child: Text(
-                allSelected ? 'Deselect All' : 'Select All',
-                style: TextStyle(
-                  color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF1D4ED8),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
+              ),
+              title: Text('${_selectedGroupIds.length} Selected'),
+              actions: [
+                TextButton(
+                  onPressed: () => _toggleSelectAll(currentGroups),
+                  child: Text(allSelected ? 'Deselect All' : 'Select All'),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 6.0),
-              child: IconButton(
-                icon: Icon(
-                  Icons.delete_outline_rounded,
-                  color: _selectedGroupIds.isNotEmpty ? Colors.redAccent : Colors.redAccent.withAlpha(110),
-                ),
-                tooltip: 'Delete Selected',
-                onPressed: _selectedGroupIds.isNotEmpty ? _confirmBatchDelete : null,
-              ),
-            ),
-          ] else ...[
-            Padding(
-              padding: const EdgeInsets.only(right: 6.0),
-              child: IconButton(
-                icon: const Icon(Icons.tune_rounded),
-                tooltip: 'Select / Manage',
-                onPressed: () => _enterSelectionMode(),
-              ),
-            ),
-          ],
-        ],
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-          child: reportState.when(
-            data: (pagination) {
-              final groups = pagination.docs;
-              if (groups.isEmpty) {
-                return const Center(
-                  child: Text(
-                    'No analysis reports found.',
-                    style: TextStyle(color: Colors.grey, fontSize: 15),
+                Padding(
+                  padding: const EdgeInsets.only(right: AppSpacing.xs),
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.delete_outline_rounded,
+                      color: _selectedGroupIds.isNotEmpty ? p.danger.fg : p.danger.fg.withAlpha(110),
+                    ),
+                    tooltip: 'Delete Selected',
+                    onPressed: _selectedGroupIds.isNotEmpty ? _confirmBatchDelete : null,
                   ),
-                );
-              }
-
+                ),
+              ],
+            )
+          : TabAppBar(
+              title: 'Reports',
+              subtitle: 'Tap a report to see each policy\'s coverage result',
+              actions: [
+                if (currentGroups.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.checklist_rounded),
+                    tooltip: 'Select / Manage',
+                    onPressed: () => _enterSelectionMode(),
+                  ),
+              ],
+            ),
+      body: SafeArea(
+        child: reportState.when(
+          data: (pagination) {
+            final groups = pagination.docs;
+            if (groups.isEmpty) {
               return RefreshIndicator(
                 onRefresh: () async {
                   await ref.read(analysisReportProvider.notifier).fetchAnalysisReports(isRefresh: true);
                 },
-                child: ListView.builder(
-                  itemCount: groups.length + (pagination.hasNextPage ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == groups.length) {
-                      Future.microtask(
-                          () => ref.read(analysisReportProvider.notifier).loadNextPage());
-                      return const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: CircularProgressIndicator(),
-                        ),
-                      );
-                    }
-                    return _buildGroupCard(groups[index], isDark);
-                  },
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: const [
+                    EmptyState(
+                      icon: Icons.description_outlined,
+                      title: 'No reports yet',
+                      message:
+                          'Start a new analysis from the Home tab. Your coverage reports will be saved here for later.',
+                    ),
+                  ],
                 ),
               );
-            },
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, stack) => Center(child: Text('Error: $err')),
+            }
+
+            return RefreshIndicator(
+              onRefresh: () async {
+                await ref.read(analysisReportProvider.notifier).fetchAnalysisReports(isRefresh: true);
+              },
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.xs, AppSpacing.page, AppSpacing.xxl),
+                itemCount: groups.length + (pagination.hasNextPage ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == groups.length) {
+                    Future.microtask(() => ref.read(analysisReportProvider.notifier).loadNextPage());
+                    return const Padding(
+                      padding: EdgeInsets.all(AppSpacing.md),
+                      child: Center(
+                        child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.4)),
+                      ),
+                    );
+                  }
+                  return ContentWidth(child: _buildGroupCard(groups[index]));
+                },
+              ),
+            );
+          },
+          loading: () => const LoadingState(message: 'Loading your reports…'),
+          error: (err, stack) => ErrorState(
+            title: 'Couldn\'t load reports',
+            message: friendlyErrorMessage(err),
+            onRetry: () => ref.invalidate(analysisReportProvider),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildGroupCard(AnalysisReportGroup group, bool isDark) {
+  Widget _buildGroupCard(AnalysisReportGroup group) {
+    final p = context.palette;
     final isSelected = _selectedGroupIds.contains(group.groupId);
     final isExpanded = _expandedGroupIds.contains(group.groupId);
     final statusLabel = group.statusLabel;
+    final style = _statusStyle(statusLabel);
 
     final dateStr = group.createdAt != null
-        ? DateFormat('dd-MM-yyyy  h:mm a').format(group.createdAt!.toLocal())
+        ? DateFormat('dd MMM yyyy, hh:mm a').format(group.createdAt!.toLocal())
         : '';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? (isDark ? const Color(0xFF1E3A8A).withAlpha(40) : const Color(0xFFEFF6FF))
-            : (isDark ? const Color(0xFF1E293B) : Colors.white),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isSelected
-              ? _primaryBlue
-              : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
-          width: isSelected ? 1.5 : 1.0,
-        ),
-        boxShadow: isDark
-            ? []
-            : [
-                BoxShadow(
-                  color: Colors.black.withAlpha(6),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-      ),
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: EdgeInsets.zero,
+      color: isSelected ? p.primarySoft : null,
+      borderColor: isSelected ? p.primary : null,
       child: Material(
-        color: Colors.transparent,
+        type: MaterialType.transparency,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.lgAll,
           onLongPress: () => _enterSelectionMode(group.groupId),
           onTap: () {
             if (_isSelectionMode) {
@@ -329,154 +285,121 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen> {
             }
           },
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xs),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ── Line 1: Header Icons & Status Row ───────────────────────
+                // Header: icon / checkbox, title + status, overflow menu
                 Row(
-                  children: [
-                    if (_isSelectionMode)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Checkbox(
-                          value: isSelected,
-                          activeColor: _primaryBlue,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                          onChanged: (_) => _toggleSelection(group.groupId),
-                        ),
-                      ),
-
-                    // File Icon Box
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Center(
-                        child: Icon(
-                          Icons.description_outlined,
-                          color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF2563EB),
-                          size: 19,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-
-                    // Status Pill (e.g. Completed)
-                    _buildStatusPill(statusLabel),
-
-                    const Spacer(),
-
-                    // Dropdown / Expand Icon
-                    InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () => _toggleExpand(group.groupId),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4.0),
-                        child: Icon(
-                          isExpanded
-                              ? Icons.keyboard_arrow_up_rounded
-                              : Icons.keyboard_arrow_down_rounded,
-                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
-                          size: 22,
-                        ),
-                      ),
-                    ),
-
-                    if (!_isSelectionMode) ...[
-                      const SizedBox(width: 6),
-                      // Delete Icon
-                      InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: () => _confirmDeleteSingle(group),
-                        child: const Padding(
-                          padding: EdgeInsets.all(4.0),
-                          child: Icon(
-                            Icons.delete_outline_rounded,
-                            color: Colors.redAccent,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 10),
-
-                // ── Line 2: Full Width Diagnosis Title ──────────────────────
-                Text(
-                  group.title,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    height: 1.3,
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // ── Line 3+: Metadata Rows ──────────────────────────────────
-                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (group.patientName.isNotEmpty)
-                      _buildMetaRow(
-                        Icons.calendar_today_outlined,
-                        'Patient Name',
-                        group.patientName,
-                        isDark,
-                      ),
-                    if (group.displayVisitDate.isNotEmpty)
-                      _buildMetaRow(
-                        Icons.calendar_today_outlined,
-                        'Prescription Date',
-                        group.displayVisitDate,
-                        isDark,
+                    if (_isSelectionMode)
+                      SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: Checkbox(value: isSelected, onChanged: (_) => _toggleSelection(group.groupId)),
                       )
-                    else if (group.visitDate.isNotEmpty)
-                      _buildMetaRow(
-                        Icons.calendar_today_outlined,
-                        'Prescription Date',
-                        group.visitDate,
-                        isDark,
+                    else
+                      const IconTile(icon: Icons.assignment_outlined, tone: AppTone.brand),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            group.title,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          StatusBadge(label: statusLabel, tone: style.tone, icon: style.icon, dense: true),
+                        ],
                       ),
-                    _buildMetaRow(
-                      Icons.description_outlined,
-                      'Policies Analyzed',
-                      '${group.policyCount}',
-                      isDark,
                     ),
-                    if (dateStr.isNotEmpty)
-                      _buildMetaRow(
-                        Icons.access_time_rounded,
-                        'Analyzed DateTime',
-                        dateStr,
-                        isDark,
-                      ),
-                    if (group.displayProcessingTime.isNotEmpty)
-                      _buildMetaRow(
-                        Icons.access_time_rounded,
-                        'Proccessed time',
-                        group.displayProcessingTime,
-                        isDark,
+                    if (!_isSelectionMode)
+                      SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: PopupMenuButton<String>(
+                          tooltip: 'More actions',
+                          padding: EdgeInsets.zero,
+                          iconSize: 20,
+                          icon: Icon(Icons.more_vert_rounded, color: p.textTertiary),
+                          onSelected: (value) {
+                            if (value == 'delete') _confirmDeleteSingle(group);
+                          },
+                          itemBuilder: (_) => [
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete_outline_rounded, size: 20, color: p.danger.fg),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Text('Delete', style: TextStyle(color: p.danger.fg)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                   ],
                 ),
 
-                // ── Nested Policies (Visible when expanded) ──────────────────
-                if (isExpanded && group.policyReports.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Divider(
-                    color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
-                    thickness: 1,
-                    height: 1,
+                // Details
+                const SizedBox(height: AppSpacing.sm),
+                Divider(height: 1, color: p.border),
+                const SizedBox(height: AppSpacing.xs),
+                if (group.patientName.isNotEmpty)
+                  _buildMetaRow(Icons.person_outline_rounded, 'Patient', group.patientName),
+                if (group.displayVisitDate.isNotEmpty)
+                  _buildMetaRow(Icons.calendar_today_outlined, 'Prescription date', group.displayVisitDate)
+                else if (group.visitDate.isNotEmpty)
+                  _buildMetaRow(Icons.calendar_today_outlined, 'Prescription date', group.visitDate),
+                _buildMetaRow(Icons.policy_outlined, 'Policies checked', '${group.policyCount}'),
+                if (dateStr.isNotEmpty) _buildMetaRow(Icons.schedule_rounded, 'Checked on', dateStr),
+                if (group.displayProcessingTime.isNotEmpty)
+                  _buildMetaRow(Icons.timer_outlined, 'Processing time', group.displayProcessingTime),
+
+                // Expand / collapse toggle for the per-policy results
+                if (group.policyReports.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Divider(height: 1, color: p.border),
+                  InkWell(
+                    borderRadius: AppRadius.smAll,
+                    onTap: () => _toggleExpand(group.groupId),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              isExpanded
+                                  ? 'Hide policy results'
+                                  : 'View policy results (${group.policyReports.length})',
+                              style: context.text.labelLarge?.copyWith(color: p.primary, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          Icon(
+                            isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                            color: p.primary,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  ...group.policyReports.map((p) => _buildNestedPolicyCard(p, isDark)),
-                ],
+                ] else
+                  const SizedBox(height: AppSpacing.xs),
+
+                // Nested policies (visible when expanded)
+                if (isExpanded && group.policyReports.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: group.policyReports.map(_buildNestedPolicyCard).toList(),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -485,115 +408,74 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen> {
     );
   }
 
-  /// Nested policy card matching user specification: Shield Icon, Coverage status, Right arrow on Line 1, Policy details on Line 2+, View Details > removed.
-  Widget _buildNestedPolicyCard(PolicyReportRow policy, bool isDark) {
-    final subColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+  /// One policy's result inside an expanded analysis group.
+  Widget _buildNestedPolicyCard(PolicyReportRow policy) {
+    final p = context.palette;
+    final style = _statusStyle(policy.statusLabel);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF151D2A) : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? const Color(0xFF2E3D52) : const Color(0xFFE2E8F0),
-          width: 1,
-        ),
+        color: p.surfaceMuted,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: p.border),
       ),
       child: Material(
-        color: Colors.transparent,
+        type: MaterialType.transparency,
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppRadius.mdAll,
           onTap: () {
             if (policy.hasReport) {
               context.push('/summary/${policy.reportId}');
             }
           },
           child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Line 1: Shield Icon  Coverage status  Right side arrow icon ──
-                Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(8),
+                const IconTile(icon: Icons.shield_outlined, tone: AppTone.brand, size: 34),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        policy.displayName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.text.titleSmall,
                       ),
-                      child: Center(
-                        child: Icon(
-                          Icons.shield_outlined,
-                          color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF2563EB),
-                          size: 17,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildPolicyStatusPill(policy.statusLabel),
-                    const Spacer(),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 20,
-                      color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                // ── Line 2+: Full Width Policy Name & Details ────────────────
-                Text(
-                  policy.displayName,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Row(
-                  children: [
-                    Icon(Icons.description_outlined, size: 12, color: subColor),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
+                      const SizedBox(height: 2),
+                      Text(
                         policy.policyNumber.isNotEmpty
                             ? 'Policy No: ${policy.policyNumber}'
-                            : (policy.insuranceCompany.isNotEmpty
-                                ? policy.insuranceCompany
-                                : 'Policy No: ---'),
-                        style: TextStyle(fontSize: 12, color: subColor),
+                            : (policy.insuranceCompany.isNotEmpty ? policy.insuranceCompany : 'Policy No: ---'),
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        style: context.text.bodySmall,
                       ),
-                    ),
-                  ],
-                ),
-                if (policy.displayPeriod.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      Icon(Icons.calendar_today_outlined, size: 12, color: subColor),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
+                      if (policy.displayPeriod.isNotEmpty)
+                        Text(
                           'Period: ${policy.displayPeriod}',
-                          style: TextStyle(fontSize: 12, color: subColor),
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          style: context.text.bodySmall,
                         ),
-                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      StatusBadge(label: policy.statusLabel, tone: style.tone, icon: style.icon, dense: true),
+                      if (policy.isFailed && policy.errorMessage.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(policy.errorMessage, style: context.text.bodySmall?.copyWith(color: p.danger.fg)),
+                      ],
                     ],
                   ),
-                ],
-
-                if (policy.isFailed && policy.errorMessage.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    policy.errorMessage,
-                    style: const TextStyle(fontSize: 11, color: Colors.redAccent),
+                ),
+                if (policy.hasReport)
+                  Padding(
+                    padding: const EdgeInsets.only(left: AppSpacing.xxs, top: 6),
+                    child: Icon(Icons.chevron_right_rounded, size: 22, color: p.textTertiary),
                   ),
-                ],
               ],
             ),
           ),
@@ -602,147 +484,32 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen> {
     );
   }
 
-  /// Status badge for parent analysis header (Completed, Analyzing, Failed, etc.).
-  Widget _buildStatusPill(String label) {
-    final lower = label.toLowerCase();
-    Color bg;
-    Color fg;
-    IconData icon;
-
-    if (lower.contains('fail') || lower.contains('invalid')) {
-      bg = const Color(0xFFFEE2E2);
-      fg = const Color(0xFFDC2626);
-      icon = Icons.cancel_rounded;
-    } else if (lower.contains('verification')) {
-      bg = const Color(0xFFF5F3FF);
-      fg = const Color(0xFF7C3AED);
-      icon = Icons.fact_check_outlined;
-    } else if (lower.contains('needs your input') ||
-        lower.contains('partial') ||
-        lower.contains('manual review') ||
-        lower.contains('review')) {
-      bg = const Color(0xFFFEF3C7);
-      fg = const Color(0xFFD97706);
-      icon = Icons.error_outline_rounded;
-    } else if (lower.contains('not covered') || lower.contains('rejected')) {
-      bg = const Color(0xFFFEE2E2);
-      fg = const Color(0xFFDC2626);
-      icon = Icons.cancel_rounded;
-    } else if (lower.contains('analyzing') || lower.contains('queued') || lower.contains('extracting')) {
-      bg = const Color(0xFFF1F5F9);
-      fg = const Color(0xFF475569);
-      icon = Icons.hourglass_empty_rounded;
-    } else {
-      bg = const Color(0xFFE8F8F0);
-      fg = const Color(0xFF15803D);
-      icon = Icons.check_circle_rounded;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: fg),
-          const SizedBox(width: 3.5),
-          Text(
-            label,
-            style: TextStyle(color: fg, fontWeight: FontWeight.w600, fontSize: 11),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Policy status pill (Covered, Not Covered, etc.) with icons matching reference UI.
-  Widget _buildPolicyStatusPill(String label) {
-    final lower = label.toLowerCase();
-    Color bg;
-    Color fg;
-    IconData icon;
-
-    if (lower.contains('not covered') || lower.contains('fail') || lower.contains('rejected')) {
-      bg = const Color(0xFFFEE2E2);
-      fg = const Color(0xFFDC2626);
-      icon = Icons.cancel_rounded;
-    } else if (lower.contains('verification')) {
-      bg = const Color(0xFFF5F3FF);
-      fg = const Color(0xFF7C3AED);
-      icon = Icons.fact_check_outlined;
-    } else if (lower.contains('partial') ||
-        lower.contains('needs your input') ||
-        lower.contains('manual review') ||
-        lower.contains('review')) {
-      bg = const Color(0xFFFEF3C7);
-      fg = const Color(0xFFD97706);
-      icon = Icons.error_outline_rounded;
-    } else if (lower.contains('analyzing') || lower.contains('queued')) {
-      bg = const Color(0xFFF1F5F9);
-      fg = const Color(0xFF475569);
-      icon = Icons.hourglass_empty_rounded;
-    } else {
-      bg = const Color(0xFFE8F8F0);
-      fg = const Color(0xFF15803D);
-      icon = Icons.check_circle_rounded;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7.5, vertical: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: fg),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            style: TextStyle(color: fg, fontWeight: FontWeight.w600, fontSize: 10.5),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Clean metadata text row with leading icon matching Image 2 reference UI.
-  Widget _buildMetaRow(IconData icon, String label, String value, bool isDark) {
+  /// Icon + label + value metadata row. Labels sit in a fixed-width column so
+  /// every value in the card lines up.
+  Widget _buildMetaRow(IconData icon, String label, String value) {
     if (value.trim().isEmpty || value.trim() == '---' || value.trim() == 'N/A') {
       return const SizedBox.shrink();
     }
-    final labelColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
-    final valueColor = isDark ? const Color(0xFFE2E8F0) : const Color(0xFF334155);
+    final p = context.palette;
+    final base = context.text.bodyMedium?.copyWith(fontSize: 13, height: 1.4);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 5.0),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 14, color: labelColor),
-          const SizedBox(width: 8),
-          Text(
-            '$label:  ',
-            style: TextStyle(
-              fontSize: 12.5,
-              color: labelColor,
-              fontWeight: FontWeight.w400,
-            ),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(icon, size: 15, color: p.textTertiary),
           ),
+          const SizedBox(width: AppSpacing.xs),
+          SizedBox(
+            width: 116,
+            child: Text(label, style: base?.copyWith(color: p.textTertiary)),
+          ),
+          const SizedBox(width: AppSpacing.xs),
           Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 12.5,
-                color: valueColor,
-                fontWeight: FontWeight.w500,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: Text(value, style: base?.copyWith(color: p.textPrimary, fontWeight: FontWeight.w600)),
           ),
         ],
       ),

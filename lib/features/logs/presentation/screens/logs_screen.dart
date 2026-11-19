@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:claimsupport/core/theme/app_theme.dart';
+import 'package:claimsupport/core/widgets/app_widgets.dart';
 import 'package:intl/intl.dart';
 import 'package:claimsupport/features/logs/presentation/controllers/log_controller.dart';
 
@@ -10,19 +10,34 @@ class LogsScreen extends ConsumerWidget {
   IconData _getIconForEntity(String entityType) {
     switch (entityType.toLowerCase()) {
       case 'policy':
-        return Icons.policy;
+        return Icons.policy_outlined;
       case 'prescription':
-        return Icons.medical_services;
+        return Icons.medical_services_outlined;
       case 'medicalreport':
-        return Icons.description;
+        return Icons.description_outlined;
       case 'medicalbill':
-        return Icons.receipt;
+        return Icons.receipt_long_outlined;
       case 'analysisreport':
-        return Icons.analytics;
+        return Icons.analytics_outlined;
       case 'user':
-        return Icons.person;
+        return Icons.person_outline_rounded;
       default:
-        return Icons.history;
+        return Icons.history_rounded;
+    }
+  }
+
+  AppTone _toneForEntity(String entityType) {
+    switch (entityType.toLowerCase()) {
+      case 'analysisreport':
+        return AppTone.success;
+      case 'prescription':
+      case 'medicalreport':
+      case 'medicalbill':
+        return AppTone.verify;
+      case 'user':
+        return AppTone.neutral;
+      default:
+        return AppTone.brand;
     }
   }
 
@@ -31,61 +46,92 @@ class LogsScreen extends ConsumerWidget {
     final logState = ref.watch(logProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Activity Logs'),
-      ),
+      appBar: AppBar(title: const Text('Activity Logs')),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: logState.when(
-            data: (pagination) {
-              final logs = pagination.docs;
-              if (logs.isEmpty) {
-                return const Center(
-                  child: Text('No activity logs found.'),
-                );
-              }
-
+        child: logState.when(
+          data: (pagination) {
+            final logs = pagination.docs;
+            if (logs.isEmpty) {
               return RefreshIndicator(
                 onRefresh: () async {
                   await ref.read(logProvider.notifier).fetchLogs(isRefresh: true);
                 },
-                child: ListView.builder(
-                  itemCount: logs.length + (pagination.hasNextPage ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == logs.length) {
-                      ref.read(logProvider.notifier).loadNextPage();
-                      return const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: CircularProgressIndicator(),
-                        ),
-                      );
-                    }
-                    
-                    final log = logs[index];
-                    final dateStr = DateFormat.yMMMd().add_jm().format(log.createdAt);
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
-                          child: Icon(
-                            _getIconForEntity(log.entityType),
-                            color: AppTheme.primaryColor,
-                          ),
-                        ),
-                        title: Text(log.action, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(dateStr),
-                      ),
-                    );
-                  },
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: const [
+                    SizedBox(height: AppSpacing.xxl),
+                    EmptyState(
+                      icon: Icons.history_rounded,
+                      title: 'No activity logs found.',
+                      message: 'Uploads, analyses and account changes will appear here.',
+                    ),
+                  ],
                 ),
               );
-            },
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, stack) => Center(child: Text('Error: $err')),
+            }
+
+            return RefreshIndicator(
+              onRefresh: () async {
+                await ref.read(logProvider.notifier).fetchLogs(isRefresh: true);
+              },
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.xs, AppSpacing.page, AppSpacing.xxl),
+                itemCount: logs.length + (pagination.hasNextPage ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == logs.length) {
+                    ref.read(logProvider.notifier).loadNextPage();
+                    return const Padding(
+                      padding: EdgeInsets.all(AppSpacing.md),
+                      child: Center(
+                        child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.4)),
+                      ),
+                    );
+                  }
+
+                  final log = logs[index];
+                  final dateStr = DateFormat.yMMMd().add_jm().format(log.createdAt);
+
+                  return ContentWidth(
+                    child: AppCard(
+                      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                      child: Row(
+                        children: [
+                          IconTile(
+                            icon: _getIconForEntity(log.entityType),
+                            tone: _toneForEntity(log.entityType),
+                            size: 40,
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(log.action, style: context.text.titleSmall),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    Icon(Icons.schedule_rounded, size: 13, color: context.palette.textTertiary),
+                                    const SizedBox(width: 4),
+                                    Flexible(child: Text(dateStr, style: context.text.bodySmall)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+          loading: () => const LoadingState(message: 'Loading activity…'),
+          error: (err, stack) => ErrorState(
+            title: 'Couldn\'t load activity',
+            message: friendlyErrorMessage(err),
+            onRetry: () => ref.invalidate(logProvider),
           ),
         ),
       ),

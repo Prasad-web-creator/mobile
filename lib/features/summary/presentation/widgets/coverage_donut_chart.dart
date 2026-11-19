@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:claimsupport/core/widgets/app_widgets.dart';
 
 /// A responsive, animated Donut Chart widget that visually represents
 /// the percentage breakdown of Covered, Partially Covered, Not Covered and
@@ -21,8 +22,7 @@ class CoverageDonutChart extends StatefulWidget {
   State<CoverageDonutChart> createState() => _CoverageDonutChartState();
 }
 
-class _CoverageDonutChartState extends State<CoverageDonutChart>
-    with SingleTickerProviderStateMixin {
+class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _animation;
 
@@ -30,23 +30,17 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
   // 3 = Needs Verification, null = none
   int? _selectedSegment;
 
-  // Theme colors
-  static const Color coveredColor = Color(0xFF059669); // Emerald Green
-  static const Color partiallyCoveredColor = Color(0xFFD97706); // Amber / Orange
-  static const Color notCoveredColor = Color(0xFFDC2626); // Danger Red
-  static const Color needsVerificationColor = Color(0xFF7C3AED); // Purple
+  // Segment colours come from the app palette (set at the start of build).
+  Color coveredColor = AppPalette.light.success.fg;
+  Color partiallyCoveredColor = AppPalette.light.warning.fg;
+  Color notCoveredColor = AppPalette.light.danger.fg;
+  Color needsVerificationColor = AppPalette.light.verify.fg;
 
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
-    _animation = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutCubic,
-    );
+    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+    _animation = CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic);
     _animController.forward();
   }
 
@@ -97,12 +91,7 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
     // Sort descending by remainder
     remainders.sort((a, b) => b.value.compareTo(a.value));
 
-    final result = {
-      'covered': cFloor,
-      'partiallyCovered': pFloor,
-      'notCovered': nFloor,
-      'needsVerification': vFloor,
-    };
+    final result = {'covered': cFloor, 'partiallyCovered': pFloor, 'notCovered': nFloor, 'needsVerification': vFloor};
 
     for (int i = 0; i < remainder && i < remainders.length; i++) {
       final key = remainders[i].key;
@@ -133,43 +122,20 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
       final int verifyCount = _parseInt(breakdown['needsVerification']);
       final int totalEvaluated = coveredCount + partiallyCoveredCount + notCoveredCount + verifyCount;
 
-      final theme = Theme.of(context);
-      final isDark = theme.brightness == Brightness.dark;
-      final Color textColor = isDark ? Colors.white : const Color(0xFF111827);
-      final Color textSecondary = isDark ? Colors.grey.shade400 : const Color(0xFF6B7280);
+      final isDark = context.isDark;
+      final pal = context.palette;
+      final Color textColor = pal.textPrimary;
+      final Color textSecondary = pal.textTertiary;
+      coveredColor = pal.success.fg;
+      partiallyCoveredColor = pal.warning.fg;
+      notCoveredColor = pal.danger.fg;
+      needsVerificationColor = pal.verify.fg;
 
       // 3. Empty State: When zero items are evaluated
       if (totalEvaluated == 0) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 24),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: theme.cardTheme.color ?? theme.cardColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.info_outline_rounded,
-                color: isDark ? Colors.grey.shade400 : const Color(0xFF6B7280),
-                size: 22,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'No evaluated claim items available.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: isDark ? Colors.grey.shade300 : const Color(0xFF4B5563),
-                  ),
-                ),
-              ),
-            ],
-          ),
+        return const Padding(
+          padding: EdgeInsets.only(bottom: AppSpacing.md),
+          child: InfoBanner(tone: AppTone.neutral, message: 'No evaluated claim items available.'),
         );
       }
 
@@ -193,80 +159,33 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
       final double verifyAngle = (verifyCount / totalEvaluated) * 2 * math.pi;
 
       return Semantics(
-        label: 'Coverage Distribution Donut Chart: '
+        label:
+            'Coverage Distribution Donut Chart: '
             '$coveredPct% Covered ($coveredCount items), '
             '$partialPct% Partially Covered ($partiallyCoveredCount items), '
             '$notCoveredPct% Not Covered ($notCoveredCount items)'
             '${verifyCount > 0 ? ', $verifyPct% Needs Verification ($verifyCount items)' : ''}.',
         child: Container(
-          margin: const EdgeInsets.only(bottom: 24),
-          padding: const EdgeInsets.all(20),
+          margin: const EdgeInsets.only(bottom: AppSpacing.md),
+          padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            color: theme.cardTheme.color ?? theme.cardColor,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withAlpha(40)
-                    : Colors.grey.shade200.withAlpha(100),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            color: pal.surface,
+            borderRadius: AppRadius.lgAll,
+            border: Border.all(color: pal.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB).withAlpha(20),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.donut_large_rounded,
-                          color: Color(0xFF2563EB),
-                          size: 18,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Coverage Distribution',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: textColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.grey.shade800
-                          : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '$totalEvaluated ${totalEvaluated == 1 ? "Item" : "Items"}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: textSecondary,
-                      ),
-                    ),
-                  ),
-                ],
+              CardTitle(
+                title: 'Coverage Distribution',
+                icon: Icons.donut_large_rounded,
+                subtitle: 'Tap a category to highlight it',
+                trailing: StatusBadge(
+                  label: '$totalEvaluated ${totalEvaluated == 1 ? "Item" : "Items"}',
+                  tone: AppTone.neutral,
+                  dense: true,
+                ),
               ),
               const SizedBox(height: 20),
 
@@ -449,33 +368,19 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
         children: [
           AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 200),
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: titleColor,
-              letterSpacing: 0.2,
-            ),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: titleColor, letterSpacing: 0.2),
             child: Text(title),
           ),
           const SizedBox(height: 2),
           AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 200),
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: textColor,
-              letterSpacing: -0.5,
-            ),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5),
             child: Text(value),
           ),
           const SizedBox(height: 2),
           AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 200),
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: textSecondary,
-            ),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: textSecondary),
             child: Text(subtitle),
           ),
         ],
@@ -506,34 +411,18 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
         borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected
-                ? color.withAlpha(isDark ? 40 : 25)
-                : (isDark ? Colors.grey.shade900.withAlpha(100) : Colors.grey.shade50),
+            color: isSelected ? color.withAlpha(isDark ? 40 : 22) : context.palette.surfaceMuted,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected
-                  ? color.withAlpha(120)
-                  : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-            ),
+            border: Border.all(color: isSelected ? color.withAlpha(120) : context.palette.border),
           ),
           child: Row(
             children: [
               Container(
                 width: 10,
                 height: 10,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withAlpha(90),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
-                ),
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -542,26 +431,18 @@ class _CoverageDonutChartState extends State<CoverageDonutChart>
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                    color: isDark ? Colors.grey.shade200 : const Color(0xFF374151),
+                    color: context.palette.textPrimary,
                   ),
                 ),
               ),
               Text(
                 '$percentage%',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: color,
-                ),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: color),
               ),
               const SizedBox(width: 6),
               Text(
                 '($count)',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: isDark ? Colors.grey.shade400 : const Color(0xFF6B7280),
-                ),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: context.palette.textTertiary),
               ),
             ],
           ),
@@ -600,7 +481,7 @@ class _DonutChartPainter extends CustomPainter {
     required this.coveredColor,
     required this.partialColor,
     required this.notCoveredColor,
-    this.verifyColor = const Color(0xFF7C3AED),
+    this.verifyColor = const Color(0xFF6D28D9),
     required this.strokeWidth,
     this.highlightedIndex,
   });

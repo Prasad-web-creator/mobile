@@ -1,15 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:claimsupport/core/widgets/app_widgets.dart';
 
 class BannerItemData {
   final String imageAsset;
   final String targetUrl;
 
-  const BannerItemData({
-    required this.imageAsset,
-    required this.targetUrl,
-  });
+  const BannerItemData({required this.imageAsset, required this.targetUrl});
 }
 
 class SlidingBanner extends StatefulWidget {
@@ -25,7 +23,7 @@ class _SlidingBannerState extends State<SlidingBanner> {
   Timer? _autoSlideTimer;
 
   // Widescreen Ad Banners with Website Redirection Links
-  final List<BannerItemData> _banners = const [ 
+  final List<BannerItemData> _banners = const [
     BannerItemData(
       imageAsset: 'assets/ad_banner_1_new.png', // Banner 1: Accounts Guru
       targetUrl: 'https://accountsguru.io/',
@@ -48,7 +46,7 @@ class _SlidingBannerState extends State<SlidingBanner> {
   void _startAutoSlide() {
     _autoSlideTimer?.cancel();
     if (_banners.length <= 1) return;
-    
+
     _autoSlideTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (_pageController.hasClients) {
         final nextPage = (_currentPage + 1) % _banners.length;
@@ -70,28 +68,19 @@ class _SlidingBannerState extends State<SlidingBanner> {
   Future<void> _launchBannerUrl(String url) async {
     final uri = Uri.parse(url);
     debugPrint('[SlidingBanner] Attempting to open URL: $url');
-    
+
     try {
       // Primary Attempt: Launch in external browser
-      final launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
-      
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+
       if (!launched) {
         // Fallback Attempt: Launch in platform default browser
-        await launchUrl(
-          uri,
-          mode: LaunchMode.platformDefault,
-        );
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
       }
     } catch (e) {
       debugPrint('[SlidingBanner] Primary launch error ($e), trying fallback...');
       try {
-        await launchUrl(
-          uri,
-          mode: LaunchMode.platformDefault,
-        );
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
       } catch (fallbackErr) {
         debugPrint('[SlidingBanner] Fallback launch error ($fallbackErr) for URL: $url');
       }
@@ -110,29 +99,24 @@ class _SlidingBannerState extends State<SlidingBanner> {
     if (_banners.isEmpty) {
       return const SizedBox.shrink();
     }
+    final p = context.palette;
 
     return Column(
       children: [
-        // PageView Banner Container with Minute Edge Padding & Touch Redirection
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final double bannerWidth = constraints.maxWidth;
-              final double bannerHeight = (bannerWidth / 2.2).clamp(150.0, 190.0);
+        // Sponsored banner carousel; tapping a banner opens the partner website.
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final double bannerWidth = constraints.maxWidth;
+            final double bannerHeight = (bannerWidth / 2.2).clamp(150.0, 190.0);
 
-              return Container(
-                height: bannerHeight,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(20),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
+            return Container(
+              height: bannerHeight,
+              decoration: BoxDecoration(
+                borderRadius: AppRadius.lgAll,
+                border: Border.all(color: p.border),
+              ),
+              child: ClipRRect(
+                borderRadius: AppRadius.lgAll,
                 child: PageView.builder(
                   controller: _pageController,
                   onPageChanged: _onPageChanged,
@@ -141,14 +125,14 @@ class _SlidingBannerState extends State<SlidingBanner> {
                     return _buildBannerCard(_banners[index]);
                   },
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
         ),
 
-        // Page Indicator Dots
+        // Page indicator
         if (_banners.length > 1) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.sm),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(_banners.length, (index) {
@@ -158,10 +142,10 @@ class _SlidingBannerState extends State<SlidingBanner> {
                 curve: Curves.easeInOut,
                 margin: const EdgeInsets.symmetric(horizontal: 3),
                 height: 6,
-                width: isActive ? 20 : 6,
+                width: isActive ? 18 : 6,
                 decoration: BoxDecoration(
-                  color: isActive ? const Color(0xFF2563EB) : const Color(0xFFD1D5DB),
-                  borderRadius: BorderRadius.circular(4),
+                  color: isActive ? p.primary : p.borderStrong,
+                  borderRadius: AppRadius.pillAll,
                 ),
               );
             }),
@@ -172,40 +156,24 @@ class _SlidingBannerState extends State<SlidingBanner> {
   }
 
   Widget _buildBannerCard(BannerItemData banner) {
+    final p = context.palette;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _launchBannerUrl(banner.targetUrl),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        decoration: BoxDecoration(
-          color: const Color(0xFF030A1A),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Image.asset(
-            banner.imageAsset,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: double.infinity,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                color: const Color(0xFF1E293B),
-                alignment: Alignment.center,
-                child: const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.image_not_supported_outlined, color: Colors.white70, size: 36),
-                    SizedBox(height: 6),
-                    Text(
-                      'Banner Image Failed to Load',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+        color: p.navy,
+        child: Image.asset(
+          banner.imageAsset,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              color: p.surfaceMuted,
+              alignment: Alignment.center,
+              child: Icon(Icons.image_not_supported_outlined, color: p.textTertiary, size: 32),
+            );
+          },
         ),
       ),
     );

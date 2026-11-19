@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:claimsupport/core/theme/app_palette.dart';
 import 'package:go_router/go_router.dart';
 import 'package:claimsupport/features/authentication/presentation/screens/splash_screen.dart';
 import 'package:claimsupport/features/authentication/presentation/screens/login_screen.dart';
@@ -16,14 +17,12 @@ import 'package:claimsupport/features/policies/presentation/screens/policy_list_
 import 'package:claimsupport/features/prescriptions/presentation/screens/prescription_list_screen.dart';
 import 'package:claimsupport/features/pdf_viewer/presentation/screens/pdf_viewer_screen.dart';
 
-import 'package:claimsupport/features/logs/presentation/screens/logs_screen.dart';
-import 'package:claimsupport/features/profile/presentation/screens/privacy_policy_screen.dart';
+import 'package:claimsupport/features/benefits/presentation/screens/my_benefits_screen.dart';
 import 'package:claimsupport/features/profile/presentation/screens/settings_screen.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:claimsupport/features/dashboard/presentation/controllers/dashboard_controller.dart';
 import 'package:claimsupport/features/analysis_reports/presentation/controllers/analysis_report_controller.dart';
-import 'package:claimsupport/features/logs/presentation/controllers/log_controller.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 final GlobalKey<NavigatorState> _shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell');
@@ -33,22 +32,10 @@ class AppRouter {
     navigatorKey: rootNavigatorKey,
     initialLocation: '/splash',
     routes: [
-      GoRoute(
-        path: '/',
-        redirect: (context, state) => '/splash',
-      ),
-      GoRoute(
-        path: '/splash',
-        builder: (context, state) => const SplashScreen(),
-      ),
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
-      ),
-      GoRoute(
-        path: '/register',
-        builder: (context, state) => const RegisterScreen(),
-      ),
+      GoRoute(path: '/', redirect: (context, state) => '/splash'),
+      GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(path: '/register', builder: (context, state) => const RegisterScreen()),
       // Dashboard with Bottom Navigation using ShellRoute
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
@@ -56,117 +43,67 @@ class AppRouter {
           return Consumer(
             builder: (context, ref, _) {
               final theme = Theme.of(context);
-              final isDark = theme.brightness == Brightness.dark;
+              final palette = theme.extension<AppPalette>() ?? AppPalette.light;
               return Scaffold(
                 backgroundColor: theme.scaffoldBackgroundColor,
                 body: child,
-                bottomNavigationBar: BottomAppBar(
-                  color: isDark ? const Color(0xFF1F2937) : Colors.white,
-                  surfaceTintColor: Colors.transparent,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _NavBarItem(
-                        icon: Icons.home_outlined,
-                        activeIcon: Icons.home,
+                bottomNavigationBar: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border(top: BorderSide(color: palette.border)),
+                  ),
+                  child: NavigationBar(
+                    selectedIndex: _calculateSelectedIndex(state.uri.path),
+                    onDestinationSelected: (index) => _onItemTapped(index, context, ref),
+                    destinations: const [
+                      NavigationDestination(
+                        icon: Icon(Icons.home_outlined),
+                        selectedIcon: Icon(Icons.home_rounded),
                         label: 'Home',
-                        isSelected: _calculateSelectedIndex(state.uri.path) == 0,
-                        isDark: isDark,
-                        onTap: () => _onItemTapped(0, context, ref),
                       ),
-                      _NavBarItem(
-                        icon: Icons.description_outlined,
-                        activeIcon: Icons.description,
+                      NavigationDestination(
+                        icon: Icon(Icons.assignment_outlined),
+                        selectedIcon: Icon(Icons.assignment_rounded),
                         label: 'Reports',
-                        isSelected: _calculateSelectedIndex(state.uri.path) == 1,
-                        isDark: isDark,
-                        onTap: () => _onItemTapped(1, context, ref),
                       ),
-                      _NavBarItem(
-                        icon: Icons.history_outlined,
-                        activeIcon: Icons.history,
-                        label: 'Logs',
-                        isSelected: _calculateSelectedIndex(state.uri.path) == 2,
-                        isDark: isDark,
-                        onTap: () => _onItemTapped(2, context, ref),
+                      NavigationDestination(
+                        icon: Icon(Icons.shield_outlined),
+                        selectedIcon: Icon(Icons.shield_rounded),
+                        label: 'My Benefits',
                       ),
-                      _NavBarItem(
-                        icon: Icons.person_outline,
-                        activeIcon: Icons.person,
+                      NavigationDestination(
+                        icon: Icon(Icons.person_outline_rounded),
+                        selectedIcon: Icon(Icons.person_rounded),
                         label: 'Profile',
-                        isSelected: _calculateSelectedIndex(state.uri.path) == 3,
-                        isDark: isDark,
-                        onTap: () => _onItemTapped(3, context, ref),
                       ),
                     ],
                   ),
                 ),
-              ); // Closes Scaffold
+              );
             },
-          ); // Closes Consumer
+          );
         },
         routes: [
-          GoRoute(
-            path: '/dashboard',
-            builder: (context, state) => const DashboardScreen(),
-          ),
-          GoRoute(
-            path: '/reports',
-            builder: (context, state) => const AnalysesReportsScreen(),
-          ),
-          GoRoute(
-            path: '/upload',
-            builder: (context, state) => const UploadPrescriptionScreen(),
-          ),
-          GoRoute(
-            path: '/profile',
-            builder: (context, state) => const ProfileScreen(),
-          ),
-          GoRoute(
-            path: '/consent',
-            builder: (context, state) => const ConsentScreen(),
-          ),
-          GoRoute(
-            path: '/upload-policy',
-            builder: (context, state) => const UploadPolicyScreen(),
-          ),
-          GoRoute(
-            path: '/analysis',
-            builder: (context, state) => const AnalysisScreen(),
-          ),
-          GoRoute(
-            path: '/analysis-multi',
-            builder: (context, state) => const MultiAnalysisScreen(),
-          ),
-          GoRoute(
-            path: '/summary',
-            builder: (context, state) => const SummaryScreen(),
-          ),
+          GoRoute(path: '/dashboard', builder: (context, state) => const DashboardScreen()),
+          GoRoute(path: '/reports', builder: (context, state) => const AnalysesReportsScreen()),
+          GoRoute(path: '/upload', builder: (context, state) => const UploadPrescriptionScreen()),
+          GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
+          GoRoute(path: '/consent', builder: (context, state) => const ConsentScreen()),
+          GoRoute(path: '/upload-policy', builder: (context, state) => const UploadPolicyScreen()),
+          GoRoute(path: '/analysis', builder: (context, state) => const AnalysisScreen()),
+          GoRoute(path: '/analysis-multi', builder: (context, state) => const MultiAnalysisScreen()),
+          GoRoute(path: '/multi-analysis', redirect: (context, state) => '/analysis-multi'),
+          GoRoute(path: '/summary', builder: (context, state) => const SummaryScreen()),
           GoRoute(
             path: '/summary/:id',
             builder: (context, state) => SummaryScreen(reportId: state.pathParameters['id']),
           ),
-          GoRoute(
-            path: '/policies',
-            builder: (context, state) => const PolicyListScreen(),
-          ),
-          GoRoute(
-            path: '/prescriptions',
-            builder: (context, state) => const PrescriptionListScreen(),
-          ),
+          GoRoute(path: '/policies', builder: (context, state) => const PolicyListScreen()),
+          GoRoute(path: '/prescriptions', builder: (context, state) => const PrescriptionListScreen()),
 
-          GoRoute(
-            path: '/activity-logs',
-            builder: (context, state) => const LogsScreen(),
-          ),
-          GoRoute(
-            path: '/settings',
-            builder: (context, state) => const SettingsScreen(),
-          ),
-          GoRoute(
-            path: '/privacy-policy',
-            builder: (context, state) => const PrivacyPolicyScreen(),
-          ),
+          GoRoute(path: '/benefits', builder: (context, state) => const MyBenefitsScreen()),
+          GoRoute(path: '/insights', redirect: (context, state) => '/benefits'),
+          GoRoute(path: '/activity-logs', redirect: (context, state) => '/benefits'),
+          GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
           GoRoute(
             path: '/view-pdf/:fileId',
             builder: (context, state) {
@@ -184,7 +121,9 @@ class AppRouter {
   static int _calculateSelectedIndex(String location) {
     if (location.startsWith('/dashboard')) return 0;
     if (location.startsWith('/reports')) return 1;
-    if (location.startsWith('/activity-logs') || location.startsWith('/logs')) return 2;
+    if (location.startsWith('/benefits') || location.startsWith('/insights') || location.startsWith('/activity-logs') || location.startsWith('/logs')) {
+      return 2;
+    }
     if (location.startsWith('/profile')) return 3;
     return 0;
   }
@@ -200,58 +139,11 @@ class AppRouter {
         context.go('/reports');
         break;
       case 2:
-        ref.invalidate(logProvider);
-        context.go('/activity-logs');
+        context.go('/benefits');
         break;
       case 3:
         context.go('/profile');
         break;
     }
-  }
-}
-
-class _NavBarItem extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final bool isSelected;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  const _NavBarItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.isSelected,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isSelected 
-        ? const Color(0xFF2563EB) 
-        : (isDark ? Colors.grey.shade400 : Colors.grey.shade600);
-    return InkWell(
-      onTap: onTap,
-      splashColor: Colors.transparent,
-      highlightColor: Colors.transparent,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(isSelected ? activeIcon : icon, color: color, size: 24),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

@@ -12,12 +12,12 @@ import 'package:claimsupport/core/utils/auth_storage.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Prevent release mode black screen on unhandled Flutter widget build errors
   ErrorWidget.builder = (FlutterErrorDetails details) {
     debugPrint('Flutter Error: ${details.exception}');
     return Material(
-      color: Colors.white,
+      color: const Color(0xFFF5F7FA),
       child: SafeArea(
         child: Center(
           child: Padding(
@@ -25,18 +25,32 @@ Future<void> main() async {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: const BoxDecoration(color: Color(0xFFFEF2F2), shape: BoxShape.circle),
+                  child: const Icon(Icons.error_outline_rounded, color: Color(0xFFB91C1C), size: 32),
+                ),
                 const SizedBox(height: 16),
                 const Text(
-                  'An unexpected error occurred',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                  'Something went wrong',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  details.exceptionAsString(),
+                const Text(
+                  'This section could not be displayed. Please go back and try again.',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  style: TextStyle(fontSize: 14, height: 1.5, color: Color(0xFF475569)),
                 ),
+                if (!kReleaseMode) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    details.exceptionAsString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  ),
+                ],
               ],
             ),
           ),
@@ -71,11 +85,7 @@ Future<void> main() async {
     debugPrint('AuthStorage migration error: $e');
   }
 
-  runApp(
-    const ProviderScope(
-      child: ClaimSupportApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: ClaimSupportApp()));
 }
 
 class ClaimSupportApp extends ConsumerWidget {

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import 'package:claimsupport/core/widgets/app_widgets.dart';
 import 'package:claimsupport/features/dashboard/presentation/controllers/dashboard_controller.dart';
 import 'package:claimsupport/features/policies/presentation/controllers/policy_controller.dart';
 import 'package:claimsupport/features/prescriptions/presentation/controllers/prescription_controller.dart';
@@ -8,22 +10,16 @@ import 'package:claimsupport/features/authentication/presentation/controllers/au
 import 'package:claimsupport/features/analysis_reports/data/models/analysis_report.dart';
 import 'package:claimsupport/features/dashboard/presentation/widgets/sliding_banner.dart';
 import 'package:claimsupport/features/dashboard/presentation/widgets/floating_live_ad.dart';
-import 'package:intl/intl.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final Color primaryBlue = const Color(0xFF2563EB);
-    final Color textColor = isDark ? Colors.white : const Color(0xFF111827);
-    final Color textSecondary = isDark ? Colors.grey.shade400 : const Color(0xFF6B7280);
+    final p = context.palette;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: p.background,
       body: Stack(
         children: [
           SafeArea(
@@ -31,427 +27,410 @@ class DashboardScreen extends ConsumerWidget {
               onRefresh: () async {
                 await ref.read(dashboardStatsProvider.notifier).fetchStats();
               },
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 800),
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 24.0, right: 24.0, top: 32.0, bottom: 100.0),
-                  child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Header
-                Text(
-                  'Welcome back,',
-                  style: TextStyle(
-                    color: textSecondary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Consumer(
-                  builder: (context, ref, child) {
-                    final authState = ref.watch(authProvider);
-                    return authState.when(
-                      data: (user) => Text(
-                        user?.name ?? 'User',
-                        style: TextStyle(
-                          color: textColor,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      loading: () => const Text('Loading...', style: TextStyle(fontSize: 28)),
-                      error: (e, _) => Text('Error: $e', style: const TextStyle(fontSize: 16, color: Colors.red)),
-                    );
-                  },
-                ),
-                const SizedBox(height: 32),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                child: ContentWidth(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.lg, AppSpacing.page, 112),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const _Greeting(),
+                        const SizedBox(height: AppSpacing.xl),
+                        _StartAnalysisCard(onStart: () => context.push('/consent')),
+                        const SizedBox(height: AppSpacing.xl),
 
-                // Main Blue Card
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(24),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF3B82F6), Color(0xFF312E81)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: primaryBlue.withAlpha(60),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        right: -20,
-                        top: 10,
-                        child: Icon(
-                          Icons.shield_outlined,
-                          size: 140,
-                          color: Colors.white.withAlpha(20),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Check Claim Eligibility',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              "Upload your policy and\nprescription to see what's covered\nbefore filing a claim.",
-                              style: TextStyle(
-                                color: Colors.white.withAlpha(220),
-                                fontSize: 14,
-                                height: 1.4,
-                              ),
-                            ),
-                            const SizedBox(height: 32),
-                            Container(
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withAlpha(30),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: Colors.white.withAlpha(50),
-                                  width: 1,
-                                ),
-                              ),
-                              child: InkWell(
-                                onTap: () => context.push('/consent'),
-                                borderRadius: BorderRadius.circular(16),
-                                child: const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 16),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
+                        // Partner offers
+                        const SlidingBanner(),
+                        const SizedBox(height: AppSpacing.xl),
+
+                        Consumer(
+                          builder: (context, ref, child) {
+                            final dashboardState = ref.watch(dashboardStatsProvider);
+                            return dashboardState.when(
+                              data: (stats) => Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  const SectionHeader(
+                                    title: 'Your documents',
+                                    subtitle: 'Saved documents you can reuse in any analysis',
+                                  ),
+                                  Row(
                                     children: [
-                                      Icon(Icons.play_arrow, color: Colors.white, size: 24),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'Start New Analysis',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
+                                      Expanded(
+                                        child: _StatCard(
+                                          icon: Icons.shield_outlined,
+                                          tone: AppTone.brand,
+                                          count: stats.totalPolicies,
+                                          label: 'Policies',
+                                          onTap: () async {
+                                            ref.invalidate(policiesProvider);
+                                            await context.push('/policies');
+                                            ref.invalidate(dashboardStatsProvider);
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppSpacing.sm),
+                                      Expanded(
+                                        child: _StatCard(
+                                          icon: Icons.medication_outlined,
+                                          tone: AppTone.verify,
+                                          count: stats.totalPrescriptions,
+                                          label: 'Prescriptions',
+                                          onTap: () async {
+                                            ref.invalidate(prescriptionProvider);
+                                            await context.push('/prescriptions');
+                                            ref.invalidate(dashboardStatsProvider);
+                                          },
                                         ),
                                       ),
                                     ],
                                   ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Sliding Offer & Promotion Banner
-                const SlidingBanner(),
-
-                const SizedBox(height: 28),
-
-                // Quick Stats Header
-                Text(
-                  'Overview',
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Dynamic Dashboard Stats
-                Consumer(
-                  builder: (context, ref, child) {
-                    final dashboardState = ref.watch(dashboardStatsProvider);
-                    return dashboardState.when(
-                      data: (stats) {
-                        return Column(
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _buildStatCard(
-                                    context,
-                                    icon: Icons.description_outlined,
-                                    iconColor: const Color(0xFF2563EB),
-                                    iconBgColor: const Color(0xFFEFF6FF),
-                                    count: stats.totalPolicies.toString(),
-                                    label: 'POLICIES',
-                                    onTap: () async {
-                                      ref.invalidate(policiesProvider);
-                                      await context.push('/policies');
-                                      ref.invalidate(dashboardStatsProvider);
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _buildStatCard(
-                                    context,
-                                    icon: Icons.medication_outlined,
-                                    iconColor: const Color(0xFF9333EA),
-                                    iconBgColor: const Color(0xFFF3E8FF),
-                                    count: stats.totalPrescriptions.toString(),
-                                    label: 'PRESCRIPTIONS',
-                                    onTap: () async {
-                                      ref.invalidate(prescriptionProvider);
-                                      await context.push('/prescriptions');
-                                      ref.invalidate(dashboardStatsProvider);
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 32),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Recent Analyses',
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () => context.go('/reports'),
-                                  child: const Text(
-                                    'View All',
-                                    style: TextStyle(
-                                      color: Color(0xFF2563EB),
-                                      fontWeight: FontWeight.w600,
+                                  const SizedBox(height: AppSpacing.section + AppSpacing.xs),
+                                  SectionHeader(
+                                    title: 'Recent analyses',
+                                    subtitle: stats.totalAnalysisReports > 0
+                                        ? '${stats.totalAnalysisReports} '
+                                              '${stats.totalAnalysisReports == 1 ? 'report' : 'reports'} in total'
+                                        : null,
+                                    trailing: TextButton(
+                                      onPressed: () => context.go('/reports'),
+                                      child: const Text('View all'),
                                     ),
                                   ),
+                                  if (stats.recentAnalyses.isEmpty)
+                                    AppCard(
+                                      child: EmptyState(
+                                        compact: true,
+                                        icon: Icons.assignment_outlined,
+                                        title: 'No analyses yet',
+                                        message:
+                                            'Start a new analysis to see whether your treatment is covered by your policy.',
+                                        action: TextButton.icon(
+                                          onPressed: () => context.push('/consent'),
+                                          icon: const Icon(Icons.add_rounded, size: 18),
+                                          label: const Text('Start new analysis'),
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    ...stats.recentAnalyses.map(
+                                      (report) => Padding(
+                                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                                        child: _RecentAnalysisTile(
+                                          report: report,
+                                          onTap: () async {
+                                            await context.push('/summary/${report.id}');
+                                            ref.invalidate(dashboardStatsProvider);
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              loading: () => const Padding(
+                                padding: EdgeInsets.symmetric(vertical: AppSpacing.xxl),
+                                child: LoadingState(message: 'Loading your overview…'),
+                              ),
+                              error: (err, stack) => AppCard(
+                                child: ErrorState(
+                                  compact: true,
+                                  title: 'Couldn\'t load your overview',
+                                  message: friendlyErrorMessage(err),
+                                  onRetry: () => ref.invalidate(dashboardStatsProvider),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            if (stats.recentAnalyses.isEmpty)
-                              const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 24),
-                                child: Center(
-                                  child: Text(
-                                    'No recent analyses',
-                                    style: TextStyle(color: Colors.grey),
-                                  ),
-                                ),
-                              )
-                            else
-                              ...stats.recentAnalyses.map((report) => _buildRecentAnalysisCard(context, ref, report)),
-                          ],
-                        );
-                      },
-                      loading: () => const Center(child: CircularProgressIndicator()),
-                      error: (err, stack) => Center(child: Text('Error: $err')),
-                    );
-                  },
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
-          ),
-        ),
-      ),
 
-          // Draggable Flipkart-style Floating Live Ad Widget
+          // Draggable floating partner ad
           const FloatingLiveAd(),
         ],
       ),
     );
   }
+}
 
-  Widget _buildStatCard(BuildContext context, {
-    required IconData icon,
-    required Color iconColor,
-    required Color iconBgColor,
-    required String count,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+class _Greeting extends ConsumerWidget {
+  const _Greeting();
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-        color: theme.cardTheme.color ?? theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade100, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(5),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final authState = ref.watch(authProvider);
+    final String? name = authState.when(
+      data: (user) => (user?.name.trim().isNotEmpty ?? false) ? user!.name.trim() : 'User',
+      loading: () => null,
+      error: (_, _) => 'User',
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Welcome back,', style: context.text.bodyMedium?.copyWith(color: p.textTertiary)),
+        const SizedBox(height: 2),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: name == null
+              ? Container(
+                  key: const ValueKey('name-loading'),
+                  margin: const EdgeInsets.only(top: 6),
+                  width: 160,
+                  height: 22,
+                  decoration: BoxDecoration(color: p.surfaceMuted, borderRadius: AppRadius.smAll),
+                )
+              : Text(
+                  name,
+                  key: const ValueKey('name'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.text.headlineSmall,
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StartAnalysisCard extends StatelessWidget {
+  final VoidCallback onStart;
+
+  const _StartAnalysisCard({required this.onStart});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    const onNavy = Colors.white;
+    final onNavyMuted = Colors.white.withAlpha(200);
+
+    return Container(
+      decoration: BoxDecoration(color: p.navy, borderRadius: AppRadius.xlAll),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          Positioned(
+            right: -28,
+            top: -20,
+            child: Icon(Icons.health_and_safety_outlined, size: 150, color: Colors.white.withAlpha(14)),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.white.withAlpha(26), borderRadius: AppRadius.pillAll),
+                  child: Text(
+                    'COVERAGE CHECK',
+                    style: context.text.labelSmall?.copyWith(color: onNavy, letterSpacing: 1),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text('Check claim eligibility', style: context.text.titleLarge?.copyWith(color: onNavy, fontSize: 20)),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Upload your prescription and policy to see what is covered before you file a claim.',
+                  style: context.text.bodyMedium?.copyWith(color: onNavyMuted),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.xs,
+                  children: const [
+                    _HeroStep(number: 1, label: 'Prescription'),
+                    _HeroStep(number: 2, label: 'Policy'),
+                    _HeroStep(number: 3, label: 'Coverage result'),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: onStart,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF0B2545),
+                    ),
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 20),
+                    iconAlignment: IconAlignment.end,
+                    label: const Text('Start new analysis'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _HeroStep extends StatelessWidget {
+  final int number;
+  final String label;
+
+  const _HeroStep({required this.number, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 20,
+          height: 20,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withAlpha(120)),
+          ),
+          child: Text(
+            '$number',
+            style: context.text.labelSmall?.copyWith(color: Colors.white, letterSpacing: 0, fontSize: 10.5),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: context.text.labelMedium?.copyWith(color: Colors.white.withAlpha(220))),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final AppTone tone;
+  final int count;
+  final String label;
+  final VoidCallback onTap;
+
+  const _StatCard({
+    required this.icon,
+    required this.tone,
+    required this.count,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return AppCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: isDark ? iconBgColor.withAlpha(50) : iconBgColor,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: iconColor, size: 24),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            count,
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              color: theme.textTheme.bodyLarge?.color,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: isDark ? Colors.grey.shade400 : const Color(0xFF6B7280),
-              letterSpacing: 1.2,
-            ),
-          ),
-        ],
-      ),
-    ),
-    );
-  }
-
-  Widget _buildRecentAnalysisCard(BuildContext context, WidgetRef ref, AnalysisReport report) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    
-    Color statusColor;
-    Color statusBgColor;
-
-    final statusLower = (report.overallStatus ?? '').toLowerCase();
-    if (statusLower == 'covered' || statusLower == 'approved' || statusLower == 'likely covered') {
-      statusColor = const Color(0xFF059669);
-      statusBgColor = isDark ? const Color(0xFF064E3B) : const Color(0xFFECFDF5);
-    } else if (statusLower == 'partially covered' || statusLower == 'partially approved') {
-      statusColor = const Color(0xFFD97706);
-      statusBgColor = isDark ? const Color(0xFF78350F) : const Color(0xFFFEF3C7);
-    } else if (statusLower == 'not covered' || statusLower == 'rejected' || statusLower == 'likely not covered') {
-      statusColor = const Color(0xFFDC2626);
-      statusBgColor = isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFEF2F2);
-    } else if (statusLower == 'needs verification') {
-      statusColor = const Color(0xFF7C3AED);
-      statusBgColor = isDark ? const Color(0xFF4C1D95) : const Color(0xFFF5F3FF);
-    } else if (statusLower.startsWith('invalid')) {
-      statusColor = const Color(0xFFD97706);
-      statusBgColor = isDark ? const Color(0xFF78350F) : const Color(0xFFFEF3C7);
-    } else {
-      statusColor = isDark ? Colors.grey.shade300 : const Color(0xFF6B7280);
-      statusBgColor = isDark ? Colors.grey.shade800 : const Color(0xFFF3F4F6);
-    }
-
-    return InkWell(
-      onTap: () async {
-        await context.push('/summary/${report.id}');
-        ref.invalidate(dashboardStatsProvider);
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Card(
-        margin: const EdgeInsets.only(bottom: 12),
-        elevation: 0,
-        color: theme.cardTheme.color ?? theme.cardColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
+          Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.grey.shade800 : const Color(0xFFF3F4F6),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.description_outlined, color: isDark ? Colors.grey.shade300 : const Color(0xFF6B7280)),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      report.displayReportNumber,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        color: isDark ? Colors.white : const Color(0xFF111827),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    if (report.createdAt != null)
-                      Text(
-                        DateFormat('dd-MM-yyyy  hh:mm a').format(report.createdAt!.toLocal()),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? Colors.grey.shade400 : const Color(0xFF6B7280),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusBgColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    report.overallStatus ?? 'Pending',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ),
+              IconTile(icon: icon, tone: tone, size: 38),
+              const Spacer(),
+              Icon(Icons.chevron_right_rounded, color: p.textTertiary, size: 20),
             ],
           ),
-        ),
+          const SizedBox(height: AppSpacing.md),
+          Text('$count', style: context.text.headlineSmall?.copyWith(fontSize: 26)),
+          const SizedBox(height: 2),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.labelMedium),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentAnalysisTile extends StatelessWidget {
+  final AnalysisReport report;
+  final VoidCallback onTap;
+
+  const _RecentAnalysisTile({required this.report, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final status = (report.overallStatus ?? '').trim().isEmpty ? 'Pending' : report.overallStatus!.trim();
+    final style = coverageStatusStyle(status);
+    final policy = report.displayPolicyName;
+    final hasPolicy = policy.isNotEmpty && policy != 'Not Specified';
+    final dateStr = report.createdAt != null
+        ? DateFormat('dd MMM yyyy, hh:mm a').format(report.createdAt!.toLocal())
+        : '';
+
+    return AppCard(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          IconTile(icon: style.icon, tone: style.tone, size: 42),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        report.displayReportNumber,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.text.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    StatusBadge(label: status, tone: style.tone, dense: true),
+                  ],
+                ),
+                if (hasPolicy) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    policy,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.bodySmall?.copyWith(
+                      color: p.textPrimary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+                if (dateStr.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      Icon(Icons.schedule_rounded, size: 13, color: p.textTertiary),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          dateStr,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.text.bodySmall?.copyWith(
+                            color: p.textTertiary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Icon(Icons.chevron_right_rounded, color: p.textTertiary, size: 22),
+        ],
       ),
     );
   }

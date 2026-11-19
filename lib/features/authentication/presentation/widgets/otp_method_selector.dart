@@ -1,10 +1,11 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:claimsupport/core/widgets/app_widgets.dart';
 
-/// How the OTP is delivered. The value is what the backend expects in `channel`.
+/// How the OTP is delivered. ClaimSupport uses Email OTP exclusively.
 enum OtpChannel {
-  email('email', 'Email OTP', Icons.email_outlined),
-  sms('sms', 'SMS OTP', Icons.sms_outlined);
+  email('email', 'Email OTP', Icons.email_outlined);
 
   const OtpChannel(this.apiValue, this.label, this.icon);
   final String apiValue;
@@ -18,10 +19,10 @@ class OtpSendResult {
   final int otpLength;
   final int resendAfterSeconds;
 
-  /// False when the server did not actually send an SMS/email (no OTP service set up).
+  /// False when the server did not actually send an email (static/test mode).
   final bool delivered;
 
-  /// Message to show the user, e.g. "OTP sent to ..." or "OTP could not be sent ... use test OTP 1234."
+  /// Message to show the user, e.g. "OTP sent to ..." or "Development Mode: Use test OTP 1234."
   final String message;
 
   const OtpSendResult({
@@ -33,16 +34,18 @@ class OtpSendResult {
   });
 
   /// One-line status shown above the OTP field.
-  String statusText(OtpChannel channel) => delivered
-      ? 'We sent a $otpLength-digit code by ${channel == OtpChannel.email ? 'email' : 'SMS'} to $destination.'
-      : message;
+  String statusText([OtpChannel channel = OtpChannel.email]) {
+    if (!kReleaseMode && !delivered) {
+      return 'Development Mode: Use test OTP 1234 to verify.';
+    }
+    return delivered ? 'We sent a $otpLength-digit code by email to $destination.' : message;
+  }
 
   factory OtpSendResult.fromResponse(Response response, {required String fallbackDestination}) {
     final data = response.data is Map ? response.data as Map : const {};
     final destination = (data['destination'] as String?) ?? fallbackDestination;
     return OtpSendResult(
       destination: destination,
-      // Older backends did not send these; their OTP was 4 digits with a 30 s cooldown.
       otpLength: (data['otpLength'] as num?)?.toInt() ?? 4,
       resendAfterSeconds: (data['resendAfterSeconds'] as num?)?.toInt() ?? 30,
       delivered: data['delivered'] != false,
@@ -51,47 +54,33 @@ class OtpSendResult {
   }
 }
 
-/// Status line above the OTP field; amber warning when the OTP was not actually delivered.
+/// Status line above the OTP field.
 class OtpStatusText extends StatelessWidget {
   final OtpSendResult sent;
   final OtpChannel channel;
 
-  const OtpStatusText({super.key, required this.sent, required this.channel});
+  const OtpStatusText({super.key, required this.sent, this.channel = OtpChannel.email});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    if (sent.delivered) {
-      return Text(
-        sent.statusText(channel),
-        style: TextStyle(fontSize: 14, color: isDark ? Colors.grey.shade400 : const Color(0xFF6B7280)),
+    if (!kReleaseMode && !sent.delivered) {
+      return const InfoBanner(
+        tone: AppTone.info,
+        icon: Icons.developer_mode_rounded,
+        title: 'Development Testing',
+        message: 'Fixed test OTP is: 1234',
+        padding: EdgeInsets.all(AppSpacing.sm),
       );
     }
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0x33F59E0B) : const Color(0xFFFFFBEB),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFF59E0B)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.info_outline, color: Color(0xFFB45309), size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              sent.message,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: isDark ? const Color(0xFFFCD34D) : const Color(0xFF92400E),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    if (sent.delivered) {
+      return InfoBanner(
+        tone: AppTone.info,
+        icon: channel.icon,
+        message: sent.statusText(channel),
+        padding: const EdgeInsets.all(AppSpacing.sm),
+      );
+    }
+    return InfoBanner(tone: AppTone.warning, message: sent.message, padding: const EdgeInsets.all(AppSpacing.sm));
   }
 }
 
@@ -111,7 +100,7 @@ String otpErrorFrom(DioException e, String fallback) {
 
 final RegExp emailPattern = RegExp(r'^[\w\-.+]+@([\w-]+\.)+[\w-]{2,}$');
 
-/// "Continue with Email OTP" / "Continue with SMS OTP" choice.
+/// "Continue with Email OTP" / "Continue with SMS OTP" choice, shown as a segmented control.
 class OtpMethodSelector extends StatelessWidget {
   final OtpChannel selected;
   final ValueChanged<OtpChannel> onChanged;
@@ -128,60 +117,181 @@ class OtpMethodSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (final channel in OtpChannel.values) ...[
-          if (channel != OtpChannel.values.first) const SizedBox(width: 12),
-          Expanded(child: _option(context, channel)),
+    final p = context.palette;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: p.surfaceMuted,
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: p.border),
+      ),
+      child: Row(
+        children: [
+          for (final channel in OtpChannel.values) ...[
+            if (channel != OtpChannel.values.first) const SizedBox(width: 4),
+            Expanded(child: _option(context, channel)),
+          ],
         ],
-      ],
+      ),
     );
   }
 
   Widget _option(BuildContext context, OtpChannel channel) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    const primaryBlue = Color(0xFF2563EB);
+    final p = context.palette;
     final isSelected = channel == selected;
-    final foreground = isSelected ? primaryBlue : (isDark ? Colors.grey.shade300 : const Color(0xFF374151));
+    final foreground = isSelected ? p.primary : p.textSecondary;
 
     return Semantics(
       button: true,
       selected: isSelected,
       label: '$prefix ${channel.label}',
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: enabled ? () => onChanged(channel) : null,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? primaryBlue.withAlpha(isDark ? 50 : 20)
-                : (theme.inputDecorationTheme.fillColor ?? (isDark ? Colors.grey.shade900 : Colors.white)),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? primaryBlue : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-              width: isSelected ? 2 : 1,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: AppRadius.smAll,
+          onTap: enabled ? () => onChanged(channel) : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            decoration: BoxDecoration(
+              color: isSelected ? p.surface : Colors.transparent,
+              borderRadius: AppRadius.smAll,
+              border: Border.all(color: isSelected ? p.primary.withAlpha(90) : Colors.transparent),
+              boxShadow: isSelected ? p.softShadow : null,
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(channel.icon, color: foreground),
-              const SizedBox(height: 6),
-              Text(
-                prefix,
-                style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : const Color(0xFF6B7280)),
-              ),
-              Text(
-                channel.label,
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: foreground),
-              ),
-            ],
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(channel.icon, color: foreground, size: 18),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    channel.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.labelLarge?.copyWith(
+                      fontSize: 14,
+                      color: foreground,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Brand mark + title + subtitle used at the top of the sign-in and registration screens.
+class AuthHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const AuthHeader({super.key, required this.title, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(color: p.primary, borderRadius: AppRadius.mdAll),
+              child: Icon(Icons.health_and_safety_rounded, color: p.onPrimary, size: 26),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Text('Policy Pal', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xxl),
+        Text(title, style: context.text.headlineMedium),
+        const SizedBox(height: AppSpacing.xs),
+        Text(subtitle, style: context.text.bodyLarge?.copyWith(color: p.textSecondary)),
+      ],
+    );
+  }
+}
+
+/// Label shown above an auth form field.
+class AuthFieldLabel extends StatelessWidget {
+  final String text;
+
+  const AuthFieldLabel(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Text(text, style: context.text.titleSmall),
+    );
+  }
+}
+
+/// "Text + link" row at the bottom of the auth screens.
+class AuthFooterLink extends StatelessWidget {
+  final String text;
+  final String linkLabel;
+  final VoidCallback onTap;
+
+  const AuthFooterLink({super.key, required this.text, required this.linkLabel, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(text, style: context.text.bodyMedium),
+        TextButton(
+          onPressed: onTap,
+          style: TextButton.styleFrom(
+            minimumSize: const Size(48, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+          ),
+          child: Text(linkLabel),
+        ),
+      ],
+    );
+  }
+}
+
+/// Resend countdown / resend button shown after an OTP is sent.
+class OtpResendRow extends StatelessWidget {
+  final int secondsLeft;
+  final bool loading;
+  final VoidCallback onResend;
+
+  const OtpResendRow({super.key, required this.secondsLeft, required this.loading, required this.onResend});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Center(
+      child: secondsLeft > 0
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.schedule_rounded, size: 16, color: p.textTertiary),
+                  const SizedBox(width: 6),
+                  Text('Resend OTP in ${secondsLeft}s', style: context.text.bodyMedium),
+                ],
+              ),
+            )
+          : TextButton.icon(
+              onPressed: loading ? null : onResend,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Resend OTP'),
+            ),
     );
   }
 }
