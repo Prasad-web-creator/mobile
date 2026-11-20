@@ -347,6 +347,13 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                           ],
                         ),
 
+                        // ─── 1b. What the bill may cost and who pays ───
+                        if (data['financialSummary'] is Map &&
+                            (data['financialSummary'] as Map).isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          _buildCostEstimateCard(Map<String, dynamic>.from(data['financialSummary'] as Map)),
+                        ],
+
                         // ─── 2. Items whose coverage depends on a detail not yet known ───
                         if (verificationItems.isNotEmpty) ...[
                           const SizedBox(height: AppSpacing.md),
@@ -519,12 +526,17 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                                           ? 'Not Required'
                                           : null,
                                     ),
-                                  _infoRow(
-                                    'Est. Cost',
-                                    prescriptionJson['estimatedTreatmentCost'] != null &&
-                                            prescriptionJson['estimatedTreatmentCost'].toString() != '0'
-                                        ? _money(prescriptionJson['estimatedTreatmentCost'])
-                                        : null,
+                                  Builder(
+                                    builder: (_) {
+                                      // The extractor stores it as estimatedCost; older reports used estimatedTreatmentCost.
+                                      final est =
+                                          prescriptionJson['estimatedCost'] ?? prescriptionJson['estimatedTreatmentCost'];
+                                      return _infoRow(
+                                            'Est. Cost',
+                                            est != null && est.toString() != '0' ? _money(est) : null,
+                                          ) ??
+                                          const SizedBox.shrink();
+                                    },
                                   ),
                                 ],
                               );
@@ -542,6 +554,12 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                           ),
                           ...clarificationQA.asMap().entries.map((entry) => _buildQaCard(entry.key, entry.value)),
                           const SizedBox(height: AppSpacing.xs),
+                        ],
+
+                        // ─── 8. What to do next ───
+                        if (asList(data['nextSteps']).isNotEmpty) ...[
+                          _buildNextStepsCard(asList(data['nextSteps'])),
+                          const SizedBox(height: AppSpacing.md),
                         ],
 
                         // ─── Disclaimer ───
@@ -844,6 +862,107 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                   },
                 ),
               ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ─── Cost estimate: bill total, insurer share, patient share, room-rent check ───
+  Widget _buildCostEstimateCard(Map<String, dynamic> fs) {
+    num? amount(dynamic v) => v is num ? v : num.tryParse((v ?? '').toString());
+    final total = amount(fs['estimatedTotalCost']);
+    final insurer = amount(fs['estimatedPayableAmount']);
+    final patient = amount(fs['estimatedPatientPayable']);
+    final roomRent = (fs['roomRentCheck'] ?? '').toString().trim();
+    final notes = (fs['notes'] ?? '').toString().trim();
+    if (total == null && insurer == null && patient == null && roomRent.isEmpty) return const SizedBox.shrink();
+
+    return Builder(
+      builder: (context) {
+        final p = context.palette;
+        Widget figure(String label, num? value, AppTone tone) => Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: context.text.bodySmall),
+              const SizedBox(height: 2),
+              Text(
+                value == null ? '—' : _money(value),
+                style: context.text.titleMedium?.copyWith(color: p.tone(tone).fg, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        );
+        return AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const CardTitle(
+                title: 'Cost Estimate',
+                icon: Icons.account_balance_wallet_outlined,
+                tone: AppTone.brand,
+                subtitle: "From your prescription's cost estimate",
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Divider(height: 1, color: p.border),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  figure('Estimated bill', total, AppTone.neutral),
+                  figure('Insurer pays', insurer, AppTone.success),
+                  figure('You pay', patient, (patient ?? 0) > 0 ? AppTone.warning : AppTone.success),
+                ],
+              ),
+              if (roomRent.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                _DetailPanel(
+                  icon: Icons.bed_outlined,
+                  label: 'Room Rent Check',
+                  tone: AppTone.neutral,
+                  child: Text(roomRent, style: context.text.bodySmall?.copyWith(color: p.textPrimary, height: 1.45)),
+                ),
+              ],
+              if (notes.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(notes, style: context.text.bodySmall),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ─── Next steps for the policyholder ───
+  Widget _buildNextStepsCard(List<dynamic> steps) {
+    final items = steps.map((s) => s.toString().trim()).where((s) => s.isNotEmpty).toList();
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Builder(
+      builder: (context) {
+        final p = context.palette;
+        return AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const CardTitle(title: 'Next Steps', icon: Icons.checklist_rounded, tone: AppTone.info),
+              const SizedBox(height: AppSpacing.sm),
+              for (int i = 0; i < items.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.xs),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${i + 1}.', style: context.text.bodyMedium?.copyWith(color: p.accent, fontWeight: FontWeight.w700)),
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: Text(items[i], style: context.text.bodyMedium?.copyWith(color: p.textPrimary, height: 1.45)),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         );
