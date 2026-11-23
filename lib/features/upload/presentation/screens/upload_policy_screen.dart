@@ -153,7 +153,8 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
       final pickAgain = await showConfirmDialog(
         context,
         title: 'Too many files selected',
-        message: 'You selected ${picked.length} files, but you can add only $remaining more '
+        message:
+            'You selected ${picked.length} files, but you can add only $remaining more '
             '${remaining == 1 ? 'policy' : 'policies'} (up to $_maxPolicies in total). '
             'Please select up to $remaining ${remaining == 1 ? 'file' : 'files'}.',
         confirmLabel: 'Select again',
@@ -310,6 +311,11 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
     if (_isUploading) return;
     if (_policies.isEmpty) {
       _toast('Please upload at least one policy document.');
+      return;
+    }
+
+    if (_policies.any((p) => p.isExtracting)) {
+      showAppSnackBar(context, 'Please wait while we finish reading your policy details.', tone: AppTone.info);
       return;
     }
 
@@ -529,11 +535,7 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
             const SizedBox(height: AppSpacing.xs),
             Row(
               children: [
-                SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: p.primary),
-                ),
+                SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: p.primary)),
                 const SizedBox(width: AppSpacing.xs),
                 Text(
                   'Reading document details...',
@@ -545,69 +547,86 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
           const SizedBox(height: AppSpacing.md),
           Divider(height: 1, color: p.border),
 
-          // 1. New or renewed decides which date is asked next.
-          _questionBlock(
-            label: 'Is this a new policy or a renewed policy? *',
-            child: policy.isRenewalAutoExtracted
-                ? _readOnlyField(
-                    value: policy.isRenewal == true ? 'Renewed' : 'New (first year)',
-                    icon: policy.isRenewal == true ? Icons.autorenew_rounded : Icons.fiber_new_rounded,
-                  )
-                : _twoChoice(
-                    value: policy.isRenewal,
-                    firstLabel: 'New (first year)',
-                    firstValue: false,
-                    secondLabel: 'Renewed',
-                    secondValue: true,
-                    onChanged: (v) => setState(() => policy.setRenewal(v)),
-                  ),
-          ),
-
-          // 2. The date: the policy's start date (new), or the very first start date (renewed).
-          //    Waiting periods are counted from this date, not from the current renewal.
-          if (policy.isRenewal != null)
+          // While the document is being read, nothing can be entered by hand: details found
+          // in the PDF are filled in and locked, and only what is missing is asked afterwards.
+          if (policy.isExtracting)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.md),
+              child: Text(
+                "Please wait while we read your policy. Any details we can't find in the "
+                'document will be asked here for you to fill in.',
+                style: context.text.bodySmall,
+              ),
+            )
+          else ...[
+            // 1. New or renewed decides which date is asked next.
             _questionBlock(
-              label: policy.isRenewal == true ? 'When was this policy first taken? *' : 'Policy Start Date *',
-              helper: policy.isRenewal == true
-                  ? 'The very first start date of this policy, before any renewals.'
-                  : 'The date this policy started, as shown on your policy document.',
-              child: policy.startDateAutoExtracted && policy.inceptionDate != null
+              label: 'Is this a new policy or a renewed policy? *',
+              child: policy.isRenewalAutoExtracted
                   ? _readOnlyField(
-                      value: DateFormat('dd-MM-yyyy').format(policy.inceptionDate!),
-                      icon: Icons.calendar_month_rounded,
-                    )
-                  : _dateField(
-                      value: policy.inceptionDate,
-                      placeholder: policy.isRenewal == true ? 'Select first start date *' : 'Select policy start date *',
-                      onTap: () => _pickDate(policy),
-                    ),
-            ),
-
-          // 3. Renewed only: renewed every year without a break?
-          if (policy.isRenewal == true)
-            _questionBlock(
-              label: 'Has this policy been renewed every year without a break? *',
-              helper: 'Answer Yes if you moved from another insurance company without any gap (portability).',
-              child: policy.noBreakAutoExtracted && policy.renewedWithoutBreak != null
-                  ? _readOnlyField(
-                      value: policy.renewedWithoutBreak == true ? 'Yes' : 'No',
-                      icon: policy.renewedWithoutBreak == true ? Icons.verified_user_outlined : Icons.warning_amber_rounded,
+                      value: policy.isRenewal == true ? 'Renewed' : 'New (first year)',
+                      icon: policy.isRenewal == true ? Icons.autorenew_rounded : Icons.fiber_new_rounded,
                     )
                   : _twoChoice(
-                      value: policy.renewedWithoutBreak,
-                      firstLabel: 'Yes',
-                      firstValue: true,
-                      secondLabel: 'No',
-                      secondValue: false,
-                      onChanged: (v) => setState(() {
-                        policy.renewedWithoutBreak = v;
-                        policy.clearAfterRenewalAnswer();
-                      }),
+                      value: policy.isRenewal,
+                      firstLabel: 'New (first year)',
+                      firstValue: false,
+                      secondLabel: 'Renewed',
+                      secondValue: true,
+                      onChanged: (v) => setState(() => policy.setRenewal(v)),
                     ),
             ),
-          if (policy.isRenewal == true && policy.renewedWithoutBreak == false) ...[
-            const SizedBox(height: AppSpacing.md),
-            _coverageGapNotice(),
+
+            // 2. The date: the policy's start date (new), or the very first start date (renewed).
+            //    Waiting periods are counted from this date, not from the current renewal.
+            if (policy.isRenewal != null)
+              _questionBlock(
+                label: policy.isRenewal == true ? 'When was this policy first taken? *' : 'Policy Start Date *',
+                helper: policy.isRenewal == true
+                    ? 'The very first start date of this policy, before any renewals.'
+                    : 'The date this policy started, as shown on your policy document.',
+                child: policy.startDateAutoExtracted && policy.inceptionDate != null
+                    ? _readOnlyField(
+                        value: DateFormat('dd-MM-yyyy').format(policy.inceptionDate!),
+                        icon: Icons.calendar_month_rounded,
+                      )
+                    : _dateField(
+                        value: policy.inceptionDate,
+                        placeholder: policy.isRenewal == true
+                            ? 'Select first start date *'
+                            : 'Select policy start date *',
+                        onTap: () => _pickDate(policy),
+                      ),
+              ),
+
+            // 3. Renewed only: renewed every year without a break?
+            if (policy.isRenewal == true)
+              _questionBlock(
+                label: 'Has this policy been renewed every year without a break? *',
+                helper: 'Answer Yes if you moved from another insurance company without any gap (portability).',
+                child: policy.noBreakAutoExtracted && policy.renewedWithoutBreak != null
+                    ? _readOnlyField(
+                        value: policy.renewedWithoutBreak == true ? 'Yes' : 'No',
+                        icon: policy.renewedWithoutBreak == true
+                            ? Icons.verified_user_outlined
+                            : Icons.warning_amber_rounded,
+                      )
+                    : _twoChoice(
+                        value: policy.renewedWithoutBreak,
+                        firstLabel: 'Yes',
+                        firstValue: true,
+                        secondLabel: 'No',
+                        secondValue: false,
+                        onChanged: (v) => setState(() {
+                          policy.renewedWithoutBreak = v;
+                          policy.clearAfterRenewalAnswer();
+                        }),
+                      ),
+              ),
+            if (policy.isRenewal == true && policy.renewedWithoutBreak == false) ...[
+              const SizedBox(height: AppSpacing.md),
+              _coverageGapNotice(),
+            ],
           ],
         ],
       ),
@@ -663,10 +682,7 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
           Expanded(
             child: Text(
               value,
-              style: context.text.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: p.textPrimary,
-              ),
+              style: context.text.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: p.textPrimary),
             ),
           ),
           const SizedBox(width: AppSpacing.xs),

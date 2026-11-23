@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
@@ -76,11 +75,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       });
       _startResendTimer(sent.resendAfterSeconds);
 
-      if (!kReleaseMode) {
-        _showMessage('Test OTP is 1234', tone: AppTone.info);
-      } else {
-        _showMessage(sent.message, tone: AppTone.success);
-      }
+      _showMessage(sent.message, tone: sent.delivered ? AppTone.success : AppTone.warning);
     } on DioException catch (e) {
       _showMessage(otpErrorFrom(e, 'Could not send OTP. Please try again.'), tone: AppTone.danger);
     } catch (e) {
@@ -170,7 +165,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     onSubmitted: (_) => _otpSent ? _verifyOtp() : _sendOtp(),
                     decoration: InputDecoration(
                       hintText: _otpSent
-                          ? (!kReleaseMode ? '1234' : 'Enter 4-digit code')
+                          ? 'Enter ${_sent?.otpLength ?? 4}-digit code'
                           : 'alex@example.com',
                       hintStyle: _otpSent ? context.text.bodyLarge?.copyWith(color: p.textTertiary) : null,
                       prefixIcon: Icon(
@@ -179,26 +174,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                   ),
-
-                  if (!kReleaseMode && _otpSent) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                          minimumSize: const Size(0, 32),
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _otpController.text = '1234';
-                          });
-                        },
-                        icon: const Icon(Icons.flash_on_rounded, size: 16),
-                        label: const Text('Auto-fill Test OTP (1234)'),
-                      ),
-                    ),
-                  ],
 
                   const SizedBox(height: AppSpacing.xl),
 

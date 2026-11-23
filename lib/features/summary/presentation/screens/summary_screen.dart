@@ -556,12 +556,6 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                           const SizedBox(height: AppSpacing.xs),
                         ],
 
-                        // ─── 8. What to do next ───
-                        if (asList(data['nextSteps']).isNotEmpty) ...[
-                          _buildNextStepsCard(asList(data['nextSteps'])),
-                          const SizedBox(height: AppSpacing.md),
-                        ],
-
                         // ─── Disclaimer ───
                         const SizedBox(height: AppSpacing.xs),
                         InfoBanner(
@@ -929,40 +923,6 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                 const SizedBox(height: AppSpacing.xs),
                 Text(notes, style: context.text.bodySmall),
               ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // ─── Next steps for the policyholder ───
-  Widget _buildNextStepsCard(List<dynamic> steps) {
-    final items = steps.map((s) => s.toString().trim()).where((s) => s.isNotEmpty).toList();
-    if (items.isEmpty) return const SizedBox.shrink();
-    return Builder(
-      builder: (context) {
-        final p = context.palette;
-        return AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const CardTitle(title: 'Next Steps', icon: Icons.checklist_rounded, tone: AppTone.info),
-              const SizedBox(height: AppSpacing.sm),
-              for (int i = 0; i < items.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.xs),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${i + 1}.', style: context.text.bodyMedium?.copyWith(color: p.accent, fontWeight: FontWeight.w700)),
-                      const SizedBox(width: AppSpacing.xs),
-                      Expanded(
-                        child: Text(items[i], style: context.text.bodyMedium?.copyWith(color: p.textPrimary, height: 1.45)),
-                      ),
-                    ],
-                  ),
-                ),
             ],
           ),
         );

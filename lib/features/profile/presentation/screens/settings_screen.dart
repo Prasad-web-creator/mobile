@@ -41,7 +41,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         '/auth/me/change-email/send-otp',
         data: {'newEmail': newEmail},
       );
-      final testOtp = response.data['testOtp']?.toString();
       final masked = response.data['destination']?.toString() ?? newEmail;
 
       if (!mounted) return;
@@ -74,13 +73,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       'We sent a verification code to $masked. Please enter it below to confirm your new email.',
                       style: ctx.text.bodyMedium?.copyWith(color: p.textSecondary),
                     ),
-                    if (testOtp != null) ...[
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        'Development mode test OTP: $testOtp',
-                        style: ctx.text.labelSmall?.copyWith(color: p.primary, fontWeight: FontWeight.w600),
-                      ),
-                    ],
                     const SizedBox(height: AppSpacing.md),
                     TextField(
                       controller: otpController,

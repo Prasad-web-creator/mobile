@@ -8,8 +8,8 @@ import 'package:claimsupport/features/policies/presentation/controllers/policy_c
 import 'package:claimsupport/features/prescriptions/presentation/controllers/prescription_controller.dart';
 import 'package:claimsupport/features/authentication/presentation/controllers/auth_controller.dart';
 import 'package:claimsupport/features/analysis_reports/data/models/analysis_report.dart';
-import 'package:claimsupport/features/dashboard/presentation/widgets/sliding_banner.dart';
-import 'package:claimsupport/features/dashboard/presentation/widgets/floating_live_ad.dart';
+import 'package:claimsupport/features/dashboard/presentation/widgets/home_banner_ad.dart';
+import 'package:claimsupport/features/dashboard/presentation/widgets/floating_banner_ad.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -40,9 +40,8 @@ class DashboardScreen extends ConsumerWidget {
                         _StartAnalysisCard(onStart: () => context.push('/consent')),
                         const SizedBox(height: AppSpacing.xl),
 
-                        // Partner offers
-                        const SlidingBanner(),
-                        const SizedBox(height: AppSpacing.xl),
+                        // Google AdMob banner (collapses with its spacing when no ad loads)
+                        const HomeBannerAd(),
 
                         Consumer(
                           builder: (context, ref, child) {
@@ -151,8 +150,8 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ),
 
-          // Draggable floating partner ad
-          const FloatingLiveAd(),
+          // Draggable floating Google AdMob banner
+          const FloatingBannerAd(),
         ],
       ),
     );

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
@@ -23,7 +22,6 @@ class RegisterScreen extends ConsumerStatefulWidget {
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
   static const OtpChannel _channel = OtpChannel.email;
   OtpSendResult? _sent;
@@ -33,14 +31,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   bool get _otpSent => _sent != null;
   String get _email => _emailController.text.trim().toLowerCase();
-  String get _phone => _phoneController.text.trim();
 
   @override
   void dispose() {
     _resendTimer?.cancel();
     _nameController.dispose();
     _emailController.dispose();
-    _phoneController.dispose();
     _otpController.dispose();
     super.dispose();
   }
@@ -78,14 +74,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       return;
     }
 
-    if (_phone.isNotEmpty) {
-      final phoneRegex = RegExp(r'^[6-9][0-9]{9}$');
-      if (!phoneRegex.hasMatch(_phone)) {
-        _showMessage('Please enter a valid 10-digit mobile number.', tone: AppTone.warning);
-        return;
-      }
-    }
-
     setState(() => _loading = true);
     try {
       final response = await ApiClient().dio.post(
@@ -94,7 +82,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           'channel': _channel.apiValue,
           'purpose': 'register',
           'email': _email,
-          if (_phone.isNotEmpty) 'phone': _phone,
         },
       );
       if (!mounted) return;
@@ -105,11 +92,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       });
       _startResendTimer(sent.resendAfterSeconds);
 
-      if (!kReleaseMode) {
-        _showMessage('Test OTP is 1234', tone: AppTone.info);
-      } else {
-        _showMessage(sent.message, tone: AppTone.success);
-      }
+      _showMessage(sent.message, tone: sent.delivered ? AppTone.success : AppTone.warning);
     } on DioException catch (e) {
       _showMessage(otpErrorFrom(e, 'Could not send OTP. Please try again.'), tone: AppTone.danger);
     } catch (e) {
@@ -133,7 +116,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         data: {
           'name': _nameController.text.trim(),
           'email': _email,
-          'phone': _phone.isNotEmpty ? _phone : '9999999999',
           'channel': _channel.apiValue,
           'otp': otpText,
         },
@@ -235,16 +217,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       keyboardType: TextInputType.emailAddress,
                       autofillHints: const [AutofillHints.email],
                     ),
-                    _buildTextField(
-                      context,
-                      label: 'Mobile number (optional)',
-                      hint: '9876543210',
-                      controller: _phoneController,
-                      icon: Icons.phone_iphone_rounded,
-                      keyboardType: TextInputType.phone,
-                      autofillHints: const [AutofillHints.telephoneNumber],
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
-                    ),
                     const SizedBox(height: AppSpacing.xs),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,7 +241,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     _buildTextField(
                       context,
                       label: 'One-time password',
-                      hint: !kReleaseMode ? '1234' : 'Enter 4-digit OTP',
+                      hint: 'Enter ${_sent?.otpLength ?? 4}-digit OTP',
                       controller: _otpController,
                       icon: Icons.lock_outline_rounded,
                       keyboardType: TextInputType.number,
@@ -278,25 +250,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         LengthLimitingTextInputFormatter(_sent?.otpLength ?? 4),
                       ],
                     ),
-                    if (!kReleaseMode) ...[
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton.icon(
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            minimumSize: const Size(0, 32),
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _otpController.text = '1234';
-                            });
-                          },
-                          icon: const Icon(Icons.flash_on_rounded, size: 16),
-                          label: const Text('Auto-fill Test OTP (1234)'),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                    ],
                   ],
 
                   PrimaryButton(

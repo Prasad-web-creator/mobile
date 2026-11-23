@@ -4,9 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:claimsupport/core/utils/auth_storage.dart';
 import 'package:claimsupport/core/routing/app_router.dart';
 
+/// Outcome of a token refresh attempt.
+enum _RefreshResult {
+  /// New tokens saved.
+  refreshed,
+
+  /// The server rejected the refresh token (401/403) or there is none: the session is really over.
+  rejected,
+
+  /// Network error, timeout or server error: the session may still be valid, so keep it.
+  unavailable,
+}
+
 class AuthInterceptor extends Interceptor {
   // Global lock for token refresh to prevent race conditions
-  static Future<bool>? _refreshFuture;
+  static Future<_RefreshResult>? _refreshFuture;
   
   // Flag to prevent duplicate session expired dialogs
   static bool _sessionExpiredShown = false;
@@ -89,35 +101,43 @@ class AuthInterceptor extends Interceptor {
   }
 
   /// Performs the actual refresh call to the backend.
-  Future<bool> _performRefresh(String baseUrl, String refreshToken) async {
+  /// Only an explicit 401/403 from the server ends the session; being offline,
+  /// a backend restart or a slow cold start must not log the user out.
+  Future<_RefreshResult> _performRefresh(String baseUrl, String refreshToken) async {
     try {
-      final freshDio = Dio(BaseOptions(baseUrl: baseUrl));
+      final freshDio = Dio(BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 60),
+      ));
       final response = await freshDio.post('/auth/refresh', data: {
         'refreshToken': refreshToken,
       });
 
-      if (response.statusCode == 200) {
-        final newToken = response.data['token'];
-        final newRefreshToken = response.data['refreshToken'];
+      final newToken = response.data is Map ? response.data['token'] : null;
+      final newRefreshToken = response.data is Map ? response.data['refreshToken'] : null;
+      if (newToken == null) return _RefreshResult.unavailable;
 
-        if (newToken != null) {
-          await AuthStorage.saveToken(newToken);
-        }
-        if (newRefreshToken != null) {
-          await AuthStorage.saveRefreshToken(newRefreshToken);
-        }
-        return true;
+      await AuthStorage.saveToken(newToken);
+      if (newRefreshToken != null) {
+        await AuthStorage.saveRefreshToken(newRefreshToken);
       }
-      return false;
+      return _RefreshResult.refreshed;
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) return _RefreshResult.rejected;
+      debugPrint('[AuthInterceptor] Token refresh unavailable (${e.type}, status $status); keeping session.');
+      return _RefreshResult.unavailable;
     } catch (e) {
-      return false;
+      debugPrint('[AuthInterceptor] Token refresh error: $e; keeping session.');
+      return _RefreshResult.unavailable;
     }
   }
 
   /// Orchestrates the refresh logic ensuring only one network call happens at a time.
-  Future<bool> _shouldRefreshToken(String baseUrl) async {
+  Future<_RefreshResult> _refreshTokens(String baseUrl) async {
     final refreshToken = await AuthStorage.getRefreshToken();
-    if (refreshToken == null) return false;
+    if (refreshToken == null) return _RefreshResult.rejected;
 
     // Wait for the ongoing refresh to finish if one is already in progress
     if (_refreshFuture != null) {
@@ -142,10 +162,10 @@ class AuthInterceptor extends Interceptor {
       if (token != null) {
         // Proactively check if the token is about to expire
         if (_isTokenExpiringSoon(token)) {
-          final success = await _shouldRefreshToken(options.baseUrl);
-          if (success) {
+          final result = await _refreshTokens(options.baseUrl);
+          if (result == _RefreshResult.refreshed) {
             token = await AuthStorage.getToken(); // Fetch the newly saved token
-          } else {
+          } else if (result == _RefreshResult.rejected) {
             // Refresh failed proactively. Abort request and logout.
             await _logoutAndRedirectToLogin();
             return handler.reject(DioException(
@@ -155,6 +175,8 @@ class AuthInterceptor extends Interceptor {
             ));
           }
         }
+        // _RefreshResult.unavailable: send with the current token; the request
+        // fails or succeeds on its own and the session is kept.
         options.headers['Authorization'] = 'Bearer $token';
       }
     } catch (_) {
@@ -169,9 +191,9 @@ class AuthInterceptor extends Interceptor {
     // Safety net: if a 401 still happens (e.g. backend clock mismatch or revoked token)
     if (err.response?.statusCode == 401) {
       try {
-        final success = await _shouldRefreshToken(err.requestOptions.baseUrl);
+        final result = await _refreshTokens(err.requestOptions.baseUrl);
 
-        if (success) {
+        if (result == _RefreshResult.refreshed) {
           final newToken = await AuthStorage.getToken();
 
           // Retry the original request with the new token
@@ -194,13 +216,14 @@ class AuthInterceptor extends Interceptor {
           );
 
           return handler.resolve(retryResponse);
-        } else {
-          // If refresh fails due to 401/403 (invalid refresh token), logout
+        } else if (result == _RefreshResult.rejected) {
+          // The server rejected the refresh token: the session is really over.
           await _logoutAndRedirectToLogin();
         }
-      } catch (_) {
-        // Refresh failed catastrophically
-        await _logoutAndRedirectToLogin();
+        // _RefreshResult.unavailable: keep the session and pass the error on.
+      } catch (e) {
+        // e.g. the retried request itself failed: report it, but keep the session.
+        debugPrint('[AuthInterceptor] Retry after refresh failed: $e');
       }
     }
 

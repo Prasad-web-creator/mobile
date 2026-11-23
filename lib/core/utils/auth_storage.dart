@@ -7,6 +7,12 @@ class AuthStorage {
   static const _secureStorage = FlutterSecureStorage();
   
   // ONE-TIME MIGRATION: Move token from SharedPreferences to Secure Storage
+  static Future<void>? _migration;
+
+  /// Starts the one-time SharedPreferences -> secure storage migration without
+  /// blocking app start-up. Token reads wait for it to finish.
+  static Future<void> startMigration() => _migration ??= migrateIfNeeded();
+
   static Future<void> migrateIfNeeded() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -36,6 +42,7 @@ class AuthStorage {
       
   static Future<String?> getToken() async {
     try {
+      await _migration;
       return await _secureStorage.read(key: AppConstants.kAuthTokenKey);
     } catch (e) {
       debugPrint('AuthStorage getToken error: $e');
@@ -53,6 +60,7 @@ class AuthStorage {
       
   static Future<String?> getRefreshToken() async {
     try {
+      await _migration;
       return await _secureStorage.read(key: AppConstants.kRefreshTokenKey);
     } catch (e) {
       debugPrint('AuthStorage getRefreshToken error: $e');

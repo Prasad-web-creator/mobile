@@ -17,7 +17,6 @@ import 'package:claimsupport/features/policies/presentation/screens/policy_list_
 import 'package:claimsupport/features/prescriptions/presentation/screens/prescription_list_screen.dart';
 import 'package:claimsupport/features/pdf_viewer/presentation/screens/pdf_viewer_screen.dart';
 
-import 'package:claimsupport/features/benefits/presentation/screens/my_benefits_screen.dart';
 import 'package:claimsupport/features/profile/presentation/screens/settings_screen.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -66,9 +65,9 @@ class AppRouter {
                         label: 'Reports',
                       ),
                       NavigationDestination(
-                        icon: Icon(Icons.shield_outlined),
-                        selectedIcon: Icon(Icons.shield_rounded),
-                        label: 'My Benefits',
+                        icon: Icon(Icons.policy_outlined),
+                        selectedIcon: Icon(Icons.policy_rounded),
+                        label: 'My Policies',
                       ),
                       NavigationDestination(
                         icon: Icon(Icons.person_outline_rounded),
@@ -100,9 +99,9 @@ class AppRouter {
           GoRoute(path: '/policies', builder: (context, state) => const PolicyListScreen()),
           GoRoute(path: '/prescriptions', builder: (context, state) => const PrescriptionListScreen()),
 
-          GoRoute(path: '/benefits', builder: (context, state) => const MyBenefitsScreen()),
-          GoRoute(path: '/insights', redirect: (context, state) => '/benefits'),
-          GoRoute(path: '/activity-logs', redirect: (context, state) => '/benefits'),
+          GoRoute(path: '/benefits', redirect: (context, state) => '/policies'),
+          GoRoute(path: '/insights', redirect: (context, state) => '/policies'),
+          GoRoute(path: '/activity-logs', redirect: (context, state) => '/policies'),
           GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
           GoRoute(
             path: '/view-pdf/:fileId',
@@ -121,9 +120,7 @@ class AppRouter {
   static int _calculateSelectedIndex(String location) {
     if (location.startsWith('/dashboard')) return 0;
     if (location.startsWith('/reports')) return 1;
-    if (location.startsWith('/benefits') || location.startsWith('/insights') || location.startsWith('/activity-logs') || location.startsWith('/logs')) {
-      return 2;
-    }
+    if (location.startsWith('/policies')) return 2;
     if (location.startsWith('/profile')) return 3;
     return 0;
   }
@@ -139,7 +136,7 @@ class AppRouter {
         context.go('/reports');
         break;
       case 2:
-        context.go('/benefits');
+        context.go('/policies');
         break;
       case 3:
         context.go('/profile');

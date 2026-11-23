@@ -122,6 +122,9 @@ class _PolicyListScreenState extends ConsumerState<PolicyListScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        titleSpacing: (_isSelectionMode || Navigator.of(context).canPop())
+            ? AppSpacing.xxs
+            : AppSpacing.page,
         leading: _isSelectionMode
             ? IconButton(
                 icon: const Icon(Icons.close_rounded),

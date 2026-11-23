@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:claimsupport/core/widgets/app_widgets.dart';
 
@@ -22,7 +21,7 @@ class OtpSendResult {
   /// False when the server did not actually send an email (static/test mode).
   final bool delivered;
 
-  /// Message to show the user, e.g. "OTP sent to ..." or "Development Mode: Use test OTP 1234."
+  /// Message from the server, e.g. "OTP sent to su****@gmail.com".
   final String message;
 
   const OtpSendResult({
@@ -35,9 +34,6 @@ class OtpSendResult {
 
   /// One-line status shown above the OTP field.
   String statusText([OtpChannel channel = OtpChannel.email]) {
-    if (!kReleaseMode && !delivered) {
-      return 'Development Mode: Use test OTP 1234 to verify.';
-    }
     return delivered ? 'We sent a $otpLength-digit code by email to $destination.' : message;
   }
 
@@ -63,15 +59,6 @@ class OtpStatusText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!kReleaseMode && !sent.delivered) {
-      return const InfoBanner(
-        tone: AppTone.info,
-        icon: Icons.developer_mode_rounded,
-        title: 'Development Testing',
-        message: 'Fixed test OTP is: 1234',
-        padding: EdgeInsets.all(AppSpacing.sm),
-      );
-    }
     if (sent.delivered) {
       return InfoBanner(
         tone: AppTone.info,

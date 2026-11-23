@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:claimsupport/core/config/app_config_provider.dart';
 import 'package:claimsupport/core/network/api_client.dart';
 import 'package:claimsupport/core/theme/theme_provider.dart';
 import 'package:claimsupport/features/authentication/data/models/user.dart';
@@ -12,6 +13,7 @@ import 'package:claimsupport/features/policies/presentation/controllers/policy_c
 import 'package:claimsupport/features/prescriptions/presentation/controllers/prescription_controller.dart';
 import 'package:claimsupport/features/analysis_reports/presentation/controllers/analysis_report_controller.dart';
 import 'package:claimsupport/core/utils/auth_storage.dart';
+import 'package:claimsupport/core/utils/device_app_info.dart';
 import 'package:claimsupport/core/network/auth_interceptor.dart';
 import 'package:claimsupport/core/widgets/app_widgets.dart';
 
@@ -91,51 +93,18 @@ class ProfileScreen extends ConsumerWidget {
               const SizedBox(height: AppSpacing.xxs),
               Text('Policy Pal assistance and claim advisory guidance', style: ctx.text.bodySmall),
               const SizedBox(height: AppSpacing.lg),
-              AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        IconTile(icon: Icons.support_agent_rounded, tone: AppTone.brand, size: 38),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Customer Care', style: ctx.text.titleSmall),
-                              Text('support@claimsupport.com', style: ctx.text.bodySmall),
-                            ],
-                          ),
+              // Support email comes from the backend's SUPPORT_EMAIL env var.
+              Consumer(
+                builder: (ctx, ref, _) => ref.watch(supportEmailProvider).when(
+                      loading: () => const AppCard(
+                        child: SizedBox(
+                          height: 96,
+                          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.copy_rounded, size: 20),
-                          tooltip: 'Copy support email',
-                          onPressed: () {
-                            Clipboard.setData(const ClipboardData(text: 'support@claimsupport.com'));
-                            showAppSnackBar(ctx, 'Support email copied to clipboard!', tone: AppTone.success);
-                          },
-                        ),
-                      ],
+                      ),
+                      error: (_, _) => _supportUnavailable(ctx, ref),
+                      data: (email) => email == null ? _supportUnavailable(ctx, ref) : _supportContact(ctx, email),
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 42)),
-                      onPressed: () async {
-                        final uri = Uri.parse('mailto:support@claimsupport.com?subject=Policy%20Pal%20Assistance');
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri);
-                        } else {
-                          if (ctx.mounted) {
-                            showAppSnackBar(ctx, 'Contact: support@claimsupport.com', tone: AppTone.info);
-                          }
-                        }
-                      },
-                      icon: const Icon(Icons.email_outlined, size: 18),
-                      label: const Text('Send Email'),
-                    ),
-                  ],
-                ),
               ),
               const SizedBox(height: AppSpacing.md),
               const InfoBanner(
@@ -153,6 +122,71 @@ class ProfileScreen extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _supportContact(BuildContext ctx, String email) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconTile(icon: Icons.support_agent_rounded, tone: AppTone.brand, size: 38),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Contact Us', style: ctx.text.titleSmall),
+                    Text(email, style: ctx.text.bodySmall),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.copy_rounded, size: 20),
+                tooltip: 'Copy support email',
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: email));
+                  showAppSnackBar(ctx, 'Support email copied to clipboard!', tone: AppTone.success);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 42)),
+            onPressed: () async {
+              final uri = Uri(scheme: 'mailto', path: email, query: 'subject=Policy%20Pal%20Assistance');
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri);
+              } else if (ctx.mounted) {
+                showAppSnackBar(ctx, 'Contact: $email', tone: AppTone.info);
+              }
+            },
+            icon: const Icon(Icons.email_outlined, size: 18),
+            label: const Text('Send Email'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _supportUnavailable(BuildContext ctx, WidgetRef ref) {
+    return AppCard(
+      child: Row(
+        children: [
+          IconTile(icon: Icons.support_agent_rounded, tone: AppTone.brand, size: 38),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text('Support contact could not be loaded.', style: ctx.text.bodySmall),
+          ),
+          TextButton(
+            onPressed: () => ref.invalidate(supportEmailProvider),
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -183,11 +217,18 @@ class ProfileScreen extends ConsumerWidget {
               const SizedBox(height: AppSpacing.md),
               Text('Policy Pal', textAlign: TextAlign.center, style: ctx.text.headlineSmall),
               const SizedBox(height: 2),
-              Text('Version 1.0.0 (Build 8) • Production Ready', textAlign: TextAlign.center, style: ctx.text.bodySmall),
+              FutureBuilder<String>(
+                future: DeviceAppInfo.getAppVersion(),
+                builder: (_, snap) => Text(
+                  snap.hasData ? 'Version ${snap.data}' : '',
+                  textAlign: TextAlign.center,
+                  style: ctx.text.bodySmall,
+                ),
+              ),
               const SizedBox(height: AppSpacing.lg),
               AppCard(
                 child: Text(
-                  'Policy Pal is an AI-powered health insurance claim analysis platform. '
+                  'Policy Pal is a system-powered health insurance claim analysis platform. '
                   'It compares medical prescriptions and treatment plans against insurance policy clauses to evaluate coverage, identify exclusions, and check continuity.',
                   textAlign: TextAlign.start,
                   style: ctx.text.bodyMedium?.copyWith(height: 1.5),
@@ -290,11 +331,24 @@ class ProfileScreen extends ConsumerWidget {
                                     style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w700),
                                   ),
                                   const SizedBox(height: 3),
-                                  Text(
-                                    email,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: context.text.bodyMedium?.copyWith(color: p.textSecondary),
+                                  Row(
+                                    children: [
+                                      if (user?.emailVerified ?? false) ...[
+                                        Semantics(
+                                          label: 'Verified email',
+                                          child: Icon(Icons.verified_rounded, size: 16, color: p.success.fg),
+                                        ),
+                                        const SizedBox(width: 4),
+                                      ],
+                                      Flexible(
+                                        child: Text(
+                                          email,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: context.text.bodyMedium?.copyWith(color: p.textSecondary),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   if (phone != null && phone.isNotEmpty) ...[
                                     const SizedBox(height: 2),

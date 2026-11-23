@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:claimsupport/core/config/env_config.dart';
 import 'package:claimsupport/core/utils/shared_prefs.dart';
 import 'package:claimsupport/core/utils/auth_storage.dart';
+import 'package:claimsupport/core/services/admob_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -79,13 +80,13 @@ Future<void> main() async {
     debugPrint('SharedPrefs init error: $e');
   }
 
-  try {
-    await AuthStorage.migrateIfNeeded();
-  } catch (e) {
-    debugPrint('AuthStorage migration error: $e');
-  }
-
+  // Draw the first frame (the branded splash) as early as possible: Android keeps
+  // its plain launch screen up until then. Slower setup runs in the background;
+  // token reads wait for the migration (see AuthStorage.getToken).
+  AuthStorage.startMigration();
   runApp(const ProviderScope(child: ClaimSupportApp()));
+
+  AdMobService.init().catchError((Object e) => debugPrint('AdMobService init error: $e'));
 }
 
 class ClaimSupportApp extends ConsumerWidget {
