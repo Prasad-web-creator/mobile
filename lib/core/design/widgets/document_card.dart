@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:flutter/material.dart';
 
 import 'package:claimsupport/core/design/app_icons.dart';
@@ -9,19 +10,27 @@ import 'package:claimsupport/core/design/widgets/app_placeholder_pulse.dart';
 enum DocumentCardType { prescription, policy }
 
 class AppDocumentCard extends StatelessWidget {
-  const AppDocumentCard({super.key, required this.type, required this.count, required this.onTap});
+  const AppDocumentCard({
+    super.key,
+    required this.type,
+    required this.count,
+    required this.onTap,
+  });
 
   final DocumentCardType type;
   final int? count;
   final VoidCallback onTap;
 
-  static String countLabel(int count) => count > 99 ? '99+' : '${count.clamp(0, 99)}';
+  static String countLabel(int count) =>
+      count > 99 ? '99+' : '${count.clamp(0, 99)}';
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final prescription = type == DocumentCardType.prescription;
-    final title = prescription ? 'Prescriptions' : 'Policies';
+    final title = prescription
+        ? context.l10n.sharedPrescriptions
+        : context.l10n.sharedPolicies;
     final count = this.count;
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -33,21 +42,42 @@ class AppDocumentCard extends StatelessWidget {
           textDirection: Directionality.of(context),
           textScaler: MediaQuery.textScalerOf(context),
         );
-        double widestTitle(TextStyle style) {
-          painter.text = TextSpan(text: 'Prescriptions', style: style);
-          painter.layout();
-          return painter.width;
+        final titles = [
+          context.l10n.sharedPrescriptions,
+          context.l10n.sharedPolicies,
+        ];
+        double largestTitle(TextStyle style, {double? width}) {
+          return titles
+              .map((label) {
+                painter.text = TextSpan(text: label, style: style);
+                painter.layout(maxWidth: width ?? double.infinity);
+                return width == null ? painter.width : painter.height;
+              })
+              .reduce((first, second) => first > second ? first : second);
         }
 
-        final availableWidth = constraints.maxWidth - 2 * ring - DsSpace.s16 - caretClearance;
-        final labelStyle = widestTitle(AppTextStyles.subheadStrong) <= availableWidth
+        final availableWidth =
+            constraints.maxWidth - 2 * ring - DsSpace.s16 - caretClearance;
+        final labelStyle =
+            largestTitle(AppTextStyles.subheadStrong) <= availableWidth
             ? AppTextStyles.subheadStrong
             : AppTextStyles.captionStrong;
-        final fitsBesideCaret = widestTitle(labelStyle) <= availableWidth;
+        final fitsBesideCaret = largestTitle(labelStyle) <= availableWidth;
         final titleStyle = labelStyle.copyWith(color: c.textPrimary);
-        final inset = widestTitle(titleStyle) <= constraints.maxWidth - DsSpace.cardPadding * 2
+        final inset =
+            largestTitle(titleStyle) <=
+                constraints.maxWidth - DsSpace.cardPadding * 2
             ? DsSpace.s16
             : DsSpace.s8;
+        final titleWidth =
+            constraints.maxWidth -
+            2 * ring -
+            inset -
+            (fitsBesideCaret ? caretClearance : inset);
+        final labelHeight = largestTitle(
+          titleStyle,
+          width: titleWidth.clamp(0, double.infinity),
+        ).ceilToDouble();
         painter.dispose();
 
         return AppPressableSurface(
@@ -60,14 +90,20 @@ class AppDocumentCard extends StatelessWidget {
             child: Stack(
               children: [
                 PositionedDirectional(
-                  end: prescription ? DsSize.prescriptionArtRight : DsSize.policyArtRight,
+                  end: prescription
+                      ? DsSize.prescriptionArtRight
+                      : DsSize.policyArtRight,
                   bottom: DsSize.documentArtBottom,
                   child: AppIllustration(
-                    prescription ? AppIllustrationKind.prescription : AppIllustrationKind.policy,
+                    prescription
+                        ? AppIllustrationKind.prescription
+                        : AppIllustrationKind.policy,
                   ),
                 ),
                 ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxWidth / (173 / 164) - 2 * ring),
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxWidth / (173 / 164) - 2 * ring,
+                  ),
                   child: Padding(
                     padding: EdgeInsetsDirectional.fromSTEB(
                       inset,
@@ -79,16 +115,23 @@ class AppDocumentCard extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(title, style: titleStyle),
+                        SizedBox(
+                          height: labelHeight,
+                          child: Text(title, style: titleStyle),
+                        ),
                         const SizedBox(height: DsSpace.s2),
                         SizedBox(
                           height: MediaQuery.textScalerOf(context).scale(36),
                           child: AnimatedSwitcher(
-                            duration: DsMotion.reduced(context) ? Duration.zero : DsMotion.base,
+                            duration: DsMotion.reduced(context)
+                                ? Duration.zero
+                                : DsMotion.base,
                             layoutBuilder: (current, previous) => Stack(
                               alignment: AlignmentDirectional.centerStart,
                               children: [
-                                ...previous.map((child) => ExcludeSemantics(child: child)),
+                                ...previous.map(
+                                  (child) => ExcludeSemantics(child: child),
+                                ),
                                 ?current,
                               ],
                             ),
@@ -100,7 +143,9 @@ class AppDocumentCard extends StatelessWidget {
                                       child: DecoratedBox(
                                         decoration: ShapeDecoration(
                                           color: c.surfacePressed,
-                                          shape: DsShape.shape(DsShape.radiusXs),
+                                          shape: DsShape.shape(
+                                            DsShape.radiusXs,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -109,7 +154,9 @@ class AppDocumentCard extends StatelessWidget {
                                     countLabel(count),
                                     key: ValueKey(countLabel(count)),
                                     style: AppTextStyles.numberCount.copyWith(
-                                      color: count <= 0 ? c.textTertiary : c.textPrimary,
+                                      color: count <= 0
+                                          ? c.textTertiary
+                                          : c.textPrimary,
                                     ),
                                   ),
                           ),
@@ -126,9 +173,16 @@ class AppDocumentCard extends StatelessWidget {
                     child: DecoratedBox(
                       decoration: ShapeDecoration(
                         color: c.surfaceCard,
-                        shape: DsShape.shape(DsShape.radiusFull, side: BorderSide(color: c.borderSubtle)),
+                        shape: DsShape.shape(
+                          DsShape.radiusFull,
+                          side: BorderSide(color: c.borderSubtle),
+                        ),
                       ),
-                      child: Icon(AppIcons.caretRight, size: DsSize.iconSm, color: c.iconDefault),
+                      child: Icon(
+                        AppIcons.caretRight,
+                        size: DsSize.iconSm,
+                        color: c.iconDefault,
+                      ),
                     ),
                   ),
                 ),

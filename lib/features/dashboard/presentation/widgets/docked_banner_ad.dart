@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:claimsupport/core/design/design.dart';
 import 'package:claimsupport/core/design/app_icons.dart';
@@ -8,7 +9,7 @@ import 'package:claimsupport/core/services/admob_service.dart';
 ///
 /// It sits below the scrolling content (never on top of it), uses an adaptive
 /// anchored size so it spans the screen edge to edge, and carries a small
-/// "Sponsored" tag plus a close button in a strip above the ad (never over
+/// context.l10n.sharedSponsored tag plus a close button in a strip above the ad (never over
 /// the ad itself, per AdMob policy). Collapsed until an ad loads; removed if
 /// loading fails or the user closes it for this session.
 class DockedBannerAd extends StatefulWidget {
@@ -45,11 +46,11 @@ class _DockedBannerAdState extends State<DockedBannerAd> {
               padding: const EdgeInsets.only(left: DsSpace.screenPadding, right: DsSpace.s8),
               child: Row(
                 children: [
-                  Text('Sponsored', style: AppTextStyles.microStrong.copyWith(color: c.textTertiary)),
+                  Text(context.l10n.sharedSponsored, style: AppTextStyles.microStrong.copyWith(color: c.textTertiary)),
                   const Spacer(),
                   AppIconButton(
                     icon: AppIcons.close,
-                    label: 'Hide advertisement',
+                    label: context.l10n.sharedHideAdvertisement,
                     onPressed: () => setState(() => _closed = true),
                   ),
                 ],

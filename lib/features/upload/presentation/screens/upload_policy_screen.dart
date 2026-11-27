@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/design/app_icons.dart';
 import 'package:claimsupport/core/design/widgets/app_buttons.dart';
 import 'package:claimsupport/core/design/widgets/app_shells.dart';
@@ -10,6 +11,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:claimsupport/core/localization/translation_mapper.dart';
 import 'package:claimsupport/core/config/app_config_provider.dart';
 import 'package:claimsupport/core/network/api_client.dart';
 import 'package:claimsupport/features/analysis/data/repositories/analysis_repository.dart';
@@ -142,7 +144,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
     final today = DateTime(now.year, now.month, now.day);
     final current = policy.inceptionDate;
     final firstDate = DateTime(1970);
-    final helpText = policy.isRenewal == true ? 'Date this policy was first taken' : 'Policy start date';
+    final helpText = policy.isRenewal == true ? context.l10n.sharedFirstStartDate : context.l10n.sharedPolicyStartDate;
     // Open on the document's date when there is no answer yet.
     final candidate = current ?? policy.documentStartDate;
     final initialDate = (candidate != null && !candidate.isAfter(today) && !candidate.isBefore(firstDate))
@@ -155,8 +157,8 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
       firstDate: firstDate,
       lastDate: today,
       helpText: helpText,
-      confirmText: 'Confirm',
-      cancelText: 'Cancel',
+      confirmText: context.l10n.sharedConfirm,
+      cancelText: context.l10n.sharedCancel,
     );
 
     if (picked == null) return;
@@ -226,7 +228,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
     final picked = result?.files.where((f) => f.path != null).toList() ?? [];
     if (!mounted || picked.isEmpty) return;
     if (picked.any((file) => !_config.acceptsFileSize(file.size))) {
-      _toast(_config.uploadLimitMessage);
+      _toast(context.l10n.sharedFileLimit(_config.maxFileSizeMb));
       return;
     }
 
@@ -237,12 +239,9 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
       if (!mounted) return;
       final pickAgain = await showConfirmDialog(
         context,
-        title: 'Too many files selected',
-        message:
-            'You selected ${picked.length} files, but you can add only $remaining more '
-            '${remaining == 1 ? 'policy' : 'policies'} (up to $_maxPolicies in total). '
-            'Please select up to $remaining ${remaining == 1 ? 'file' : 'files'}.',
-        confirmLabel: 'Select again',
+        title: context.l10n.sharedTooManyFiles,
+        message: context.l10n.sharedPolicyFileSelectionLimit(picked.length, remaining, _maxPolicies),
+        confirmLabel: context.l10n.sharedSelectAgain,
         icon: Icons.filter_5_rounded,
       );
       if (pickAgain && mounted) await _pickAndUploadFiles();
@@ -269,7 +268,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
 
       final response = await ApiClient().dio.post('/upload', data: formData, options: analysisUploadOptions());
       if (response.statusCode != 200) {
-        _toast('Could not upload ${file.name}.', tone: AppTone.danger);
+        _toast(context.l10n.sharedUploadFileFailed(file.name), tone: AppTone.danger);
         return;
       }
 
@@ -309,7 +308,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
       if (e.response?.statusCode == 413) {
         final data = e.response?.data;
         final message = data is Map ? data['message'] : null;
-        _toast(message is String ? message : _config.uploadLimitMessage);
+        _toast(message is String && context.l10n.localeName == 'en' ? message : context.l10n.sharedFileLimit(_config.maxFileSizeMb));
         return;
       }
       final offline =
@@ -317,13 +316,13 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout;
       _toast(
-        offline ? friendlyErrorMessage(e) : 'Our servers could not process ${file.name}. Please try again later.',
+        offline ? friendlyErrorMessage(e, l10n: context.l10n) : context.l10n.sharedProcessFileFailed(file.name),
         tone: AppTone.danger,
       );
     } catch (e) {
       debugPrint("Failed to save policy record: $e");
       await _rollbackUpload(fileId);
-      _toast('Could not add ${file.name}. Please try again.', tone: AppTone.danger);
+      _toast(context.l10n.sharedAddFileFailed(file.name), tone: AppTone.danger);
     }
   }
 
@@ -353,7 +352,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
   Future<void> _analyzeDocuments() async {
     if (_isUploading) return;
     if (_policies.isEmpty) {
-      _toast('Please upload at least one policy document.');
+      _toast(context.l10n.sharedPleaseUploadPolicy);
       return;
     }
     if (_policies.length > _maxPolicies) {
@@ -362,7 +361,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
     }
 
     if (_policies.any((p) => p.isReading)) {
-      _toast('Still reading your policy. This takes a few seconds.', tone: AppTone.info);
+      _toast(context.l10n.sharedStillReadingPolicy, tone: AppTone.info);
       return;
     }
 
@@ -372,7 +371,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
         if (policy.isRenewal != null) await _syncContinuity(policy);
       }
     } catch (_) {
-      _toast('Could not save the confirmed policy details. Please try again.', tone: AppTone.danger);
+      _toast(context.l10n.sharedConfirmPolicyFailed, tone: AppTone.danger);
       return;
     }
 
@@ -390,7 +389,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
     final p = context.palette;
 
     return FlowShell(
-      title: 'Upload Policy',
+      title: context.l10n.sharedUploadPolicy,
       step: 3,
       stepCount: 3,
       onClose: () => context.go('/dashboard'),
@@ -402,10 +401,10 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Add your insurance policy', style: context.text.headlineSmall),
+                Text(context.l10n.sharedAddInsurancePolicy, style: context.text.headlineSmall),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  "Upload one or more insurance policy documents. Add several to compare them against the same prescription.",
+                  context.l10n.sharedExplainPolicyUpload,
                   style: context.text.bodyMedium,
                 ),
                 const SizedBox(height: AppSpacing.xl),
@@ -414,8 +413,8 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
                 // the waiting-period checks are per policy.
                 if (_policies.isNotEmpty) ...[
                   SectionHeader(
-                    title: _policies.length == 1 ? "1 policy added" : "${_policies.length} policies added",
-                    subtitle: 'We read the details from each policy',
+                    title: context.l10n.sharedPoliciesAdded(_policies.length),
+                    subtitle: context.l10n.sharedReadEachPolicy,
                     trailing: Text(
                       '${_policies.length}/$_maxPolicies',
                       style: context.text.labelMedium?.copyWith(color: p.textTertiary),
@@ -428,7 +427,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
                 // Upload Area with Dashed Border
                 Semantics(
                   button: true,
-                  label: _policies.isEmpty ? 'Tap to upload PDF or Image' : 'Tap to add another policy',
+                  label: _policies.isEmpty ? context.l10n.sharedUploadPdfOrImage : context.l10n.sharedAddAnotherPolicy,
                   child: Material(
                     color: p.surface,
                     borderRadius: AppRadius.lgAll,
@@ -469,16 +468,14 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
                               const SizedBox(height: AppSpacing.md),
                               Text(
                                 _isUploading
-                                    ? 'Uploading…'
-                                    : (_policies.isEmpty ? 'Tap to upload PDF or Image' : 'Tap to add another policy'),
+                                    ? context.l10n.sharedUploading
+                                    : (_policies.isEmpty ? context.l10n.sharedUploadPdfOrImage : context.l10n.sharedAddAnotherPolicy),
                                 textAlign: TextAlign.center,
                                 style: context.text.titleSmall,
                               ),
                               const SizedBox(height: AppSpacing.xxs),
                               Text(
-                                'Select up to ${_maxPolicies - _policies.length} '
-                                '${_maxPolicies - _policies.length == 1 ? 'file' : 'files'} · '
-                                'max $_maxPolicies policies · ${config.maxFileSizeMb} MB each',
+                                context.l10n.sharedPolicyPickerHint(_maxPolicies - _policies.length, _maxPolicies, config.maxFileSizeMb),
                                 textAlign: TextAlign.center,
                                 style: context.text.bodySmall,
                               ),
@@ -502,7 +499,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
         ),
       ),
       bottomAction: AppButton(
-        label: _policies.length > 1 ? 'Compare ${_policies.length} Policies' : 'Analyze Coverage',
+        label: _policies.length > 1 ? context.l10n.sharedComparePolicies(_policies.length) : context.l10n.sharedAnalyzeCoverage,
         onPressed: _analyzeDocuments,
         icon: AppIcons.scan,
       ),
@@ -541,7 +538,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
                   padding: EdgeInsets.zero,
                   onPressed: () => _removePolicy(policy),
                   icon: Icon(Icons.delete_outline_rounded, color: p.danger.fg, size: 22),
-                  tooltip: 'Remove',
+                  tooltip: context.l10n.sharedRemove,
                 ),
               ),
             ],
@@ -554,7 +551,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
               children: [
                 const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2)),
                 const SizedBox(width: AppSpacing.sm),
-                Expanded(child: Text('Reading your policy details…', style: context.text.bodyMedium)),
+                Expanded(child: Text(context.l10n.sharedReadingPolicy, style: context.text.bodyMedium)),
               ],
             ),
           ] else ...[
@@ -562,12 +559,12 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
             // 1. New or renewed decides which date is asked next.
             if (policy.askRenewal)
               _questionBlock(
-                label: 'Is this a new policy or a renewed policy?',
+                label: context.l10n.sharedNewOrRenewed,
                 child: _twoChoice(
                   value: policy.isRenewal,
-                  firstLabel: 'New (first year)',
+                  firstLabel: context.l10n.sharedNewFirstYear,
                   firstValue: false,
-                  secondLabel: 'Renewed',
+                  secondLabel: context.l10n.sharedRenewed,
                   secondValue: true,
                   onChanged: (v) => setState(() {
                     policy.renewalFromDocument = false;
@@ -580,13 +577,13 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
             //    Waiting periods are counted from this date, not from the current renewal.
             if (policy.isRenewal != null && policy.askDate)
               _questionBlock(
-                label: policy.isRenewal == true ? 'When was this policy first taken?' : 'Policy start date',
+                label: policy.isRenewal == true ? context.l10n.sharedWhenFirstTaken : context.l10n.sharedPolicyStartDate,
                 helper: policy.isRenewal == true
-                    ? 'The very first start date of this policy, before any renewals.'
-                    : 'The date this policy started, as shown on your policy document.',
+                    ? context.l10n.sharedFirstDateHint
+                    : context.l10n.sharedPolicyDateHint,
                 child: _dateField(
                   value: policy.inceptionDate,
-                  placeholder: policy.isRenewal == true ? 'Select first start date' : 'Select policy start date',
+                  placeholder: policy.isRenewal == true ? context.l10n.sharedSelectFirstDate : context.l10n.sharedSelectStartDate,
                   onTap: () => _pickDate(policy),
                 ),
               ),
@@ -594,13 +591,13 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
             // 3. Renewed only: renewed every year without a break?
             if (policy.isRenewal == true && policy.askBreak)
               _questionBlock(
-                label: 'Has this policy been renewed every year without a break?',
-                helper: 'Answer Yes if you moved from another insurance company without any gap (portability).',
+                label: context.l10n.sharedContinuousRenewalQuestion,
+                helper: context.l10n.sharedPortabilityHint,
                 child: _twoChoice(
                   value: policy.renewedWithoutBreak,
-                  firstLabel: 'Yes',
+                  firstLabel: context.l10n.sharedYes,
                   firstValue: true,
-                  secondLabel: 'No',
+                  secondLabel: context.l10n.sharedNo,
                   secondValue: false,
                   onChanged: (v) => setState(() {
                     policy.renewedWithoutBreak = v;
@@ -624,7 +621,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
     final p = context.palette;
     String? date(Object? value) {
       final parsed = value is DateTime ? value : DateTime.tryParse('${value ?? ''}');
-      return parsed == null ? null : DateFormat('dd-MM-yyyy').format(parsed);
+      return parsed == null ? null : formatLocalizedDate(context.l10n, parsed, pattern: 'dd-MM-yyyy');
     }
 
     String? text(Object? value) {
@@ -636,19 +633,19 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
       case _ReadState.notPolicy:
         return [
           const SizedBox(height: AppSpacing.md),
-          const InfoBanner(
+          InfoBanner(
             tone: AppTone.warning,
             padding: EdgeInsets.all(AppSpacing.sm),
-            message: 'This file does not look like an insurance policy. Check the file, or answer the questions below.',
+            message: context.l10n.sharedLooksInvalidPolicy,
           ),
         ];
       case _ReadState.failed:
         return [
           const SizedBox(height: AppSpacing.md),
-          const InfoBanner(
+          InfoBanner(
             tone: AppTone.warning,
             padding: EdgeInsets.all(AppSpacing.sm),
-            message: 'We could not read the details from this policy. Please answer the questions below.',
+            message: context.l10n.sharedPolicyDetailsUnreadable,
           ),
         ];
       case _ReadState.reading:
@@ -662,23 +659,23 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
     final start = date(d['policyStartDate']);
     final end = date(d['policyEndDate']);
     final rows = <(String, String?)>[
-      ('Insurer', text(d['insuranceCompany'])),
-      ('Plan', text(d['policyName'])),
-      ('Policy number', text(d['policyNumber'])),
-      ('Policy holder', text(d['policyHolder'])),
-      ('Policy period', start == null && end == null ? null : '${start ?? '—'} to ${end ?? '—'}'),
+      (context.l10n.sharedInsurer, text(d['insuranceCompany'])),
+      (context.l10n.sharedPlan, text(d['policyName'])),
+      (context.l10n.sharedPolicyNumber, text(d['policyNumber'])),
+      (context.l10n.sharedPolicyHolder, text(d['policyHolder'])),
+      (context.l10n.sharedPolicyPeriod, start == null && end == null ? null : context.l10n.sharedDateRange(start ?? '—', end ?? '—')),
       (
-        'Sum insured',
+        context.l10n.sharedSumInsured,
         amount is num && amount > 0
-            ? NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0).format(amount)
+            ? NumberFormat.currency(locale: context.l10n.localeName == 'ta' ? 'ta_IN' : 'en_IN', symbol: '₹', decimalDigits: 0).format(amount)
             : null,
       ),
       if (!policy.editing && policy.renewalFromDocument)
-        ('Policy type', policy.isRenewal == true ? 'Renewed' : 'New (first year)'),
+        (context.l10n.sharedPolicyType, policy.isRenewal == true ? context.l10n.sharedRenewed : context.l10n.sharedNewFirstYear),
       if (!policy.editing && policy.dateFromDocument && policy.inceptionDate != null)
-        (policy.isRenewal == true ? 'First taken on' : 'Start date', date(policy.inceptionDate)),
+        (policy.isRenewal == true ? context.l10n.sharedFirstTakenOn : context.l10n.sharedStartDate, date(policy.inceptionDate)),
       if (!policy.editing && policy.breakFromDocument && policy.isRenewal == true)
-        ('Renewed without a break', policy.renewedWithoutBreak == true ? 'Yes' : 'No'),
+        (context.l10n.sharedRenewedContinuously, policy.renewedWithoutBreak == true ? context.l10n.sharedYes : context.l10n.sharedNo),
     ].where((row) => row.$2 != null).toList();
 
     final missing =
@@ -693,11 +690,11 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
         children: [
           Icon(Icons.check_circle_rounded, size: 18, color: p.success.fg),
           const SizedBox(width: AppSpacing.xs),
-          Expanded(child: Text('Details from your policy', style: context.text.titleSmall)),
+          Expanded(child: Text(context.l10n.sharedPolicyDetails, style: context.text.titleSmall)),
           if (canEdit)
             TextButton(
               onPressed: () => setState(() => policy.editing = !policy.editing),
-              child: Text(policy.editing ? 'Done' : 'Edit'),
+              child: Text(policy.editing ? context.l10n.sharedDone : context.l10n.sharedEdit),
             ),
         ],
       ),
@@ -717,7 +714,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
       if (missing && !policy.editing) ...[
         const SizedBox(height: AppSpacing.sm),
         Text(
-          'Your policy does not state the following, so please answer:',
+          context.l10n.sharedMissingPolicyDetails,
           style: context.text.bodySmall?.copyWith(color: p.textSecondary),
         ),
       ],
@@ -746,13 +743,11 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
   /// Shown when a renewed policy had a break: cover is counted from the uploaded
   /// policy's own start date instead of the first start date.
   Widget _coverageGapNotice() {
-    return const InfoBanner(
+    return InfoBanner(
       tone: AppTone.warning,
       icon: Icons.info_outline_rounded,
       padding: EdgeInsets.all(AppSpacing.sm),
-      message:
-          'You have a coverage gap in your policy continuity. So the coverage analysis will check '
-          'your prescription against this policy from the start date of the uploaded policy document.',
+      message: context.l10n.sharedCoverageGap,
     );
   }
 
@@ -778,7 +773,7 @@ class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
-                  hasValue ? DateFormat('dd-MM-yyyy').format(value) : placeholder,
+                  hasValue ? formatLocalizedDate(context.l10n, value, pattern: 'dd-MM-yyyy') : placeholder,
                   style: context.text.bodyMedium?.copyWith(
                     fontWeight: hasValue ? FontWeight.w600 : FontWeight.w400,
                     color: hasValue ? p.textPrimary : p.textTertiary,

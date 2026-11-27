@@ -1,0 +1,1318 @@
+{
+  "@@locale": "en",
+  "analysisAcceptContinue": "Accept and continue",
+  "analysisAddDocumentFailed": "Couldn't add this document. Try again.",
+  "analysisAddMethods": "Scan, upload or pick a photo",
+  "analysisAddNew": "Add new",
+  "analysisAddPolicy": "Add a policy",
+  "analysisAddPrescription": "Add a prescription",
+  "analysisAlreadySaved": "Already saved",
+  "analysisAlsoConsidered": "Also considered",
+  "analysisAnalysisBasis": "Analysis basis",
+  "analysisAnalyzing": "Analyzing...",
+  "analysisAnswerAbove": "Please answer the questions above to continue.",
+  "analysisAnswerQuestion": "Answer question",
+  "analysisAnswerQuestions": "Answer questions",
+  "analysisAnswerToComplete": "Answer to complete your coverage analysis.",
+  "analysisAnswersUsed": "Your answers that were used in this analysis",
+  "analysisAppliesTo": "Applies to: ",
+  "analysisAskedThisPolicy": "Asked about this policy",
+  "analysisBackDashboard": "Back to Dashboard",
+  "analysisBackHome": "Back to Home",
+  "analysisBackTreatment": "Back to treatment",
+  "analysisBeforeBegin": "Before we begin",
+  "analysisBest": "Best",
+  "analysisCalendar": "Open calendar",
+  "analysisCancel": "Cancel",
+  "analysisCancelAnalysis": "Cancel analysis",
+  "analysisCapitalInvalidPolicy": "Invalid Policy",
+  "analysisCapitalNeedsVerification": "Needs Verification",
+  "analysisCapitalNotCovered": "Not Covered",
+  "analysisCapitalPolicyEvidence": "Policy Evidence",
+  "analysisCheckCancelled": "This check was cancelled",
+  "analysisCheckDetails": "Check details",
+  "analysisCheckDisclaimer": "An estimate from your documents. Your insurer makes the final decision.",
+  "analysisCheckExpired": "This check expired",
+  "analysisCheckFailed": "Check failed",
+  "analysisCheckNotFound": "Check not found.",
+  "analysisCheckNotStarted": "This check hasn’t started",
+  "analysisChecking": "Checking…",
+  "analysisCheckingPolicies": "Checking your policies…",
+  "analysisClaimDate": "Claim Date",
+  "analysisClarificationNeeded": "Clarification Needed",
+  "analysisClauseLabel": "Clause: ",
+  "analysisComplete": "Analysis Complete!",
+  "analysisConditionalCover": "Coverage for these items depends on a detail that must be confirmed.",
+  "analysisConflicts": "Conflicts",
+  "analysisConnecting": "Connecting to the server and preparing analysis…",
+  "analysisConsentAgree": "I have read and agree to the Terms & Conditions.",
+  "analysisConsentClaims": "I understand that the system does not submit insurance claims.",
+  "analysisConsentInformation": "I understand that the analysis is for informational purposes only.",
+  "analysisConsentInsurer": "I understand that the insurance provider makes the final approval decision.",
+  "analysisConsentOcr": "I agree that Policy Pal may store my uploaded documents, read them with OCR, and send extracted text and any details I enter to Google Gemini for coverage analysis.",
+  "analysisConsentOwnership": "I confirm that the uploaded documents belong to me or I have permission to use them.",
+  "analysisConsentReference": "I agree that the generated report is only a reference.",
+  "analysisConsentTitle": "Consent & Agreement",
+  "analysisConsideredClauses": "Policy Clauses Considered",
+  "analysisContinue": "Continue",
+  "analysisContinuity": "Policy Continuity",
+  "analysisContinuityStatus": "Continuity Status",
+  "analysisContinuityUnknown": "Continuity Cannot Be Established",
+  "analysisCopyCheckSummary": "Copy check summary",
+  "analysisCouldNotComplete": "Analysis could not be completed",
+  "analysisCouldNotFinish": "Couldn't finish this check",
+  "analysisCouldNotRead": "Couldn't read",
+  "analysisCoverRestarted": "Cover Restarted",
+  "analysisCoverage": "Coverage",
+  "analysisCoverageAnalysis": "Coverage Analysis",
+  "analysisCoverageBreakdown": "Coverage Breakdown",
+  "analysisCoverageGaps": "Coverage Gap(s)",
+  "analysisCoverageSummary": "Coverage Summary",
+  "analysisCovered": "Covered",
+  "analysisCurrentPeriod": "Current Period",
+  "analysisDateExample": "e.g., 15-Feb-2026 (or tap calendar)",
+  "analysisDateUnavailable": "Date unavailable",
+  "analysisDecidingClauses": "Deciding clauses",
+  "analysisDiagnosis": "Primary Diagnosis",
+  "analysisDisclaimerLabel": "Disclaimer: ",
+  "analysisDistribution": "Coverage Distribution",
+  "analysisDoctor": "Doctor",
+  "analysisDocumentConsent": "I have permission to use this document. I agree that Policy Pal may store it and read it with OCR and send extracted text to Google Gemini for analysis. The result is for reference. Policy Pal does not submit a claim, and only the insurer can approve it.",
+  "analysisDocuments": "Documents",
+  "analysisDocumentsAnalysed": "Documents Analysed",
+  "analysisDone": "Done",
+  "analysisEnded": "Analysis ended",
+  "analysisEnterDate": "Or enter date (e.g. 15-Feb-2026)",
+  "analysisEstimatedCost": "Est. Cost",
+  "analysisExtractedDetails": "Details extracted from your policy and prescription",
+  "analysisExtractingPdf": "Extracting PDF Text",
+  "analysisExtractingPolicy": "Extracting Policy Data",
+  "analysisExtractingPrescription": "Extracting Prescription Data",
+  "analysisFailed": "Analysis Failed",
+  "analysisFinancialStatus": "Financial Status",
+  "analysisFirstStartDate": "First Start Date",
+  "analysisFollowingAnalysis": "Following the analysis…",
+  "analysisGeneratingReport": "Generating Report",
+  "analysisGoHome": "Go to Home",
+  "analysisHighlightCategory": "Tap a category to highlight it",
+  "analysisHistory": "History",
+  "analysisHospital": "Hospital",
+  "analysisHospitalization": "Hospitalization",
+  "analysisHowClassified": "How the prescribed items were classified",
+  "analysisImageBasedPdf": "Your uploaded PDF is image-based, so it may take some time. Please stay here.",
+  "analysisInsurer": "Insurance Provider",
+  "analysisInvalidBoth": "Invalid Policy and Prescription",
+  "analysisInvalidBothHint": "The uploaded Policy and Prescription documents could not be analyzed because they are invalid, unreadable, or unsupported. Please ensure you upload a valid health insurance policy and a medical prescription document (PDF, JPG, PNG) and try again.",
+  "analysisInvalidDocHint": "The uploaded document(s) could not be analyzed because they are invalid or unsupported. Please ensure you upload valid health insurance policy and medical prescription documents and try again.",
+  "analysisInvalidDocument": "Invalid Document",
+  "analysisInvalidPolicy": "Invalid policy",
+  "analysisInvalidPolicyHint": "The uploaded Policy document could not be analyzed because it is invalid, unreadable, or unsupported. Please ensure you upload a valid health insurance policy document (PDF, JPG, PNG) and try again.",
+  "analysisInvalidPolicyReason": "The uploaded policy document contains no recognizable insurance policy clauses, covered treatments, benefit rules, or insurance terms.",
+  "analysisInvalidPrescription": "Invalid Prescription",
+  "analysisInvalidPrescriptionHint": "The uploaded Prescription document could not be analyzed because it is invalid, unreadable, or unsupported. Please ensure you upload a valid medical prescription document (PDF, JPG, PNG) and try again.",
+  "analysisInvalidRxReason": "The uploaded document contains no valid diagnosis, medicines, medical tests, procedures, or symptoms.",
+  "analysisInvalidTypedHint": "The self-entered prescription is not valid. Please provide valid medical details (such as diagnosis, symptoms, diseases, medicines, or medical tests) and try again.",
+  "analysisInvalidTypedReason": "The self-entered text contains no recognizable medical details (no diagnosis, symptoms, diseases, medicines, or medical tests).",
+  "analysisItemDecision": "Item-wise Coverage Decision",
+  "analysisItemReason": "Result and reason for each prescribed item",
+  "analysisKeepAnalyzing": "Keep analyzing",
+  "analysisKeepOpen": "Please keep this screen open",
+  "analysisKeptSavedPolicy": "Kept your saved policy.",
+  "analysisLoadCheckFailed": "Could not load this check.",
+  "analysisLoadChecksFailed": "Couldn’t load checks.",
+  "analysisLoadDetailsFailed": "Could not load these details.",
+  "analysisLoadPoliciesFailed": "Couldn't load your saved policies.",
+  "analysisLoadPolicyReportFailed": "Couldn't load this policy's report.",
+  "analysisLoadPrescriptionsFailed": "Couldn't load your saved treatment documents.",
+  "analysisLoadPreviewFailed": "Could not load the document preview.",
+  "analysisLoadReportFailed": "Couldn’t load the report",
+  "analysisLoadingReport": "Loading coverage report…",
+  "analysisLoadingSummary": "Loading Coverage Summary...",
+  "analysisLooksPolicy": "This looks like a policy",
+  "analysisLooksPrescription": "This looks like a prescription",
+  "analysisMajorTermReason": "Policy terms that led to this result",
+  "analysisMajorTerms": "Major Policy Terms – Not Covered",
+  "analysisMaxClaim": "Max Claim",
+  "analysisMissingInfo": "Information Not Available",
+  "analysisMissingUploads": "Missing uploaded files or policy selection.",
+  "analysisNeedMoreInformation": "We need a little more information",
+  "analysisNeedsInfo": "Needs info",
+  "analysisNeedsInput": "Needs your input",
+  "analysisNeedsVerification": "Needs verification",
+  "analysisNewFirstYear": "New policy (first year)",
+  "analysisNewPolicy": "New policy",
+  "analysisNewPrescription": "New prescription",
+  "analysisNewRenewed": "New / Renewed",
+  "analysisNo": "No",
+  "analysisNoChecks": "No checks yet",
+  "analysisNoChecksFilter": "No checks match this filter.",
+  "analysisNoEvaluatedClaims": "No evaluated claim items available.",
+  "analysisNoExactWording": "Exact policy wording is unavailable for this term.",
+  "analysisNoGapsIncomplete": "None found in the documents provided (history incomplete).",
+  "analysisNoQuestionAvailable": "No question is available yet.",
+  "analysisNoneFound": "None found.",
+  "analysisNormalizing": "Cleaning & Normalizing",
+  "analysisNotAvailable": "Not available",
+  "analysisNotCovered": "Not covered",
+  "analysisNotEstablished": "Not established",
+  "analysisNotRequired": "Not Required",
+  "analysisNotStated": "Not stated",
+  "analysisOffline": "You're offline.",
+  "analysisOfflineSaved": "You're offline. Showing saved checks.",
+  "analysisOnePolicyQuestions": "These questions are about one policy only.",
+  "analysisOtherPolicies": "Your other policies are unaffected.",
+  "analysisPartial": "Partial",
+  "analysisPartiallyCovered": "Partially Covered",
+  "analysisPartlyCovered": "Partly covered",
+  "analysisPatientName": "Patient Name",
+  "analysisPhotos": "Photos",
+  "analysisPickGallery": "Pick from your gallery",
+  "analysisPolicies": "Policies",
+  "analysisPolicy": "Policy",
+  "analysisPolicyAlreadySaved": "Policy already saved",
+  "analysisPolicyClause": "Policy clause",
+  "analysisPolicyClauses": "Policy clauses",
+  "analysisPolicyComparison": "Policy Comparison",
+  "analysisPolicyEvidence": "Policy evidence",
+  "analysisPolicyName": "Policy Name",
+  "analysisPolicyNumber": "Policy Number",
+  "analysisPolicySummary": "Policy Summary",
+  "analysisPolicyType": "Policy Type",
+  "analysisPolicyWordingUsed": "Policy wording used",
+  "analysisPrescribedDiagnosis": "Prescribed Treatment / Diagnosis",
+  "analysisPrescribedTreatment": "Prescribed Treatment",
+  "analysisPrescription": "Prescription",
+  "analysisPrescriptionSummary": "Prescription Summary",
+  "analysisProgress": "Analysis progress",
+  "analysisQa": "Clarification Q&A",
+  "analysisReadImageFailed": "Could not read the document image.",
+  "analysisReadingCoverage": "Our system is reading your documents and cross-referencing coverage.",
+  "analysisReadingDocuments": "Reading your documents…",
+  "analysisReanalyzing": "Re-analyzing with your answers...",
+  "analysisRefreshFailed": "Couldn't refresh. Your check can keep running.",
+  "analysisRenewalGap": "Policy renewal break / gap",
+  "analysisRenewedPolicy": "Renewed policy",
+  "analysisReportedSymptoms": "Reported Symptoms",
+  "analysisRequired": "Required",
+  "analysisResultUnavailable": "Result not available",
+  "analysisRetry": "Retry",
+  "analysisRetryAnalysis": "Retry Analysis",
+  "analysisReturnDashboard": "Return to Dashboard",
+  "analysisReviewTerms": "Please review and accept the Terms & Conditions before the system analyzes your uploaded documents.",
+  "analysisRunningRules": "Running Business Rules",
+  "analysisSaveAnswerFailed": "Couldn't save your answer. Try again.",
+  "analysisSaveAnyway": "Save anyway",
+  "analysisSaveConsentFailed": "Could not save consent. Please try again.",
+  "analysisSaveCopy": "Save another copy",
+  "analysisSaveMisplacedPolicy": "You selected a policy document in the prescription step. Save it to your Policies list instead?",
+  "analysisSaveMisplacedPrescription": "You selected a prescription document in the policy step. Save it to your Prescriptions list instead?",
+  "analysisSaveToPolicies": "Save to Policies",
+  "analysisSaveToPrescriptions": "Save to Prescriptions",
+  "analysisSavedToPolicies": "Saved to your Policies list.",
+  "analysisSavedToPrescriptions": "Saved to your Prescriptions list.",
+  "analysisScan": "Scan",
+  "analysisSeeClauses": "See policy clauses",
+  "analysisSelectCalendar": "Select Date from Calendar",
+  "analysisSelectDate": "Select date *",
+  "analysisSelectPolicies": "Select policies",
+  "analysisSelectPrescription": "Select prescription",
+  "analysisSelfEntered": "Self-entered",
+  "analysisShare": "Share",
+  "analysisShareAssessedItems": "Share of assessed items that are covered",
+  "analysisShareCheck": "Share check",
+  "analysisShareEstimatedBill": "Share of the estimated bill the insurer may pay",
+  "analysisSharingUnavailable": "Sharing is unavailable.",
+  "analysisShowingSavedCheck": "Showing saved check details.",
+  "analysisShowingSavedDocuments": "Showing saved documents. Try refreshing when you reconnect.",
+  "analysisSpecifyDetails": "Please specify details...",
+  "analysisStartCheck": "Start a check",
+  "analysisStartFailed": "Couldn't start this check. Please try again.",
+  "analysisStartNewCheck": "Start a new check",
+  "analysisStartWithDocuments": "Please start a new analysis and add your prescription and policy.",
+  "analysisStartingCheck": "Starting check…",
+  "analysisStatusReason": "Status Reason",
+  "analysisStop": "Stop analysis",
+  "analysisStopExplanation": "The report will be discarded. Your policy and prescription documents will stay saved.",
+  "analysisStopFailed": "Couldn't confirm the analysis stopped. Try again.",
+  "analysisStopQuestion": "Stop the analysis?",
+  "analysisStopping": "Stopping the analysis…",
+  "analysisSubmitAnswers": "Submit Answers",
+  "analysisSumInsured": "Sum Insured",
+  "analysisSystemReference": "This is a system-generated reference. It does not guarantee approval. Final decisions rest with your insurance provider.",
+  "analysisTermsOfUse": "Terms of use",
+  "analysisThisPolicySaved": "This policy is already saved.",
+  "analysisTreatmentDocument": "Treatment document",
+  "analysisTreatmentImage": "Treatment document image",
+  "analysisTreatmentItem": "Treatment item",
+  "analysisTryAgain": "Try again",
+  "analysisTypeAnswer": "Type your answer",
+  "analysisTypeIn": "Type it in",
+  "analysisTypeTreatment": "No document? Describe the treatment",
+  "analysisTypedPrescriptionIssue": "Self-Entered Prescription Issue",
+  "analysisUnexpectedError": "Something went wrong during the analysis.",
+  "analysisUnreadable": "Couldn't read this document. Try a clearer photo.",
+  "analysisUploadFile": "Upload file",
+  "analysisUploadedPolicyIssue": "Uploaded Policy Issue",
+  "analysisUploadedPrescriptionIssue": "Uploaded Prescription Issue",
+  "analysisUseCamera": "Use the camera",
+  "analysisUseSaved": "Use saved",
+  "analysisUseSavedPolicy": "Use saved policy",
+  "analysisValidatingDocuments": "Validating Documents",
+  "analysisValidatingExtracted": "Validating Extracted Data",
+  "analysisValidationReasons": "Validation Failure Reasons",
+  "analysisVerify": "Verify",
+  "analysisViewCoverageReport": "View coverage report",
+  "analysisViewDocument": "View document",
+  "analysisViewProgress": "View progress",
+  "analysisViewReport": "View report",
+  "analysisWaitingAnswer": "Waiting for your answer",
+  "analysisWaitingStarts": "Waiting periods count from this date",
+  "analysisWhatWasChecked": "What was checked",
+  "analysisWhyResult": "Why this result",
+  "analysisWorking": "Working…",
+  "analysisYes": "Yes",
+  "analysisYesNo": "Yes / No",
+  "analysisStep": "Step {step} of {total}",
+  "@analysisStep": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisPolicyIndex": "Policy {number}",
+  "@analysisPolicyIndex": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisPolicyOf": "Policy {number} of {total}",
+  "@analysisPolicyOf": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisAskedPolicy": "Asked about {policy}",
+  "@analysisAskedPolicy": {
+    "placeholders": {
+      "policy": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisQuestionNumber": "Question {number}",
+  "@analysisQuestionNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisNextQuestions": "Next: {policies} {count, plural, one{also has a question.} other{also have questions.}}",
+  "@analysisNextQuestions": {
+    "placeholders": {
+      "policies": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisStepsFinished": "{done} of {total} steps done · {completed} of {count, plural, one{1 policy} other{{count} policies}} finished",
+  "@analysisStepsFinished": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "completed": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisAgainstPolicies": "Analyzed against {count, plural, one{1 policy} other{{count} policies}}",
+  "@analysisAgainstPolicies": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisPickLimit": "Pick up to {count} to see which covers more.",
+  "@analysisPickLimit": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisSavedCount": "Saved · {count}",
+  "@analysisSavedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisCheckPolicies": "Check {count, plural, one{1 policy} other{{count} policies}}",
+  "@analysisCheckPolicies": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisCheckedPolicies": "{count, plural, one{1 policy checked} other{{count} policies checked}}",
+  "@analysisCheckedPolicies": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisPolicyFileDuplicate": "A policy from “{filename}” is already saved.",
+  "@analysisPolicyFileDuplicate": {
+    "placeholders": {
+      "filename": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisPrescriptionFileDuplicate": "A prescription from “{filename}” is already saved.",
+  "@analysisPrescriptionFileDuplicate": {
+    "placeholders": {
+      "filename": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisPolicyNameDuplicate": "{name} is already in your saved policies.",
+  "@analysisPolicyNameDuplicate": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisForPatient": "For {name}",
+  "@analysisForPatient": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisCoversTreatment": "{name} covers this treatment.",
+  "@analysisCoversTreatment": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisCoversPartTreatment": "{name} covers part of this treatment.",
+  "@analysisCoversPartTreatment": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisDoesNotCoverTreatment": "{name} does not cover this treatment.",
+  "@analysisDoesNotCoverTreatment": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisSeeClauseCount": "See policy clauses ({count})",
+  "@analysisSeeClauseCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisManualReviewCount": "{count, plural, one{1 item needs manual review before coverage can be determined.} other{{count} items need manual review before coverage can be determined.}}",
+  "@analysisManualReviewCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisBasedOnItems": "Based on {count, plural, one{1 prescribed item} other{{count} prescribed items}} assessed against your policy.",
+  "@analysisBasedOnItems": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisItemCount": "{count, plural, one{1 item} other{{count} items}}",
+  "@analysisItemCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisItemCountHeadline": "{count, plural, one{1 Item} other{{count} Items}}",
+  "@analysisItemCountHeadline": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisCompletedIn": "Analysis completed in {seconds} s",
+  "@analysisCompletedIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisEstimatedCostValue": "Est. cost {cost}",
+  "@analysisEstimatedCostValue": {
+    "placeholders": {
+      "cost": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisChartCategory": "{label}: {percentage}% ({count, plural, one{1 item} other{{count} items}})",
+  "@analysisChartCategory": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "percentage": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisContinuityEarliest": "Not established (earliest documented: {date})",
+  "@analysisContinuityEarliest": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisClaimFrom": "From {source}",
+  "@analysisClaimFrom": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisBeforeDate": "Before {date}",
+  "@analysisBeforeDate": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisGapDateRange": "{from} – {to} ({days, plural, one{1 day} other{{days} days}})",
+  "@analysisGapDateRange": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisOtherReportLanguage": "This report was generated in {language}.",
+  "@analysisOtherReportLanguage": {
+    "placeholders": {
+      "language": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisOtherQuestionLanguage": "These questions were generated in {language}.",
+  "@analysisOtherQuestionLanguage": {
+    "placeholders": {
+      "language": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisNotificationPolicies": "{count, plural, one{ across 1 policy} other{ across {count} policies}}",
+  "@analysisNotificationPolicies": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisNotificationComplete": "Your Policy Pal analysis for {subject}{policies} is complete. Tap to view.",
+  "@analysisNotificationComplete": {
+    "placeholders": {
+      "subject": {
+        "type": "String"
+      },
+      "policies": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisNotificationReview": "Your Policy Pal analysis for {subject}{policies} is ready to review. Tap to view.",
+  "@analysisNotificationReview": {
+    "placeholders": {
+      "subject": {
+        "type": "String"
+      },
+      "policies": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisPrescriptionDescription": "A prescription, doctor's advice or hospital estimate.",
+  "analysisNotCompleted": "ANALYSIS NOT COMPLETED",
+  "analysisOverallResult": "OVERALL COVERAGE RESULT",
+  "analysisNoItemDetails": "No further details were provided for this item.",
+  "analysisTranslatedWording": "Translated policy wording",
+  "analysisViewOriginalWording": "View original policy wording",
+  "analysisTranslationUnavailable": "Policy wording is unavailable in the selected language.",
+  "analysisEnglishLanguage": "English",
+  "analysisTamilLanguage": "Tamil",
+  "analysisStatusFinished": "Finished",
+  "analysisStatusWaiting": "Waiting to start",
+  "analysisStatusQueued": "Queued",
+  "analysisStatusAnalyzing": "Analyzing",
+  "analysisStatusReview": "Manual review",
+  "analysisStatusFailed": "Failed",
+  "analysisClauseExcludes": "Excludes",
+  "analysisClauseWaiting": "Waiting Period",
+  "analysisClauseCondition": "Condition",
+  "analysisClauseLimit": "Limit",
+  "analysisClauseCovers": "Covers",
+  "analysisClauseOther": "Policy term",
+  "analysisNotificationPrescription": "your prescription",
+  "analysisNotificationOpen": "Open Policy Pal to continue.",
+  "analysisNotificationNeedsInput": "Your check needs input",
+  "analysisNotificationReady": "Your check is ready",
+  "analysisNotificationChannel": "Check updates",
+  "analysisNoAdditionalDetails": "No additional details.",
+  "analysisPdfOrImage": "PDF or image",
+  "analysisCouldNotFinishAnalysis": "We couldn't complete the analysis",
+  "analysisContinuityVerified": "Continuous coverage verified",
+  "analysisContinuityGap": "Coverage gap detected",
+  "analysisContinuityConflict": "Conflicting policy information",
+  "analysisContinuityOutside": "Claim date outside the policy period",
+  "policyPal": "Policy Pal",
+  "startupErrorTitle": "Something went wrong",
+  "startupErrorBody": "This section could not be displayed. Please go back and try again.",
+  "authGoogleError": "Could not sign in with Google. Try again or use Email OTP.",
+  "authEnterEmail": "Please enter your email address.",
+  "authEnterValidEmail": "Please enter a valid email address.",
+  "authSendOtpError": "Could not send OTP. Please try again.",
+  "authSendCodeError": "Could not send a verification code. Please try again.",
+  "authSignInError": "Could not sign in. Please try again.",
+  "authCheckEmail": "Check your email",
+  "authVerify": "Verify",
+  "authLogin": "Log in",
+  "authSendCode": "Send code",
+  "authNewUser": "New to Policy Pal? ",
+  "authCreateAccount": "Create account",
+  "authLoginDescription": "Enter your email. We'll send you a code to log in.",
+  "authEmail": "Email",
+  "authContinueGoogle": "Continue with Google",
+  "authSignInUnavailable": "Sign-in is temporarily unavailable. Please try again later.",
+  "authSplashTagline": "Know what your policy covers",
+  "authEnterName": "Please enter your full name.",
+  "authRequestError": "Could not complete the request. Please try again.",
+  "authExistingAccount": "Already have an account? ",
+  "authRegisterDescription": "Save your policies and prescriptions, and check your cover anytime.",
+  "authFullName": "Full name",
+  "authLegalPrefix": "By continuing, you agree to our ",
+  "authTermsShort": "Terms",
+  "authLegalAnd": " and ",
+  "authPrivacyShort": "Privacy Policy.",
+  "authYourName": "Your name",
+  "authChangeEmail": "Change email",
+  "authVerificationCode": "Verification code",
+  "authResendCode": "Resend code",
+  "authTermsTitle": "Terms of use",
+  "authTermsFirst": "Only upload documents that belong to you or that you have permission to use.",
+  "authTermsSecond": "Coverage checks are for reference. Policy Pal does not submit claims. Your insurer makes the final decision.",
+  "authPrivacyTitle": "Privacy policy",
+  "authPrivacyFirst": "Policy Pal stores the documents you upload and processes them to evaluate coverage.",
+  "authPrivacySecond": "You confirm consent before adding a document.",
+  "accountEditName": "Edit name",
+  "accountLoadError": "Couldn't load your account.",
+  "accountSave": "Save",
+  "accountEmailReadOnly": "You log in with this email, so it can't be changed here.",
+  "accountSaveNameError": "Couldn't save your name. Try again.",
+  "accountOffline": "You're offline.",
+  "accountOfflineCached": "You're offline. Showing saved account details.",
+  "accountUnavailable": "Account details are unavailable.",
+  "accountPreferences": "Preferences",
+  "accountAppearance": "Appearance",
+  "accountHelp": "Help",
+  "accountHelpSupport": "Help and support",
+  "accountLogout": "Log out",
+  "accountLogoutQuestion": "Log out?",
+  "accountLogoutDescription": "Your documents and checks stay saved. Log in with your email to see them again.",
+  "accountCancel": "Cancel",
+  "accountMatchDevice": "Match your phone's setting",
+  "accountThemeSystem": "System",
+  "accountThemeLight": "Light",
+  "accountThemeDark": "Dark",
+  "accountSupportUnavailable": "Support contact is unavailable.",
+  "accountSupportEmail": "Support email",
+  "accountSendEmail": "Send email",
+  "accountCopyEmail": "Copy email",
+  "accountLabel": "Account",
+  "accountNotificationPermission": "Allow notifications in your phone settings to receive alerts.",
+  "accountNotificationSaveError": "Couldn't save your notification setting.",
+  "accountNotifications": "Notifications",
+  "accountGoogleLinked": "Google sign-in linked.",
+  "accountGoogleLinkError": "Could not link Google sign-in.",
+  "accountVerifyNewEmail": "Verify New Email Address",
+  "accountVerifying": "Verifying...",
+  "accountVerifySave": "Verify & Save",
+  "accountEnterVerification": "Please enter the verification code.",
+  "accountEmailUpdated": "Email updated successfully!",
+  "accountEditProfile": "Edit Profile",
+  "accountPersonalInfo": "Personal Information",
+  "accountPersonalInfoDescription": "Used on your account and analysis reports.",
+  "accountFullName": "Full Name",
+  "accountFullNameHint": "Enter your full name",
+  "accountEmailAddress": "Email Address",
+  "accountEmailHint": "Enter your email address",
+  "accountSaving": "Saving...",
+  "accountSaveChanges": "Save Changes",
+  "accountEmptyName": "Name cannot be empty",
+  "accountValidEmail": "Please enter a valid email address",
+  "accountUpdated": "Profile updated successfully!",
+  "accountGoogleIsLinked": "Google sign-in is linked.",
+  "accountGoogleLinking": "Linking Google…",
+  "accountLinkGoogle": "Link Google sign-in",
+  "accountLoginMethods": "Login methods",
+  "accountVerified": "Verified",
+  "authEnterOtp": "Please enter the OTP.",
+  "accountEmailVerified": "Email verified successfully.",
+  "authVerifyError": "Verification failed. Please try again.",
+  "accountVerifyEmail": "Verify Email Address",
+  "authOtp": "OTP",
+  "authResendOtp": "Resend OTP",
+  "accountLanguage": "Language",
+  "accountLanguageEnglish": "English",
+  "accountLanguageTamil": "தமிழ்",
+  "accountLanguageUpdateError": "Could not save your language. Try again.",
+  "accountEmailLoginEnabled": "Email OTP login enabled",
+  "accountEmailLoginVerify": "Verify to enable Email OTP login",
+  "accountProfileUpdateError": "Failed to update profile. Try again.",
+  "accountEmailSendError": "Could not send verification code. Try again.",
+  "authInvalidOtp": "That code isn't right. Check it, or get a new one.",
+  "authCouldNotVerify": "Could not verify the code. Try again.",
+  "authCheckDetails": "Please check the details and try again.",
+  "authNoConnection": "No connection. Please check your internet and try again.",
+  "authEmailRegistered": "This email address is already registered. Please login.",
+  "authNoAccount": "No account found with this email address. Please register first.",
+  "authOtpUnavailable": "The email verification service is temporarily unavailable.",
+  "authTooManyRequests": "Too many attempts. Wait a moment and try again.",
+  "authUndeliverable": "This email address cannot receive email. Please check it.",
+  "authGoogleAlreadyLinked": "This Google account is already linked.",
+  "authCodeEnter": "Enter the {length}-digit code we sent to",
+  "@authCodeEnter": {
+    "placeholders": {
+      "length": {
+        "type": "int"
+      }
+    }
+  },
+  "authCodeResendTimer": "Resend code in {timer}",
+  "@authCodeResendTimer": {
+    "placeholders": {
+      "timer": {
+        "type": "String"
+      }
+    }
+  },
+  "accountVersion": "Policy Pal · Version {version}",
+  "@accountVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "accountOtpSent": "We sent a verification code to {email}. Please enter it below to confirm your new email.",
+  "@accountOtpSent": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "accountOtpSending": "Sending a code to {email}...",
+  "@accountOtpSending": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "accountOtpResendTimer": "Resend OTP in {seconds}s",
+  "@accountOtpResendTimer": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "authOtpSent": "OTP sent to {email}",
+  "@authOtpSent": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "accountSupportSubject": "Policy Pal Assistance",
+  "sharedHome": "Home",
+  "sharedHistory": "History",
+  "sharedNewCheck": "New check",
+  "sharedSelectPrescription": "Select prescription",
+  "sharedSelectPolicy": "Select policy",
+  "sharedViewClaimCoverage": "View claim coverage",
+  "sharedProfile": "Profile",
+  "sharedBest": "Best",
+  "sharedSeeAll": "See all",
+  "sharedRetry": "Retry",
+  "sharedCancel": "Cancel",
+  "sharedSessionExpired": "Session Expired",
+  "sharedSessionExpiredExplanation": "Your login session has expired. Please sign in again to continue.",
+  "sharedOk": "OK",
+  "sharedTryAgain": "Try again",
+  "sharedLoadFailed": "We couldn't load this information. Please check your connection and try again.",
+  "sharedSponsored": "Sponsored",
+  "sharedHideAdvertisement": "Hide advertisement",
+  "sharedCannotConnect": "Can’t connect to Policy Pal",
+  "sharedRecentChecks": "Recent checks",
+  "sharedDocuments": "Documents",
+  "sharedKnowYourCover": "Know your cover before the bill",
+  "sharedFirstCheck": "Start your first check",
+  "sharedHi": "Hi",
+  "sharedResumeDraft": "Continue your draft check",
+  "sharedResumeCheck": "Resume your last check",
+  "sharedPrescriptions": "Prescriptions",
+  "sharedPolicies": "Policies",
+  "sharedViewAll": "View all",
+  "sharedNextCheck": "Next check",
+  "sharedPreviousCheck": "Previous check",
+  "sharedViewDocument": "View document",
+  "sharedAddPrescription": "Add prescription",
+  "sharedOffline": "You're offline.",
+  "sharedAddPolicyWithCheck": "Add policies when you start a check.",
+  "sharedLongPressDelete": "Long-press to select and delete.",
+  "sharedRetryLoadingMore": "Retry loading more",
+  "sharedExitSelection": "Exit selection",
+  "sharedSelectAll": "Select all",
+  "sharedSelectAllFailed": "Couldn't select all items. Try again.",
+  "sharedDelete": "Delete",
+  "sharedConfirmDeleteDocument": "This can't be undone. Checks that used them stay in History.",
+  "sharedConfirmDelete": "This can't be undone.",
+  "sharedDeleteUnconfirmed": "Couldn't confirm deletion. Check the list and try again.",
+  "sharedLoading": "Loading",
+  "sharedMembers": "Members",
+  "sharedNoPolicyDetails": "No extracted policy details yet.",
+  "sharedItems": "Items",
+  "sharedNoPrescriptionDetails": "No extracted prescription details yet.",
+  "sharedManualEntry": "Type it in",
+  "sharedEnterTreatment": "Write the illness, symptoms, tests or surgery the doctor advised. A few words is enough.",
+  "sharedTreatment": "Treatment",
+  "sharedCheckAsAdmittedToday": "We'll check it as if you're admitted to hospital today.",
+  "sharedSavePrescription": "Save prescription",
+  "sharedSavePrescriptionFailed": "Couldn't save your prescription. Try again.",
+  "sharedBack": "Back",
+  "sharedLoadingDocument": "Loading document…",
+  "sharedUnreadableDocument": "This file could not be opened. Upload a readable copy of the document.",
+  "sharedImageOpenFailed": "Could not open this image.",
+  "sharedFirstStartDate": "Date this policy was first taken",
+  "sharedPolicyStartDate": "Policy start date",
+  "sharedConfirm": "Confirm",
+  "sharedTooManyFiles": "Too many files selected",
+  "sharedSelectAgain": "Select again",
+  "sharedPleaseUploadPolicy": "Please upload at least one policy document.",
+  "sharedStillReadingPolicy": "Still reading your policy. This takes a few seconds.",
+  "sharedConfirmPolicyFailed": "Could not save the confirmed policy details. Please try again.",
+  "sharedUploadPolicy": "Upload Policy",
+  "sharedAddInsurancePolicy": "Add your insurance policy",
+  "sharedExplainPolicyUpload": "Upload one or more insurance policy documents. Add several to compare them against the same prescription.",
+  "sharedReadEachPolicy": "We read the details from each policy",
+  "sharedUploadPdfOrImage": "Tap to upload PDF or Image",
+  "sharedAddAnotherPolicy": "Tap to add another policy",
+  "sharedUploading": "Uploading…",
+  "sharedAnalyzeCoverage": "Analyze Coverage",
+  "sharedRemove": "Remove",
+  "sharedReadingPolicy": "Reading your policy details…",
+  "sharedNewOrRenewed": "Is this a new policy or a renewed policy?",
+  "sharedNewFirstYear": "New (first year)",
+  "sharedRenewed": "Renewed",
+  "sharedWhenFirstTaken": "When was this policy first taken?",
+  "sharedFirstDateHint": "The very first start date of this policy, before any renewals.",
+  "sharedPolicyDateHint": "The date this policy started, as shown on your policy document.",
+  "sharedSelectFirstDate": "Select first start date",
+  "sharedSelectStartDate": "Select policy start date",
+  "sharedContinuousRenewalQuestion": "Has this policy been renewed every year without a break?",
+  "sharedPortabilityHint": "Answer Yes if you moved from another insurance company without any gap (portability).",
+  "sharedYes": "Yes",
+  "sharedNo": "No",
+  "sharedLooksInvalidPolicy": "This file does not look like an insurance policy. Check the file, or answer the questions below.",
+  "sharedPolicyDetailsUnreadable": "We could not read the details from this policy. Please answer the questions below.",
+  "sharedInsurer": "Insurer",
+  "sharedPlan": "Plan",
+  "sharedPolicyNumber": "Policy number",
+  "sharedPolicyHolder": "Policy holder",
+  "sharedPolicyPeriod": "Policy period",
+  "sharedSumInsured": "Sum insured",
+  "sharedPolicyType": "Policy type",
+  "sharedFirstTakenOn": "First taken on",
+  "sharedStartDate": "Start date",
+  "sharedRenewedContinuously": "Renewed without a break",
+  "sharedPolicyDetails": "Details from your policy",
+  "sharedDone": "Done",
+  "sharedEdit": "Edit",
+  "sharedMissingPolicyDetails": "Your policy does not state the following, so please answer:",
+  "sharedUploadServerError": "Our servers are experiencing issues processing your upload. Please try again later.",
+  "sharedUploadUnexpected": "An unexpected error occurred during upload. Please try again later.",
+  "sharedChooseOnePrescriptionMethod": "Please choose only one prescription input method: either upload a prescription PDF or enter your prescription manually.",
+  "sharedProvidePrescription": "Please upload a prescription PDF or enter your prescription manually.",
+  "sharedCouldNotSavePrescription": "Could not save the prescription. Please try again.",
+  "sharedExistingPolicyFound": "Existing Policy Found",
+  "sharedUseSavedPolicy": "We found existing policies in your account. Would you like to analyze this prescription using one of your saved policies?",
+  "sharedContinueExistingPolicy": "Continue Existing Policy",
+  "sharedUploadNewPolicy": "Upload New Policy",
+  "sharedSelectPolicies": "Select Policies",
+  "sharedInsurancePolicy": "Insurance Policy",
+  "sharedUnknown": "Unknown",
+  "sharedValidity": "Validity",
+  "sharedStartDateTitle": "Start Date",
+  "sharedExpiry": "Expiry",
+  "sharedHolder": "Holder",
+  "sharedPolicyNo": "Policy No",
+  "sharedFile": "File",
+  "sharedAnalyzeWithSelectedPolicy": "Analyze With Selected Policy",
+  "sharedAddPrescriptionTitle": "Add Prescription",
+  "sharedAddYourPrescription": "Add your prescription",
+  "sharedUploadDoctorDocument": "Upload your doctor's prescription, diagnosis, or medical bills.",
+  "sharedUploadDocument": "Upload a document",
+  "sharedUploadMedicalDocuments": "Tap to upload medical documents",
+  "sharedKeepAppOpen": "Please keep the app open",
+  "sharedUploadSucceeded": "File uploaded successfully",
+  "sharedOr": "OR",
+  "sharedManualPrescription": "Enter your prescription manually",
+  "sharedPrescriptionDetails": "Prescription / Diagnosis Details",
+  "sharedClear": "Clear",
+  "sharedDescribeSymptoms": "Describe your diagnosis, symptoms, doctor's findings, or prescribed treatment...",
+  "sharedReadingPrescription": "Reading prescription?",
+  "sharedProcessManualPrescription": "Process Manual Prescription",
+  "sharedProcessPrescription": "Process Prescription",
+  "sharedReplaceFile": "Replace file",
+  "sharedRemoveFile": "Remove file",
+  "sharedGreeting": "Hi, {name}",
+  "@sharedGreeting": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedShowingSavedChecks": "{message} Showing your saved checks.",
+  "@sharedShowingSavedChecks": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedFileLimit": "Each file must be {max} MB or smaller.",
+  "@sharedFileLimit": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedPdfImageLimit": "PDF, JPG, PNG · {max} MB max",
+  "@sharedPdfImageLimit": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedUploadNamed": "Uploading {name}…",
+  "@sharedUploadNamed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedPickUpToPolicies": "Choose up to {max} policies",
+  "@sharedPickUpToPolicies": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedAnalyzeWithPolicies": "Analyze With {count} Policies",
+  "@sharedAnalyzeWithPolicies": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedDateRange": "{start} to {end}",
+  "@sharedDateRange": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedPolicyFileSelectionLimit": "You selected {count} files. You can add {remaining} more, up to {max} policies in total.",
+  "@sharedPolicyFileSelectionLimit": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "remaining": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedPolicyPickerHint": "Select up to {remaining} · max {max} policies · {size} MB each",
+  "@sharedPolicyPickerHint": {
+    "placeholders": {
+      "remaining": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      },
+      "size": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedPoliciesAdded": "{count, plural, one{1 policy added} other{{count} policies added}}",
+  "@sharedPoliciesAdded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedComparePolicies": "Compare {count} Policies",
+  "@sharedComparePolicies": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedUploadFileFailed": "Could not upload {name}.",
+  "@sharedUploadFileFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedProcessFileFailed": "Our servers could not process {name}. Please try again later.",
+  "@sharedProcessFileFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedAddFileFailed": "Could not add {name}. Please try again.",
+  "@sharedAddFileFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedCoverageGap": "You have a coverage gap in your policy continuity. So the coverage analysis will check your prescription against this policy from the start date of the uploaded policy document.",
+  "sharedDocument": "Document",
+  "sharedSavedPrescription": "Saved prescription",
+  "sharedStep": "Step {label}",
+  "@sharedStep": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedSavedCount": "{count} saved",
+  "@sharedSavedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedSelectedCount": "{count} selected",
+  "@sharedSelectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedOfflineShowSaved": "You're offline. Showing saved {items}.",
+  "@sharedOfflineShowSaved": {
+    "placeholders": {
+      "items": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedCouldNotLoadItems": "Couldn’t load {items}.",
+  "@sharedCouldNotLoadItems": {
+    "placeholders": {
+      "items": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedDocumentsShownHere": "{title} you add in a check show up here.",
+  "@sharedDocumentsShownHere": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedNoFilteredDocuments": "No {filter} {items}.",
+  "@sharedNoFilteredDocuments": {
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      },
+      "items": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedAll": "All",
+  "sharedUploaded": "Uploaded",
+  "sharedManual": "Manual",
+  "sharedRemoveSelected": "Delete {count} {items}",
+  "@sharedRemoveSelected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "items": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedConfirmRemoveSelected": "Delete {count} {items}?",
+  "@sharedConfirmRemoveSelected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "items": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedDeletedCount": "Deleted {count} {items}.",
+  "@sharedDeletedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "items": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedDeletedPartial": "Deleted {count} of {selected} selected {items}. The list has been refreshed.",
+  "@sharedDeletedPartial": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "selected": {
+        "type": "int"
+      },
+      "items": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedSorryError": "Something went wrong",
+  "sharedNetwork": "We couldn’t reach Policy Pal’s server. Check your internet connection and try again.",
+  "sharedTimeout": "The server took too long to respond. Please try again.",
+  "sharedServerError": "Policy Pal’s server is having trouble right now. Please try again in a moment.",
+  "sharedSessionInvalid": "Your session has expired. Please sign in again.",
+  "sharedForbidden": "You do not have permission for this action.",
+  "sharedNotFound": "The requested information could not be found.",
+  "sharedConflict": "This action conflicts with an existing record.",
+  "sharedInvalidRequest": "Check the information you entered and try again.",
+  "sharedUnsupportedFile": "This file format is not supported.",
+  "sharedFileTooLarge": "This file exceeds the upload size limit.",
+  "sharedTooManyRequests": "Too many requests. Wait a moment and try again.",
+  "sharedCovered": "Covered",
+  "sharedFullyCovered": "Fully covered",
+  "sharedPartial": "Partially covered",
+  "sharedNotCovered": "Not covered",
+  "sharedVerification": "Needs verification",
+  "sharedNeedsInfo": "Needs info",
+  "sharedNeedsReview": "Needs review",
+  "sharedInvalidPolicy": "Invalid policy",
+  "sharedInvalidPrescription": "Not a prescription",
+  "sharedInvalidDocument": "Invalid document",
+  "sharedUnavailable": "Result not available",
+  "sharedChecking": "Checking…",
+  "sharedFailed": "Check failed",
+  "sharedCouldNotCheck": "Couldn’t check",
+  "sharedCancelled": "Check cancelled",
+  "sharedPending": "Pending",
+  "sharedCompleted": "Completed",
+  "sharedExpired": "Expired",
+  "sharedReading": "Reading…",
+  "sharedCouldNotRead": "Couldn’t read",
+  "sharedStatusUnavailable": "Status unavailable",
+  "sharedIndividual": "Individual",
+  "sharedFamily": "Family",
+  "sharedFamilyFloater": "Family floater",
+  "sharedGroup": "Group",
+  "sharedToday": "Today",
+  "sharedYesterday": "Yesterday",
+  "sharedPrescription": "Prescription",
+  "sharedPolicy": "Policy",
+  "sharedCoverageCheck": "Coverage check",
+  "sharedYou": "you",
+  "sharedLoadingFileFailed": "Couldn't load the document.",
+  "sharedReviewLater": "We’ll update this when it’s reviewed.",
+  "sharedUploadPrescriptionRetry": "Upload the doctor’s prescription and try again.",
+  "sharedCanLeave": "You can leave. We’ll let you know.",
+  "sharedFailureOnOurSide": "Something went wrong on our side.",
+  "sharedAnswerOne": "Answer 1 question",
+  "sharedTypedByYou": "Typed by you",
+  "sharedRenewalDate": "Renewal date",
+  "sharedRenewal": "Renewal",
+  "sharedContinuity": "Continuity",
+  "sharedDoctor": "Doctor",
+  "sharedPatient": "Patient",
+  "sharedVisitDate": "Visit date",
+  "sharedTreatmentDate": "Treatment date",
+  "sharedForPatient": "For {name}",
+  "@sharedForPatient": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedPoliciesCompared": "{count} policies compared",
+  "@sharedPoliciesCompared": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedEnded": "Ended {date}",
+  "@sharedEnded": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedEnds": "Ends {date}",
+  "@sharedEnds": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "sharedCoverageAmount": "₹{amount} cover",
+  "@sharedCoverageAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisDetailTranslationUnavailable": "A translation is unavailable for this detail.",
+  "analysisItemDiagnosis": "Diagnosis",
+  "analysisItemTest": "Test",
+  "analysisItemProcedure": "Procedure",
+  "analysisItemMedicine": "Medicine",
+  "analysisItemConsultation": "Consultation",
+  "analysisItemSymptom": "Symptom",
+  "analysisViewOriginalQuestion": "View the original question",
+  "analysisOriginalOption": "Original answer option: {option}",
+  "@analysisOriginalOption": {
+    "placeholders": {
+      "option": {
+        "type": "String"
+      }
+    }
+  },
+  "analysisAnnexureItemsQuestion": "Did the bill include any items listed in Annexure I, or were all items essential surgical supplies or included in the package?",
+  "analysisAnnexureItemsYes": "Yes, it includes items from Annexure I",
+  "analysisAnnexureItemsNo": "No, all items are essential surgical supplies or included in the package",
+  "analysisItemizedBillNeeded": "Unsure / An itemized bill is needed",
+  "analysisOptionNumber": "Option {number}",
+  "analysisViewOriginalOptions": "View the original answer options",
+  "@analysisOptionNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  }
+}

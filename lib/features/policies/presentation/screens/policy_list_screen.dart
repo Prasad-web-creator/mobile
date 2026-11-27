@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/design/widgets/app_illustration.dart';
 import 'package:claimsupport/core/design/widgets/app_sheet_content.dart';
 import 'package:claimsupport/core/design/widgets/app_shells.dart';
@@ -20,12 +21,12 @@ class PolicyListScreen extends ConsumerWidget {
     final state = ref.watch(policiesProvider);
     final notifier = ref.read(policiesProvider.notifier);
     return SavedDocumentList<Policy>(
-      title: 'Policies',
+      title: context.l10n.sharedPolicies,
       singular: 'policy',
       page: state.value ?? notifier.cachedPage,
       isLoading: state.isLoading,
       error: state.error,
-      describe: DocumentSummary.policy,
+      describe: (policy) => DocumentSummary.policy(policy, l10n: context.l10n),
       createdAt: (policy) => policy.createdAt,
       idOf: (policy) => policy.id,
       onOpen: _showPolicy,
@@ -36,7 +37,7 @@ class PolicyListScreen extends ConsumerWidget {
   }
 
   void _showPolicy(BuildContext context, Policy policy, DocumentSummary summary) {
-    final fields = policyDetailFields(policy);
+    final fields = policyDetailFields(policy, l10n: context.l10n);
     final fileId = documentText(policy.gridFsFileId);
     AppSheet.show<void>(
       context: context,
@@ -47,10 +48,10 @@ class PolicyListScreen extends ConsumerWidget {
       bodyBuilder: (context) => AppSheetList(
         rows: [
           for (final (label, value) in fields)
-            AppSheetKeyValue(label: label, value: value, monospace: label == 'Policy number'),
-          if (policy.insuredMembers.isNotEmpty) AppSheetFieldList(label: 'Members', values: policy.insuredMembers),
+            AppSheetKeyValue(label: label, value: value, monospace: label == context.l10n.sharedPolicyNumber),
+          if (policy.insuredMembers.isNotEmpty) AppSheetFieldList(label: context.l10n.sharedMembers, values: policy.insuredMembers),
           if (fields.isEmpty && policy.insuredMembers.isEmpty)
-            const SavedListMessage('No extracted policy details yet.'),
+            SavedListMessage(context.l10n.sharedNoPolicyDetails),
         ],
       ),
     );

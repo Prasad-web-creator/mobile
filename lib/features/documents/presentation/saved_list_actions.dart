@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:async';
 
 import 'package:claimsupport/core/design/app_icons.dart';
@@ -142,7 +143,7 @@ mixin SavedListActions<W extends StatefulWidget, T> on State<W> {
   Widget moreStatus(PaginationResponse<T> source, Future<PaginationResponse<T>> Function(int) fetch) {
     if (_paging) return const Center(child: SizedBox.square(dimension: 24, child: CircularProgressIndicator()));
     if (identical(visiblePage(source), _failedPage)) {
-      return TextButton(onPressed: () => _loadMore(source, fetch), child: const Text('Retry loading more'));
+      return TextButton(onPressed: () => _loadMore(source, fetch), child: Text(context.l10n.sharedRetryLoadingMore));
     }
     return const SizedBox.shrink();
   }
@@ -157,12 +158,12 @@ mixin SavedListActions<W extends StatefulWidget, T> on State<W> {
       children: [
         AppIconButton(
           icon: AppIcons.close,
-          label: 'Exit selection',
+          label: context.l10n.sharedExitSelection,
           onPressed: _deleting ? null : () => setState(clearSelection),
         ),
         Expanded(
           child: Text(
-            '${_selected.length} selected',
+            context.l10n.sharedSelectedCount(_selected.length),
             textAlign: TextAlign.center,
             style: AppTextStyles.subheadStrong.copyWith(color: context.colors.textPrimary),
           ),
@@ -174,7 +175,7 @@ mixin SavedListActions<W extends StatefulWidget, T> on State<W> {
             textStyle: AppTextStyles.subheadStrong,
           ),
           onPressed: listBusy || source == null ? null : () => _selectAll(source, fetch, idOf),
-          child: const Text('Select all'),
+          child: Text(context.l10n.sharedSelectAll),
         ),
       ],
     ),
@@ -197,7 +198,7 @@ mixin SavedListActions<W extends StatefulWidget, T> on State<W> {
       }
       if (mounted && selecting) setState(() => _selected.addAll(ids));
     } catch (_) {
-      if (mounted) _message("Couldn't select all items. Try again.");
+      if (mounted) _message(context.l10n.sharedSelectAllFailed);
     } finally {
       if (mounted) setState(() => _paging = false);
     }
@@ -219,7 +220,7 @@ mixin SavedListActions<W extends StatefulWidget, T> on State<W> {
         top: false,
         minimum: const EdgeInsets.fromLTRB(DsSpace.screenPadding, DsSpace.s8, DsSpace.screenPadding, DsSpace.s8),
         child: AppButton(
-          label: 'Delete ${_selected.length} $label',
+          label: context.l10n.sharedRemoveSelected(_selected.length, label),
           icon: AppIcons.trash,
           style: AppButtonStyle.danger,
           onPressed: listBusy || _selected.isEmpty ? null : () => _confirmDelete(singular, plural, isDocument, delete),
@@ -254,9 +255,9 @@ mixin SavedListActions<W extends StatefulWidget, T> on State<W> {
               titlePadding: const EdgeInsets.fromLTRB(DsSpace.s20, DsSpace.s24, DsSpace.s20, DsSpace.s8),
               contentPadding: const EdgeInsets.fromLTRB(DsSpace.s20, 0, DsSpace.s20, DsSpace.s20),
               actionsPadding: const EdgeInsets.fromLTRB(DsSpace.s20, 0, DsSpace.s20, DsSpace.s16),
-              title: Text('Delete ${ids.length} $label?', style: AppTextStyles.title),
+              title: Text(context.l10n.sharedConfirmRemoveSelected(ids.length, label), style: AppTextStyles.title),
               content: Text(
-                isDocument ? "This can't be undone. Checks that used them stay in History." : "This can't be undone.",
+                isDocument ? context.l10n.sharedConfirmDeleteDocument : context.l10n.sharedConfirmDelete,
                 style: AppTextStyles.subheadRegular.copyWith(color: context.colors.textSecondary),
               ),
               actions: [
@@ -264,14 +265,14 @@ mixin SavedListActions<W extends StatefulWidget, T> on State<W> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     AppButton(
-                      label: 'Delete',
+                      label: context.l10n.sharedDelete,
                       style: AppButtonStyle.danger,
                       onPressed: () => Navigator.of(context).pop(true),
                     ),
                     TextButton(
                       style: TextButton.styleFrom(foregroundColor: context.colors.textPrimary),
                       onPressed: () => Navigator.of(context).pop(false),
-                      child: const Text('Cancel'),
+                      child: Text(context.l10n.sharedCancel),
                     ),
                   ],
                 ),
@@ -286,11 +287,11 @@ mixin SavedListActions<W extends StatefulWidget, T> on State<W> {
       setState(resetList);
       _message(
         deleted == ids.length
-            ? 'Deleted $deleted $label.'
-            : 'Deleted $deleted of ${ids.length} selected $label. The list has been refreshed.',
+            ? context.l10n.sharedDeletedCount(deleted, label)
+            : context.l10n.sharedDeletedPartial(deleted, ids.length, label),
       );
     } catch (_) {
-      if (mounted) _message("Couldn't confirm deletion. Check the list and try again.");
+      if (mounted) _message(context.l10n.sharedDeleteUnconfirmed);
     } finally {
       if (mounted) setState(() => _deleting = false);
     }

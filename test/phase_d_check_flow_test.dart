@@ -14,6 +14,8 @@ import 'package:claimsupport/core/routing/app_back_dispatcher.dart';
 import 'package:claimsupport/features/analysis/data/repositories/new_check_repository.dart';
 import 'package:claimsupport/features/analysis/presentation/screens/check_processing_screen.dart';
 import 'package:claimsupport/features/analysis/presentation/widgets/analysis_exit_guard.dart';
+import 'package:claimsupport/features/analysis/presentation/widgets/clarification_dialog.dart';
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/features/analysis/presentation/screens/new_check_screen.dart';
 import 'package:claimsupport/features/checks/presentation/check_completion_monitor.dart';
 import 'package:claimsupport/features/policies/data/models/policy.dart';
@@ -43,7 +45,11 @@ final _policies = [
     'insuranceCompany': 'Example insurer',
     'status': 'Active',
   }),
-  Policy.fromJson({'id': 'fixture-expired', 'policyName': 'Previous Health Plan', 'status': 'Expired'}),
+  Policy.fromJson({
+    'id': 'fixture-expired',
+    'policyName': 'Previous Health Plan',
+    'status': 'Expired',
+  }),
 ];
 
 class _FakeRepository implements NewCheckRepository {
@@ -84,7 +90,11 @@ class _FakeRepository implements NewCheckRepository {
   }
 
   @override
-  Future<void> start(String jobId, String treatment, List<String> policies) async {
+  Future<void> start(
+    String jobId,
+    String treatment,
+    List<String> policies,
+  ) async {
     startedWith = [jobId, treatment, ...policies];
     await startGate;
   }
@@ -112,7 +122,8 @@ class _FakeMonitor extends CheckCompletionMonitor {
   void track(String jobId) => tracked = jobId;
 
   @override
-  void setProcessingView(String jobId, bool visible) => viewed = visible ? jobId : null;
+  void setProcessingView(String jobId, bool visible) =>
+      viewed = visible ? jobId : null;
 
   @override
   void acknowledge(String jobId) => acknowledged = jobId;
@@ -143,12 +154,20 @@ Future<GoRouter> _app(
             path: '/dashboard',
             builder: (_, _) => const Scaffold(body: Text('Dashboard')),
           ),
-          GoRoute(path: '/check/new', onExit: confirmAnalysisRouteExit, builder: (_, _) => const NewCheckScreen()),
-          GoRoute(path: '/prescriptions/type', builder: (_, _) => const TypedPrescriptionScreen()),
+          GoRoute(
+            path: '/check/new',
+            onExit: confirmAnalysisRouteExit,
+            builder: (_, _) => const NewCheckScreen(),
+          ),
+          GoRoute(
+            path: '/prescriptions/type',
+            builder: (_, _) => const TypedPrescriptionScreen(),
+          ),
           GoRoute(
             path: '/check/processing/:jobId',
             onExit: confirmAnalysisRouteExit,
-            builder: (_, state) => CheckProcessingScreen(jobId: state.pathParameters['jobId']!),
+            builder: (_, state) =>
+                CheckProcessingScreen(jobId: state.pathParameters['jobId']!),
           ),
           GoRoute(
             path: '/reports',
@@ -167,7 +186,9 @@ Future<GoRouter> _app(
     ProviderScope(
       overrides: [
         appConfigProvider.overrideWith((_) async => AppRuntimeConfig.defaults),
-        checkTreatmentsProvider.overrideWith((_) async => empty ? [] : [_treatment]),
+        checkTreatmentsProvider.overrideWith(
+          (_) async => empty ? [] : [_treatment],
+        ),
         checkPoliciesProvider.overrideWith((_) async => empty ? [] : _policies),
         newCheckRepositoryProvider.overrideWithValue(repository),
         checkCompletionMonitorProvider.overrideWith(() => monitor),
@@ -183,7 +204,12 @@ Future<GoRouter> _app(
             routeInformationProvider: router.routeInformationProvider,
             routeInformationParser: router.routeInformationParser,
             routerDelegate: router.routerDelegate,
-            backButtonDispatcher: AppBackDispatcher(router, root: root, shell: shell, homePath: '/dashboard'),
+            backButtonDispatcher: AppBackDispatcher(
+              router,
+              root: root,
+              shell: shell,
+              homePath: '/dashboard',
+            ),
           ),
           theme: ThemeData(brightness: brightness),
           builder: (context, child) => MediaQuery(
@@ -203,14 +229,19 @@ Future<GoRouter> _app(
 }
 
 Finder _button(String label) => find.widgetWithText(AppButton, label);
-Finder _row(String label) => find.byWidgetPredicate((widget) => widget is AppDocumentRow && widget.title == label);
+Finder _row(String label) => find.byWidgetPredicate(
+  (widget) => widget is AppDocumentRow && widget.title == label,
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
     for (final (family, files) in <(String, List<String>)>[
-      ('Geist', ['Geist-Regular', 'Geist-Medium', 'Geist-SemiBold', 'Geist-Bold']),
+      (
+        'Geist',
+        ['Geist-Regular', 'Geist-Medium', 'Geist-SemiBold', 'Geist-Bold'],
+      ),
       ('PhosphorRegular', ['phosphor/Phosphor']),
     ]) {
       final font = FontLoader(family);
@@ -221,100 +252,268 @@ void main() {
     }
   });
 
-  for (final brightness in Brightness.values) {
-    testWidgets('new check keeps selection and handles expiry in ${brightness.name}', (tester) async {
-      final repo = _FakeRepository();
-      final monitor = _FakeMonitor();
-      final router = await _app(tester, repository: repo, monitor: monitor, brightness: brightness);
-      router.push('/check/new');
-      await tester.pumpAndSettle();
-      expect(find.text('Select prescription'), findsOneWidget);
-      expect(tester.widget<AppButton>(_button('Continue')).onPressed, isNull);
-      expect(tester.getTopLeft(_row('Add new')).dy, lessThan(tester.getTopLeft(_row('Example treatment')).dy));
-      expect(find.byType(HomeBackground), findsNothing);
-      expect(find.text('Today   03 : 55 PM').hitTestable(), findsOneWidget);
-      await tester.pump();
-      await tester.tap(_row('Example treatment'));
-      await tester.pumpAndSettle();
-      expect(tester.widget<AppDocumentRow>(_row('Example treatment')).selected, isTrue);
-      await tester.tap(_button('Continue'));
-      await tester.pumpAndSettle();
-      expect(find.text('Select policies'), findsOneWidget);
-      expect(tester.widget<AppDocumentRow>(_row('Previous Health Plan')).onTap, isNull);
-      expect(tester.widget<AppDocumentRow>(_row('Example Health Plan')).selected, isFalse);
-      expect(tester.widget<AppButton>(_button('Check 0 policies')).onPressed, isNull);
-      expect(tester.getTopLeft(_row('Add new')).dy, lessThan(tester.getTopLeft(_row('Example Health Plan')).dy));
-
-      await tester.tap(_row('Example Health Plan'));
-      await tester.pumpAndSettle();
-      expect(tester.widget<AppButton>(_button('Check 1 policy')).onPressed, isNotNull);
-      await tester.tap(find.bySemanticsLabel('Back to treatment'));
-      await tester.pumpAndSettle();
-      expect(tester.widget<AppDocumentRow>(_row('Example treatment')).selected, isTrue);
-      await tester.tap(_button('Continue'));
-      await tester.pumpAndSettle();
-      expect(tester.widget<AppDocumentRow>(_row('Example Health Plan')).selected, isTrue);
-      await tester.tap(_row('Example Health Plan'));
-      await tester.pumpAndSettle();
-      expect(tester.widget<AppDocumentRow>(_row('Example Health Plan')).selected, isFalse);
-      expect(tester.widget<AppButton>(_button('Check 0 policies')).onPressed, isNull);
-      await tester.tap(_row('Example Health Plan'));
-      await tester.pumpAndSettle();
-      await tester.tap(_button('Check 1 policy'));
-      await tester.pumpAndSettle();
-      expect(find.text('Before we begin'), findsNothing);
-
-      expect(repo.startedWith, ['fixture-job', 'fixture-rx', 'fixture-policy']);
-      expect(monitor.tracked, 'fixture-job');
-      expect(monitor.viewed, 'fixture-job');
-      expect(find.text('Reading your documents…'), findsOneWidget);
-
-      repo.jobStatus = 'analyzing';
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
-      expect(find.text('Checking your policies…'), findsOneWidget);
-
-      repo.offline = true;
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
-      expect(find.text("Couldn't refresh. Your check can keep running."), findsOneWidget);
-      repo.offline = false;
-      repo.jobStatus = 'failed';
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
-      expect(find.text("Couldn't finish this check"), findsOneWidget);
-      await tester.tap(find.bySemanticsLabel('Close'));
-      await tester.pumpAndSettle();
-      expect(find.text('Dashboard'), findsOneWidget);
-      expect(monitor.viewed, isNull);
-    });
-
-    testWidgets('empty check always offers an inline add sheet in ${brightness.name}', (tester) async {
-      final router = await _app(
-        tester,
-        repository: _FakeRepository(),
-        monitor: _FakeMonitor(),
-        brightness: brightness,
-        empty: true,
+  testWidgets(
+    'verification shows the policy choices and submits the original answer',
+    (tester) async {
+      Map<String, dynamic>? answers;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ClarificationDialog(
+              clarificationData: {
+                'questions': [
+                  {
+                    'id': 'verify_refractive_error',
+                    'title': 'Eye power',
+                    'question': 'What is the eye power being corrected?',
+                    'type': 'single_choice',
+                    'required': true,
+                    'options': [
+                      'Less than 8.5 dioptres',
+                      '8.5 dioptres or more',
+                      "Don't know",
+                    ],
+                    'optionStatuses': {
+                      'Less than 8.5 dioptres': 'Not Covered',
+                      '8.5 dioptres or more': 'Covered',
+                      "Don't know": 'Needs Verification',
+                    },
+                  },
+                ],
+              },
+              onSubmit: (value) => answers = value,
+              onCancel: () {},
+            ),
+          ),
+        ),
       );
-      router.push('/check/new');
+      expect(find.text('Less than 8.5 dioptres · Not covered'), findsOneWidget);
+      expect(find.text('8.5 dioptres or more · Covered'), findsOneWidget);
+      final unknown = find.text("Don't know · Needs verification");
+      expect(unknown, findsOneWidget);
+      await tester.tap(unknown);
+      await tester.pump();
+      await tester.tap(find.text('Submit Answers'));
+      expect(answers, {'verify_refractive_error': "Don't know"});
+    },
+  );
+
+  testWidgets(
+    'Tamil clarification recovers cached Annexure I labels and submits the unchanged value',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 560);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      Map<String, dynamic>? answers;
+      const options = [
+        'Yes, contains items from Annexure I',
+        'No, all are integral surgical consumables / package items',
+        "Don't know / Need itemised breakdown",
+      ];
+      final l10n = lookupAppLocalizations(const Locale('ta'));
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('ta'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: ClarificationDialog(
+              contextLabel: 'Prakriti Family Health Secure',
+              clarificationData: {
+                'questions': [
+                  {
+                    'id': 'annexure',
+                    'question': 'Which items are on the bill?',
+                    'title': 'Surgical consumables',
+                    'type': 'single_choice',
+                    'options': options,
+                    'required': true,
+                  },
+                ],
+              },
+              onSubmit: (value) => answers = value,
+              onCancel: () {},
+            ),
+          ),
+        ),
+      );
+      final firstOption = find.text(l10n.analysisAnnexureItemsYes);
+      expect(find.textContaining('contains items from Annexure'), findsNothing);
+      expect(
+        find.textContaining(
+          l10n.analysisAnnexureItemsQuestion.split('?').first,
+        ),
+        findsWidgets,
+      );
+      await tester.ensureVisible(firstOption);
+      await tester.tap(firstOption);
       await tester.pumpAndSettle();
-      expect(find.text('Select prescription'), findsOneWidget);
-      await tester.tap(_row('Add new'));
-      await tester.pumpAndSettle();
-      expect(_row('Scan'), findsOneWidget);
-      expect(_row('Upload file'), findsOneWidget);
-      expect(_row('Photos'), findsOneWidget);
-      await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
-      expect(_row('Add new'), findsOneWidget);
-    });
+      final submit = find.text(l10n.analysisSubmitAnswers);
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      expect(tester.takeException(), isNull);
+      expect(answers, {'annexure': options.first});
+    },
+  );
+
+  for (final brightness in Brightness.values) {
+    testWidgets(
+      'new check keeps selection and handles expiry in ${brightness.name}',
+      (tester) async {
+        final repo = _FakeRepository();
+        final monitor = _FakeMonitor();
+        final router = await _app(
+          tester,
+          repository: repo,
+          monitor: monitor,
+          brightness: brightness,
+        );
+        router.push('/check/new');
+        await tester.pumpAndSettle();
+        expect(find.text('Select prescription'), findsOneWidget);
+        expect(tester.widget<AppButton>(_button('Continue')).onPressed, isNull);
+        expect(
+          tester.getTopLeft(_row('Add new')).dy,
+          lessThan(tester.getTopLeft(_row('Example treatment')).dy),
+        );
+        expect(find.byType(HomeBackground), findsNothing);
+        expect(find.text('Today   03 : 55 PM').hitTestable(), findsOneWidget);
+        await tester.pump();
+        await tester.tap(_row('Example treatment'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<AppDocumentRow>(_row('Example treatment')).selected,
+          isTrue,
+        );
+        await tester.tap(_button('Continue'));
+        await tester.pumpAndSettle();
+        expect(find.text('Select policies'), findsOneWidget);
+        expect(
+          tester.widget<AppDocumentRow>(_row('Previous Health Plan')).onTap,
+          isNull,
+        );
+        expect(
+          tester.widget<AppDocumentRow>(_row('Example Health Plan')).selected,
+          isFalse,
+        );
+        expect(
+          tester.widget<AppButton>(_button('Check 0 policies')).onPressed,
+          isNull,
+        );
+        expect(
+          tester.getTopLeft(_row('Add new')).dy,
+          lessThan(tester.getTopLeft(_row('Example Health Plan')).dy),
+        );
+
+        await tester.tap(_row('Example Health Plan'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<AppButton>(_button('Check 1 policy')).onPressed,
+          isNotNull,
+        );
+        await tester.tap(find.bySemanticsLabel('Back to treatment'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<AppDocumentRow>(_row('Example treatment')).selected,
+          isTrue,
+        );
+        await tester.tap(_button('Continue'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<AppDocumentRow>(_row('Example Health Plan')).selected,
+          isTrue,
+        );
+        await tester.tap(_row('Example Health Plan'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<AppDocumentRow>(_row('Example Health Plan')).selected,
+          isFalse,
+        );
+        expect(
+          tester.widget<AppButton>(_button('Check 0 policies')).onPressed,
+          isNull,
+        );
+        await tester.tap(_row('Example Health Plan'));
+        await tester.pumpAndSettle();
+        await tester.tap(_button('Check 1 policy'));
+        await tester.pumpAndSettle();
+        expect(find.text('Before we begin'), findsNothing);
+
+        expect(repo.startedWith, [
+          'fixture-job',
+          'fixture-rx',
+          'fixture-policy',
+        ]);
+        expect(monitor.tracked, 'fixture-job');
+        expect(monitor.viewed, 'fixture-job');
+        expect(find.text('Reading your documents…'), findsOneWidget);
+
+        repo.jobStatus = 'analyzing';
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
+        expect(find.text('Checking your policies…'), findsOneWidget);
+
+        repo.offline = true;
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
+        expect(
+          find.text("Couldn't refresh. Your check can keep running."),
+          findsOneWidget,
+        );
+        repo.offline = false;
+        repo.jobStatus = 'failed';
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
+        expect(find.text("Couldn't finish this check"), findsOneWidget);
+        await tester.tap(find.bySemanticsLabel('Close'));
+        await tester.pumpAndSettle();
+        expect(find.text('Dashboard'), findsOneWidget);
+        expect(monitor.viewed, isNull);
+      },
+    );
+
+    testWidgets(
+      'empty check always offers an inline add sheet in ${brightness.name}',
+      (tester) async {
+        final router = await _app(
+          tester,
+          repository: _FakeRepository(),
+          monitor: _FakeMonitor(),
+          brightness: brightness,
+          empty: true,
+        );
+        router.push('/check/new');
+        await tester.pumpAndSettle();
+        expect(find.text('Select prescription'), findsOneWidget);
+        await tester.tap(_row('Add new'));
+        await tester.pumpAndSettle();
+        expect(_row('Scan'), findsOneWidget);
+        expect(_row('Upload file'), findsOneWidget);
+        expect(_row('Photos'), findsOneWidget);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(_row('Add new'), findsOneWidget);
+      },
+    );
   }
 
-  testWidgets('a visible check opens details when the durable job finishes', (tester) async {
+  testWidgets('a visible check opens details when the durable job finishes', (
+    tester,
+  ) async {
     final repo = _FakeRepository();
     final monitor = _FakeMonitor();
-    final router = await _app(tester, repository: repo, monitor: monitor, brightness: Brightness.light);
+    final router = await _app(
+      tester,
+      repository: repo,
+      monitor: monitor,
+      brightness: Brightness.light,
+    );
     router.push('/check/processing/fixture-job');
     await tester.pumpAndSettle();
     expect(find.text('Reading your documents…'), findsOneWidget);
@@ -328,57 +527,81 @@ void main() {
     expect(monitor.viewed, isNull);
   });
 
-  testWidgets('back and tab navigation confirm cancellation of a running check', (tester) async {
-    final repo = _FakeRepository()..jobStatus = 'analyzing';
-    final monitor = _FakeMonitor();
-    final router = await _app(tester, repository: repo, monitor: monitor, brightness: Brightness.dark);
-    router.push('/check/processing/fixture-job');
-    await tester.pumpAndSettle();
+  testWidgets(
+    'back and tab navigation confirm cancellation of a running check',
+    (tester) async {
+      final repo = _FakeRepository()..jobStatus = 'analyzing';
+      final monitor = _FakeMonitor();
+      final router = await _app(
+        tester,
+        repository: repo,
+        monitor: monitor,
+        brightness: Brightness.dark,
+      );
+      router.push('/check/processing/fixture-job');
+      await tester.pumpAndSettle();
 
-    await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
-    expect(find.text('Stop the analysis?'), findsOneWidget);
-    await tester.tap(find.text('Keep analyzing'));
-    await tester.pumpAndSettle();
-    expect(repo.cancelledJobs, isEmpty);
-    expect(find.byType(CheckProcessingScreen), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('Stop the analysis?'), findsOneWidget);
+      await tester.tap(find.text('Keep analyzing'));
+      await tester.pumpAndSettle();
+      expect(repo.cancelledJobs, isEmpty);
+      expect(find.byType(CheckProcessingScreen), findsOneWidget);
 
-    router.go('/reports');
-    await tester.pumpAndSettle();
-    expect(find.text('Stop the analysis?'), findsOneWidget);
-    await tester.tap(find.text('Stop analysis'));
-    await tester.pumpAndSettle();
-    expect(repo.cancelledJobs, ['fixture-job']);
-    expect(monitor.acknowledged, 'fixture-job');
-    expect(find.text('History'), findsOneWidget);
-  });
+      router.go('/reports');
+      await tester.pumpAndSettle();
+      expect(find.text('Stop the analysis?'), findsOneWidget);
+      await tester.tap(find.text('Stop analysis'));
+      await tester.pumpAndSettle();
+      expect(repo.cancelledJobs, ['fixture-job']);
+      expect(monitor.acknowledged, 'fixture-job');
+      expect(find.text('History'), findsOneWidget);
+    },
+  );
 
-  testWidgets('returning from the background prompts and a failed stop stays on the check', (tester) async {
-    final repo = _FakeRepository()..cancelFails = true;
-    final router = await _app(tester, repository: repo, monitor: _FakeMonitor(), brightness: Brightness.light);
-    router.push('/check/processing/fixture-job');
-    await tester.pumpAndSettle();
+  testWidgets(
+    'returning from the background prompts and a failed stop stays on the check',
+    (tester) async {
+      final repo = _FakeRepository()..cancelFails = true;
+      final router = await _app(
+        tester,
+        repository: repo,
+        monitor: _FakeMonitor(),
+        brightness: Brightness.light,
+      );
+      router.push('/check/processing/fixture-job');
+      await tester.pumpAndSettle();
 
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pumpAndSettle();
-    expect(find.text('Stop the analysis?'), findsOneWidget);
-    await tester.tap(find.text('Stop analysis'));
-    await tester.pumpAndSettle();
-    expect(find.text("Couldn't confirm the analysis stopped. Try again."), findsOneWidget);
-    expect(find.byType(CheckProcessingScreen), findsOneWidget);
-    expect(repo.cancelledJobs, ['fixture-job']);
-  });
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.text('Stop the analysis?'), findsOneWidget);
+      await tester.tap(find.text('Stop analysis'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text("Couldn't confirm the analysis stopped. Try again."),
+        findsOneWidget,
+      );
+      expect(find.byType(CheckProcessingScreen), findsOneWidget);
+      expect(repo.cancelledJobs, ['fixture-job']);
+    },
+  );
 
-  testWidgets('Android back goes to Home and a second back closes the app', (tester) async {
+  testWidgets('Android back goes to Home and a second back closes the app', (
+    tester,
+  ) async {
     var closes = 0;
-    final platform = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final platform =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     platform.setMockMethodCallHandler(SystemChannels.platform, (call) async {
       if (call.method == 'SystemNavigator.pop') closes++;
       return null;
     });
-    addTearDown(() => platform.setMockMethodCallHandler(SystemChannels.platform, null));
+    addTearDown(
+      () => platform.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
     final router = await _app(
       tester,
       repository: _FakeRepository(),
@@ -399,40 +622,55 @@ void main() {
     expect(closes, 1);
   });
 
-  testWidgets('Android back can stop a check while the start request is pending', (tester) async {
-    final start = Completer<void>();
-    final repo = _FakeRepository()..startGate = start.future;
-    final monitor = _FakeMonitor();
-    final router = await _app(tester, repository: repo, monitor: monitor, brightness: Brightness.light);
-    router.push('/check/new');
-    await tester.pumpAndSettle();
-    await tester.tap(_row('Example treatment'));
-    await tester.pumpAndSettle();
-    await tester.tap(_button('Continue'));
-    await tester.pumpAndSettle();
-    await tester.tap(_row('Example Health Plan'));
-    await tester.pumpAndSettle();
-    await tester.tap(_button('Check 1 policy'));
-    await tester.pump(const Duration(milliseconds: 600));
-    await tester.pump();
-    expect(repo.startedWith, isNotNull);
+  testWidgets(
+    'Android back can stop a check while the start request is pending',
+    (tester) async {
+      final start = Completer<void>();
+      final repo = _FakeRepository()..startGate = start.future;
+      final monitor = _FakeMonitor();
+      final router = await _app(
+        tester,
+        repository: repo,
+        monitor: monitor,
+        brightness: Brightness.light,
+      );
+      router.push('/check/new');
+      await tester.pumpAndSettle();
+      await tester.tap(_row('Example treatment'));
+      await tester.pumpAndSettle();
+      await tester.tap(_button('Continue'));
+      await tester.pumpAndSettle();
+      await tester.tap(_row('Example Health Plan'));
+      await tester.pumpAndSettle();
+      await tester.tap(_button('Check 1 policy'));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump();
+      expect(repo.startedWith, isNotNull);
 
-    await tester.binding.handlePopRoute();
-    await tester.pump(const Duration(milliseconds: 600));
-    await tester.pump();
-    expect(find.text('Stop the analysis?'), findsOneWidget);
-    await tester.tap(find.text('Stop analysis'));
-    start.complete();
-    await tester.pumpAndSettle();
-    expect(repo.cancelledJobs, ['fixture-job']);
-    expect(monitor.tracked, isNull);
-    expect(find.text('Dashboard'), findsOneWidget);
-  });
+      await tester.binding.handlePopRoute();
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump();
+      expect(find.text('Stop the analysis?'), findsOneWidget);
+      await tester.tap(find.text('Stop analysis'));
+      start.complete();
+      await tester.pumpAndSettle();
+      expect(repo.cancelledJobs, ['fixture-job']);
+      expect(monitor.tracked, isNull);
+      expect(find.text('Dashboard'), findsOneWidget);
+    },
+  );
 
   for (final brightness in Brightness.values) {
-    testWidgets('typed prescriptions save directly in ${brightness.name}', (tester) async {
+    testWidgets('typed prescriptions save directly in ${brightness.name}', (
+      tester,
+    ) async {
       final repo = _FakeRepository();
-      final router = await _app(tester, repository: repo, monitor: _FakeMonitor(), brightness: brightness);
+      final router = await _app(
+        tester,
+        repository: repo,
+        monitor: _FakeMonitor(),
+        brightness: brightness,
+      );
       router.push('/check/new');
       await tester.pumpAndSettle();
       expect(find.textContaining('For Sample person'), findsOneWidget);
@@ -442,7 +680,10 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(_row('Type it in'));
         await tester.pumpAndSettle();
-        expect(tester.widget<AppButton>(_button('Save prescription')).onPressed, isNull);
+        expect(
+          tester.widget<AppButton>(_button('Save prescription')).onPressed,
+          isNull,
+        );
         expect(find.text('Examples'), findsNothing);
         expect(find.byType(ActionChip), findsNothing);
         await tester.enterText(find.byType(TextField), treatment);
@@ -453,7 +694,12 @@ void main() {
         expect(tester.widget<AppDocumentRow>(_row(treatment)).selected, isTrue);
         expect(find.text('Typed by you'), findsWidgets);
         expect(
-          find.descendant(of: _row(treatment), matching: find.text('Today   03 : 35 PM')).hitTestable(),
+          find
+              .descendant(
+                of: _row(treatment),
+                matching: find.text('Today   03 : 35 PM'),
+              )
+              .hitTestable(),
           findsOneWidget,
         );
       }
@@ -463,7 +709,10 @@ void main() {
   }
 
   test('policy numbers are normalized without merging missing identifiers', () {
-    expect(NewCheckRepository.normalizePolicyNumber(' abc - 123 / d '), 'ABC123D');
+    expect(
+      NewCheckRepository.normalizePolicyNumber(' abc - 123 / d '),
+      'ABC123D',
+    );
     expect(NewCheckRepository.normalizePolicyNumber('N/A'), isEmpty);
     expect(NewCheckRepository.normalizePolicyNumber(null), isEmpty);
   });

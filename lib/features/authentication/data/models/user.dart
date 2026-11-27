@@ -7,6 +7,7 @@ class User {
   /// Whether ownership of the email address has been verified.
   final bool emailVerified;
   final bool googleLinked;
+  final String? preferredLanguage;
 
   User({
     required this.id,
@@ -15,6 +16,7 @@ class User {
     this.phone,
     this.emailVerified = false,
     this.googleLinked = false,
+    this.preferredLanguage,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -25,6 +27,7 @@ class User {
       phone: json['phone'],
       emailVerified: json['emailVerified'] == true,
       googleLinked: json['googleLinked'] == true,
+      preferredLanguage: json['preferredLanguage'] as String?,
     );
   }
 }

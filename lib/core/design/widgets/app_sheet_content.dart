@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:flutter/material.dart';
 
 import 'package:claimsupport/core/design/design.dart';
@@ -111,7 +112,7 @@ class AppSheetConfirmation extends StatelessWidget {
     children: [
       Text(message, style: AppTextStyles.bodyStrong.copyWith(color: context.colors.textPrimary)),
       AppButton(label: actionLabel, onPressed: onConfirm),
-      AppButton(label: 'Cancel', style: AppButtonStyle.secondary, onPressed: onCancel),
+      AppButton(label: context.l10n.sharedCancel, style: AppButtonStyle.secondary, onPressed: onCancel),
     ],
   );
 }

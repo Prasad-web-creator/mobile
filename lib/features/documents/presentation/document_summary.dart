@@ -1,5 +1,6 @@
-import 'package:flutter/foundation.dart';
-import 'package:intl/intl.dart';
+import 'package:claimsupport/core/localization/localization.dart';
+import 'package:flutter/widgets.dart';
+import 'package:claimsupport/core/localization/translation_mapper.dart';
 
 import 'package:claimsupport/core/design/widgets/app_document_row.dart';
 import 'package:claimsupport/core/design/widgets/document_card.dart';
@@ -12,22 +13,23 @@ import 'package:claimsupport/features/prescriptions/data/models/prescription.dar
 class DocumentSummary {
   const DocumentSummary._(this.type, this.title, this.meta, this.state, {this.timestamp});
 
-  factory DocumentSummary.prescription(Prescription record, {DateTime? now}) {
+  factory DocumentSummary.prescription(Prescription record, {DateTime? now, AppLocalizations? l10n}) {
+    l10n ??= lookupAppLocalizations(const Locale('en'));
     final isTyped = record.isManual;
     final title = isTyped
         ? (_firstLine(record.manualText ?? record.extractedPrescriptionText) ??
               _cleanExtractedName(record.diagnosis, record.originalFileName) ??
-              'Prescription')
+              l10n.sharedPrescription)
         : (_cleanExtractedName(record.diagnosis, record.originalFileName) ??
               _cleanExtractedName(record.title, record.originalFileName) ??
               (record.items.isNotEmpty ? _cleanExtractedName(record.items.first, record.originalFileName) : null) ??
-              'Prescription');
+              l10n.sharedPrescription);
     final patient = CheckSummary.cleanPatientName(record.patientName ?? '');
     final hospital = _cleanExtractedName(record.hospitalName, record.originalFileName);
-    final source = isTyped ? 'Typed by you' : (patient.isNotEmpty ? 'For $patient' : hospital ?? '');
+    final source = isTyped ? l10n.sharedTypedByYou : (patient.isNotEmpty ? l10n.sharedForPatient(patient) : hospital ?? '');
     final timestamp = switch ((record.createdAt, record.visitDate ?? record.treatmentDate)) {
-      (final savedAt?, _) => formatActivityTimestamp(savedAt, now: now),
-      (null, final visitDate?) => formatActivityDate(visitDate, now: now),
+      (final savedAt?, _) => formatActivityTimestamp(savedAt, now: now, l10n: l10n),
+      (null, final visitDate?) => formatActivityDate(visitDate, now: now, l10n: l10n),
       _ => null,
     };
     return DocumentSummary._(
@@ -39,10 +41,11 @@ class DocumentSummary {
     );
   }
 
-  factory DocumentSummary.policy(Policy record, {DateTime? now}) {
+  factory DocumentSummary.policy(Policy record, {DateTime? now, AppLocalizations? l10n}) {
+    l10n ??= lookupAppLocalizations(const Locale('en'));
     final insurer = _cleanExtractedName(record.insuranceCompany, record.originalFileName);
     // Phase F §0.3: show extracted product name only — never the filename.
-    final title = _cleanExtractedName(record.policyName, record.originalFileName) ?? insurer ?? 'Policy';
+    final title = _cleanExtractedName(record.policyName, record.originalFileName) ?? insurer ?? l10n.sharedPolicy;
     final today = now ?? DateTime.now();
     final end = record.policyEndDate?.toLocal();
     final expired =
@@ -50,15 +53,26 @@ class DocumentSummary {
         (end != null && DateTime(end.year, end.month, end.day).isBefore(DateTime(today.year, today.month, today.day)));
     final amount = record.coverageAmount;
     final cover = amount != null && amount.isFinite && amount > 0
-        ? NumberFormat.decimalPattern('en_IN').format(amount)
+        ? localizedIndianNumber(l10n).format(amount)
         : null;
     final meta = expired && end != null
-        ? 'Ended ${DateFormat('d MMM yyyy').format(end)}'
+        ? l10n.sharedEnded(formatLocalizedDate(l10n, end))
         : [
             if (insurer != null && insurer != title) insurer,
-            if (cover != null) '₹$cover cover' else if (end != null) CheckSummary.relativeDate(end, today),
+            if (cover != null) l10n.sharedCoverageAmount(cover) else if (end != null) _relativeDate(l10n, end, today),
           ].join(' · ');
     return DocumentSummary._(DocumentCardType.policy, title, meta, _state(record.processingStatus, expired: expired));
+  }
+
+  static String _relativeDate(AppLocalizations l10n, DateTime date, DateTime today) {
+    if (l10n.localeName == 'en') return CheckSummary.relativeDate(date, today);
+    final days = DateTime.utc(today.year, today.month, today.day)
+        .difference(DateTime.utc(date.year, date.month, date.day)).inDays;
+    return switch (days) {
+      0 => l10n.sharedToday,
+      1 => l10n.sharedYesterday,
+      _ => formatLocalizedDate(l10n, date),
+    };
   }
 
   final DocumentCardType type;

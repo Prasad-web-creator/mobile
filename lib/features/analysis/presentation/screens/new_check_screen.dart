@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
@@ -29,8 +30,6 @@ import 'package:claimsupport/features/prescriptions/data/models/prescription.dar
 import 'package:claimsupport/features/prescriptions/presentation/controllers/prescription_controller.dart';
 
 enum _DocumentSource { camera, file, photos, typed }
-
-const _unreadable = "Couldn't read this document. Try a clearer photo.";
 
 class NewCheckScreen extends ConsumerStatefulWidget {
   const NewCheckScreen({
@@ -70,11 +69,17 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
   @override
   void initState() {
     super.initState();
-    _removeExitGuard = registerAnalysisExitGuard(ref, '/check/new', _confirmStartingExit);
+    _removeExitGuard = registerAnalysisExitGuard(
+      ref,
+      '/check/new',
+      _confirmStartingExit,
+    );
     if (widget.addPrescriptionOnly) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
-        await _addDocument(ref.read(appConfigProvider).value ?? AppRuntimeConfig.defaults);
+        await _addDocument(
+          ref.read(appConfigProvider).value ?? AppRuntimeConfig.defaults,
+        );
         if (mounted && !_isError) context.pop();
       });
     }
@@ -89,7 +94,9 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
   Future<bool> _confirmStartingExit() {
     final job = _startingJobId;
     if (job == null) return Future.value(true);
-    return _startExit ??= _stopStartingJob(job).whenComplete(() => _startExit = null);
+    return _startExit ??= _stopStartingJob(
+      job,
+    ).whenComplete(() => _startExit = null);
   }
 
   Future<bool> _stopStartingJob(String jobId) async {
@@ -103,14 +110,17 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
       }
       return true;
     } catch (_) {
-      _showMessage("Couldn't confirm the analysis stopped. Try again.", error: true);
+      _showMessage(context.l10n.analysisStopFailed, error: true);
       return false;
     }
   }
 
   static String _newRequestId() {
     final random = Random.secure();
-    return List.generate(16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+    return List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
   }
 
   void _close() {
@@ -139,35 +149,54 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
       _jobId ??= await repository.createJob(_requestId);
 
   static bool _isJobExpired(Object error) =>
-      error is DioException && const {403, 404, 410}.contains(error.response?.statusCode);
+      error is DioException &&
+      const {403, 404, 410}.contains(error.response?.statusCode);
 
   Future<XFile?> _pickDocument(_DocumentSource source) async {
     if (source == _DocumentSource.file) {
       final picked = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', if (_choosePolicies) 'docx'],
+        allowedExtensions: [
+          'pdf',
+          'jpg',
+          'jpeg',
+          'png',
+          if (_choosePolicies) 'docx',
+        ],
       );
       return picked?.xFiles.singleOrNull;
     }
     return _imagePicker.pickImage(
-      source: source == _DocumentSource.camera ? ImageSource.camera : ImageSource.gallery,
+      source: source == _DocumentSource.camera
+          ? ImageSource.camera
+          : ImageSource.gallery,
       imageQuality: 95,
       requestFullMetadata: false,
     );
   }
 
-  Future<bool?> _confirmDuplicateFile(String filename, {required bool isPolicy}) => AppSheet.show<bool>(
+  Future<bool?> _confirmDuplicateFile(
+    String filename, {
+    required bool isPolicy,
+  }) => AppSheet.show<bool>(
     context: context,
-    title: 'Already saved',
+    title: context.l10n.analysisAlreadySaved,
     bodyBuilder: (ctx) => AppSheetList(
       rows: [
         Text(
-          '${isPolicy ? 'A policy' : 'A prescription'} from "$filename" is already saved.',
-          style: AppTextStyles.bodyStrong.copyWith(color: ctx.colors.textPrimary),
+          isPolicy
+              ? ctx.l10n.analysisPolicyFileDuplicate(filename)
+              : ctx.l10n.analysisPrescriptionFileDuplicate(filename),
+          style: AppTextStyles.bodyStrong.copyWith(
+            color: ctx.colors.textPrimary,
+          ),
         ),
-        AppButton(label: 'Use saved', onPressed: () => Navigator.of(ctx).pop(false)),
         AppButton(
-          label: 'Save another copy',
+          label: context.l10n.analysisUseSaved,
+          onPressed: () => Navigator.of(ctx).pop(false),
+        ),
+        AppButton(
+          label: context.l10n.analysisSaveCopy,
           style: AppButtonStyle.secondary,
           onPressed: () => Navigator.of(ctx).pop(true),
         ),
@@ -175,23 +204,31 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
     ),
   );
 
-  Future<bool?> _confirmDuplicatePolicyNumber(Policy candidate, Policy existing) {
+  Future<bool?> _confirmDuplicatePolicyNumber(
+    Policy candidate,
+    Policy existing,
+  ) {
     final existingName = DocumentSummary.policy(existing).title;
     final numLabel = candidate.policyNumber.trim();
     return AppSheet.show<bool>(
       context: context,
-      title: 'Policy already saved',
+      title: context.l10n.analysisPolicyAlreadySaved,
       bodyBuilder: (ctx) => AppSheetList(
         rows: [
           Text(
-            numLabel.isNotEmpty
-                ? '$existingName ($numLabel) is already in your saved policies.'
-                : '$existingName is already in your saved policies.',
-            style: AppTextStyles.bodyStrong.copyWith(color: ctx.colors.textPrimary),
+            ctx.l10n.analysisPolicyNameDuplicate(
+              numLabel.isNotEmpty ? '$existingName ($numLabel)' : existingName,
+            ),
+            style: AppTextStyles.bodyStrong.copyWith(
+              color: ctx.colors.textPrimary,
+            ),
           ),
-          AppButton(label: 'Use saved policy', onPressed: () => Navigator.of(ctx).pop(false)),
           AppButton(
-            label: 'Save anyway',
+            label: context.l10n.analysisUseSavedPolicy,
+            onPressed: () => Navigator.of(ctx).pop(false),
+          ),
+          AppButton(
+            label: context.l10n.analysisSaveAnyway,
             style: AppButtonStyle.secondary,
             onPressed: () => Navigator.of(ctx).pop(true),
           ),
@@ -204,12 +241,16 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
     final isDetectedPolicy = detectedType == 'policy';
     return AppSheet.show<bool>(
       context: context,
-      title: isDetectedPolicy ? 'This looks like a policy' : 'This looks like a prescription',
+      title: isDetectedPolicy
+          ? context.l10n.analysisLooksPolicy
+          : context.l10n.analysisLooksPrescription,
       bodyBuilder: (ctx) => AppSheetConfirmation(
         message: isDetectedPolicy
-            ? 'You selected a policy document in the prescription step. Save it to your Policies list instead?'
-            : 'You selected a prescription document in the policy step. Save it to your Prescriptions list instead?',
-        actionLabel: isDetectedPolicy ? 'Save to Policies' : 'Save to Prescriptions',
+            ? context.l10n.analysisSaveMisplacedPolicy
+            : context.l10n.analysisSaveMisplacedPrescription,
+        actionLabel: isDetectedPolicy
+            ? context.l10n.analysisSaveToPolicies
+            : context.l10n.analysisSaveToPrescriptions,
         onConfirm: () => Navigator.of(ctx).pop(true),
         onCancel: () => Navigator.of(ctx).pop(false),
       ),
@@ -222,7 +263,11 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
     String filename,
     List<int> bytes,
   ) async {
-    final policy = await repository.uploadPolicy(jobId: jobId, filename: filename, bytes: bytes);
+    final policy = await repository.uploadPolicy(
+      jobId: jobId,
+      filename: filename,
+      bytes: bytes,
+    );
     if (!mounted) return;
     final existing = await repository.findDuplicatePolicyByNumber(policy);
     if (!mounted) return;
@@ -235,7 +280,7 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
         setState(() {
           _newPolicies[existing.id] = existing;
         });
-        _showMessage('Kept your saved policy.', error: false);
+        _showMessage(context.l10n.analysisKeptSavedPolicy, error: false);
         return;
       }
     }
@@ -253,7 +298,11 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
     List<int> bytes, {
     bool selectInList = true,
   }) async {
-    final treatment = await repository.uploadTreatment(jobId: jobId, filename: filename, bytes: bytes);
+    final treatment = await repository.uploadTreatment(
+      jobId: jobId,
+      filename: filename,
+      bytes: bytes,
+    );
     if (!mounted) return;
     setState(() {
       _newTreatments[treatment.id] = treatment;
@@ -279,33 +328,39 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
           defaultTargetPlatform == TargetPlatform.iOS;
       final source = await AppSheet.show<_DocumentSource>(
         context: context,
-        title: isPolicy ? 'Add a policy' : 'Add a prescription',
+        title: isPolicy
+            ? context.l10n.analysisAddPolicy
+            : context.l10n.analysisAddPrescription,
         showClose: true,
         bodyBuilder: (context) {
-          final type = isPolicy ? DocumentCardType.policy : DocumentCardType.prescription;
+          final type = isPolicy
+              ? DocumentCardType.policy
+              : DocumentCardType.prescription;
           return AppRowGroup(
             onSheet: true,
             rows: [
               AppDocumentRow(
                 type: type,
-                title: 'Scan',
-                meta: 'Use the camera',
+                title: context.l10n.analysisScan,
+                meta: context.l10n.analysisUseCamera,
                 leadingIcon: AppIcons.scan,
                 grouped: true,
-                onTap: canScan ? () => Navigator.of(context).pop(_DocumentSource.camera) : null,
+                onTap: canScan
+                    ? () => Navigator.of(context).pop(_DocumentSource.camera)
+                    : null,
               ),
               AppDocumentRow(
                 type: type,
-                title: 'Upload file',
-                meta: 'PDF or image',
+                title: context.l10n.analysisUploadFile,
+                meta: context.l10n.analysisPdfOrImage,
                 leadingIcon: Icons.file_upload_outlined,
                 grouped: true,
                 onTap: () => Navigator.of(context).pop(_DocumentSource.file),
               ),
               AppDocumentRow(
                 type: type,
-                title: 'Photos',
-                meta: 'Pick from your gallery',
+                title: context.l10n.analysisPhotos,
+                meta: context.l10n.analysisPickGallery,
                 leadingIcon: Icons.photo_outlined,
                 grouped: true,
                 onTap: () => Navigator.of(context).pop(_DocumentSource.photos),
@@ -313,8 +368,8 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
               if (!isPolicy)
                 AppDocumentRow(
                   type: type,
-                  title: 'Type it in',
-                  meta: 'No document? Describe the treatment',
+                  title: context.l10n.analysisTypeIn,
+                  meta: context.l10n.analysisTypeTreatment,
                   leadingIcon: AppIcons.pencil,
                   grouped: true,
                   onTap: () => Navigator.of(context).pop(_DocumentSource.typed),
@@ -345,10 +400,16 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
 
       // Phase F §0.7: Warn before saving if a file with the same name & size is already saved.
       if (isPolicy) {
-        final existing = await repository.findMatchingPolicyFile(file.name, length);
+        final existing = await repository.findMatchingPolicyFile(
+          file.name,
+          length,
+        );
         if (!mounted) return;
         if (existing != null) {
-          final saveAnyway = await _confirmDuplicateFile(file.name, isPolicy: true);
+          final saveAnyway = await _confirmDuplicateFile(
+            file.name,
+            isPolicy: true,
+          );
           if (!mounted || saveAnyway == null) return;
           if (!saveAnyway) {
             setState(() {
@@ -358,10 +419,16 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
           }
         }
       } else {
-        final existing = await repository.findMatchingPrescriptionFile(file.name, length);
+        final existing = await repository.findMatchingPrescriptionFile(
+          file.name,
+          length,
+        );
         if (!mounted) return;
         if (existing != null) {
-          final saveAnyway = await _confirmDuplicateFile(file.name, isPolicy: false);
+          final saveAnyway = await _confirmDuplicateFile(
+            file.name,
+            isPolicy: false,
+          );
           if (!mounted || saveAnyway == null) return;
           if (!saveAnyway) {
             setState(() {
@@ -376,7 +443,11 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
       if (!await confirmDocumentConsent(context) || !mounted) return;
       final jobId = await _ensureJob(repository);
       if (!mounted) return;
-      setState(() => _pendingName = isPolicy ? 'New policy' : 'New prescription');
+      setState(
+        () => _pendingName = isPolicy
+            ? context.l10n.analysisNewPolicy
+            : context.l10n.analysisNewPrescription,
+      );
       final bytes = await file.readAsBytes();
 
       if (isPolicy) {
@@ -388,36 +459,48 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
     } on WrongDocumentTypeException catch (wrong) {
       if (!mounted) return;
       setState(() => _pendingName = null);
-      final moveToRightList = await _confirmWrongDocumentType(detectedType: wrong.detectedType);
+      final moveToRightList = await _confirmWrongDocumentType(
+        detectedType: wrong.detectedType,
+      );
       if (!mounted || moveToRightList != true) return;
       final jobId = await _ensureJob(repository);
       if (!mounted) return;
-      setState(() => _pendingName = wrong.detectedType == 'policy' ? 'New policy' : 'New prescription');
+      setState(
+        () => _pendingName = wrong.detectedType == 'policy'
+            ? context.l10n.analysisNewPolicy
+            : context.l10n.analysisNewPrescription,
+      );
       if (wrong.detectedType == 'policy') {
         await _savePolicyRecord(repository, jobId, wrong.filename, wrong.bytes);
-        _showMessage('Saved to your Policies list.', error: false);
+        _showMessage(context.l10n.analysisSavedToPolicies, error: false);
       } else {
-        await _saveTreatmentRecord(repository, jobId, wrong.filename, wrong.bytes, selectInList: false);
-        _showMessage('Saved to your Prescriptions list.', error: false);
+        await _saveTreatmentRecord(
+          repository,
+          jobId,
+          wrong.filename,
+          wrong.bytes,
+          selectInList: false,
+        );
+        _showMessage(context.l10n.analysisSavedToPrescriptions, error: false);
       }
       ref.invalidate(dashboardStatsProvider);
     } on DuplicateCheckPolicy {
-      _showMessage('This policy is already saved.', error: false);
+      _showMessage(context.l10n.analysisThisPolicySaved, error: false);
     } on UnreadableCheckDocument {
       if (!isPolicy) _resetJob();
-      _showMessage(_unreadable, error: true);
+      _showMessage(context.l10n.analysisUnreadable, error: true);
     } on DioException catch (error) {
       if (_isJobExpired(error)) _resetJob();
       _showMessage(
         error.response?.statusCode == 413
             ? config.uploadLimitMessage
             : const {400, 415, 422}.contains(error.response?.statusCode)
-            ? _unreadable
-            : "Couldn't add this document. Try again.",
+            ? context.l10n.analysisUnreadable
+            : context.l10n.analysisAddDocumentFailed,
         error: true,
       );
     } catch (_) {
-      _showMessage("Couldn't add this document. Try again.", error: true);
+      _showMessage(context.l10n.analysisAddDocumentFailed, error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -455,7 +538,7 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
     } catch (error) {
       if (_startCancelled) return;
       if (_isJobExpired(error)) _resetJob();
-      _showMessage("Couldn't start this check. Please try again.", error: true);
+      _showMessage(context.l10n.analysisStartFailed, error: true);
     } finally {
       if (mounted) setState(() => _starting = false);
     }
@@ -464,14 +547,19 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
   static bool _policyAvailable(Policy policy) =>
       policy.id.isNotEmpty &&
       DocumentSummary.policy(policy).state == AppDocumentState.ready &&
-      !const {'inactive', 'cancelled', 'canceled'}.contains(policy.status.trim().toLowerCase());
+      !const {
+        'inactive',
+        'cancelled',
+        'canceled',
+      }.contains(policy.status.trim().toLowerCase());
 
   void _togglePolicy(String id, Set<String> selected, int limit) {
     if (_busy || _starting) return;
     final updated = {...selected};
     if (!updated.remove(id)) {
       if (updated.length >= limit) {
-        final config = ref.read(appConfigProvider).value ?? AppRuntimeConfig.defaults;
+        final config =
+            ref.read(appConfigProvider).value ?? AppRuntimeConfig.defaults;
         _showMessage(config.policyLimitMessage, error: false);
         return;
       }
@@ -490,16 +578,23 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final config = ref.watch(appConfigProvider).value ?? AppRuntimeConfig.defaults;
+    final config =
+        ref.watch(appConfigProvider).value ?? AppRuntimeConfig.defaults;
     final treatmentsState = ref.watch(checkTreatmentsProvider);
-    final policiesState = _choosePolicies ? ref.watch(checkPoliciesProvider) : null;
+    final policiesState = _choosePolicies
+        ? ref.watch(checkPoliciesProvider)
+        : null;
     final savedTreatments =
         treatmentsState.value ??
-        (treatmentsState.hasError ? ref.read(prescriptionProvider.notifier).cachedPage?.docs : null) ??
+        (treatmentsState.hasError
+            ? ref.read(prescriptionProvider.notifier).cachedPage?.docs
+            : null) ??
         const <Prescription>[];
     final savedPolicies =
         policiesState?.value ??
-        (policiesState?.hasError == true ? ref.read(policiesProvider.notifier).cachedPage?.docs : null) ??
+        (policiesState?.hasError == true
+            ? ref.read(policiesProvider.notifier).cachedPage?.docs
+            : null) ??
         const <Policy>[];
     final treatments = {
       for (final item in savedTreatments)
@@ -512,7 +607,8 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
             .where(
               (item) =>
                   item.id == widget.initialPrescriptionId &&
-                  DocumentSummary.prescription(item).state == AppDocumentState.ready,
+                  DocumentSummary.prescription(item).state ==
+                      AppDocumentState.ready,
             )
             .firstOrNull;
     final policies = {
@@ -520,12 +616,20 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
         if (item.id.isNotEmpty) item.id: item,
       ..._newPolicies,
     }.values;
-    final eligible = policies.where(_policyAvailable).map((policy) => policy.id).toSet();
-    final selected = _policyIds.where(eligible.contains).take(config.maxPolicies).toSet();
+    final eligible = policies
+        .where(_policyAvailable)
+        .map((policy) => policy.id)
+        .toSet();
+    final selected = _policyIds
+        .where(eligible.contains)
+        .take(config.maxPolicies)
+        .toSet();
     final interactionLocked = _busy || _starting;
     final message = _message;
     final pendingName = _pendingName;
-    final type = _choosePolicies ? DocumentCardType.policy : DocumentCardType.prescription;
+    final type = _choosePolicies
+        ? DocumentCardType.policy
+        : DocumentCardType.prescription;
 
     return PopScope<Object?>(
       canPop: !_choosePolicies,
@@ -533,13 +637,15 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
         if (!didPop && _choosePolicies && !interactionLocked) _setStep(false);
       },
       child: FlowShell(
-        title: _choosePolicies ? 'Select policies' : 'Select prescription',
+        title: _choosePolicies
+            ? context.l10n.analysisSelectPolicies
+            : context.l10n.analysisSelectPrescription,
         step: _choosePolicies ? 2 : 1,
         onClose: _close,
         action: _choosePolicies
             ? AppIconButton(
                 icon: AppIcons.caretLeft,
-                label: 'Back to treatment',
+                label: context.l10n.analysisBackTreatment,
                 onPressed: interactionLocked ? null : () => _setStep(false),
               )
             : null,
@@ -554,50 +660,68 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
           children: [
             Text(
               _choosePolicies
-                  ? 'Pick up to ${config.maxPolicies} to see which covers more.'
-                  : "A prescription, doctor's advice or hospital estimate.",
-              style: AppTextStyles.label.copyWith(color: context.colors.textSecondary),
+                  ? context.l10n.analysisPickLimit(config.maxPolicies)
+                  : context.l10n.analysisPrescriptionDescription,
+              style: AppTextStyles.label.copyWith(
+                color: context.colors.textSecondary,
+              ),
             ),
             const SizedBox(height: DsSpace.s16),
             AppDocumentRow(
               type: type,
-              title: 'Add new',
-              meta: 'Scan, upload or pick a photo',
+              title: context.l10n.analysisAddNew,
+              meta: context.l10n.analysisAddMethods,
               addAction: true,
               onTap: interactionLocked ? null : () => _addDocument(config),
             ),
             const SizedBox(height: DsSpace.s8),
             if (pendingName != null) ...[
-              AppDocumentRow(type: type, title: pendingName, state: AppDocumentState.reading, onTap: null),
+              AppDocumentRow(
+                type: type,
+                title: pendingName,
+                state: AppDocumentState.reading,
+                onTap: null,
+              ),
               const SizedBox(height: DsSpace.s8),
             ],
             if (message != null) ...[
               AppInlineBanner(
-                kind: _isError ? AppInlineBannerKind.error : AppInlineBannerKind.info,
+                kind: _isError
+                    ? AppInlineBannerKind.error
+                    : AppInlineBannerKind.info,
                 message: message,
               ),
               const SizedBox(height: DsSpace.s12),
             ],
             const SizedBox(height: DsSpace.s8),
             Text(
-              'Saved · ${_choosePolicies ? policies.length : treatments.length}',
-              style: AppTextStyles.captionRegular.copyWith(color: context.colors.textSecondary),
+              context.l10n.analysisSavedCount(
+                _choosePolicies ? policies.length : treatments.length,
+              ),
+              style: AppTextStyles.captionRegular.copyWith(
+                color: context.colors.textSecondary,
+              ),
             ),
             const SizedBox(height: DsSpace.s8),
             if (_choosePolicies) ...[
               if (policiesState?.hasError == true)
                 _LoadIssue(
-                  message: "Couldn't load your saved policies.",
+                  message: context.l10n.analysisLoadPoliciesFailed,
                   cached: policies.isNotEmpty,
                   retry: () => ref.invalidate(checkPoliciesProvider),
                 ),
-              if (policiesState?.isLoading == true && policies.isEmpty) const _DocumentPlaceholder(),
+              if (policiesState?.isLoading == true && policies.isEmpty)
+                const _DocumentPlaceholder(),
               for (final policy in policies) ...[
                 _ChoiceRow(
                   summary: DocumentSummary.policy(policy),
                   selected: selected.contains(policy.id),
                   onTap: _policyAvailable(policy) && !interactionLocked
-                      ? () => _togglePolicy(policy.id, selected, config.maxPolicies)
+                      ? () => _togglePolicy(
+                          policy.id,
+                          selected,
+                          config.maxPolicies,
+                        )
                       : null,
                 ),
                 const SizedBox(height: DsSpace.s8),
@@ -605,18 +729,20 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
             ] else ...[
               if (treatmentsState.hasError)
                 _LoadIssue(
-                  message: "Couldn't load your saved treatment documents.",
+                  message: context.l10n.analysisLoadPrescriptionsFailed,
                   cached: treatments.isNotEmpty,
                   retry: () => ref.invalidate(checkTreatmentsProvider),
                 ),
-              if (treatmentsState.isLoading && treatments.isEmpty) const _DocumentPlaceholder(),
+              if (treatmentsState.isLoading && treatments.isEmpty)
+                const _DocumentPlaceholder(),
               for (final treatment in treatments) ...[
                 _ChoiceRow(
                   summary: DocumentSummary.prescription(treatment),
                   selected: selectedTreatment?.id == treatment.id,
                   onTap:
                       interactionLocked ||
-                          DocumentSummary.prescription(treatment).state != AppDocumentState.ready
+                          DocumentSummary.prescription(treatment).state !=
+                              AppDocumentState.ready
                       ? null
                       : () => setState(() => _treatment = treatment),
                 ),
@@ -628,9 +754,9 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
         bottomAction: AppButton(
           label: _choosePolicies
               ? (_starting
-                    ? 'Starting check…'
-                    : 'Check ${selected.length} ${selected.length == 1 ? 'policy' : 'policies'}')
-              : 'Continue',
+                    ? context.l10n.analysisStartingCheck
+                    : context.l10n.analysisCheckPolicies(selected.length))
+              : context.l10n.analysisContinue,
           busy: _starting,
           onPressed: interactionLocked
               ? null
@@ -651,7 +777,11 @@ class _NewCheckScreenState extends ConsumerState<NewCheckScreen> {
 }
 
 class _ChoiceRow extends StatelessWidget {
-  const _ChoiceRow({required this.summary, required this.selected, required this.onTap});
+  const _ChoiceRow({
+    required this.summary,
+    required this.selected,
+    required this.onTap,
+  });
 
   final DocumentSummary summary;
   final bool selected;
@@ -684,7 +814,11 @@ class _DocumentPlaceholder extends StatelessWidget {
 }
 
 class _LoadIssue extends StatelessWidget {
-  const _LoadIssue({required this.message, required this.cached, required this.retry});
+  const _LoadIssue({
+    required this.message,
+    required this.cached,
+    required this.retry,
+  });
 
   final String message;
   final bool cached;
@@ -695,7 +829,7 @@ class _LoadIssue extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: DsSpace.s8),
     child: AppInlineBanner(
       kind: cached ? AppInlineBannerKind.offline : AppInlineBannerKind.error,
-      message: cached ? 'Showing saved documents. Try refreshing when you reconnect.' : message,
+      message: cached ? context.l10n.analysisShowingSavedDocuments : message,
       onRetry: retry,
     ),
   );

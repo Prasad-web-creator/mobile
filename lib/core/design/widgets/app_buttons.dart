@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -142,7 +143,7 @@ class AppGlassAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final foreground = context.colors.textOnGradient;
     return _GlassButton(
-      label: 'Profile',
+      label: context.l10n.sharedProfile,
       size: DsSize.avatarMd,
       blur: DsEffect.avatarBlur,
       onPressed: onPressed,

@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:claimsupport/core/theme/app_palette.dart';
@@ -383,26 +384,26 @@ class EmptyState extends StatelessWidget {
 
 /// Error state with a retry action. Shows a readable message, never a raw stack trace.
 class ErrorState extends StatelessWidget {
-  final String title;
+  final String? title;
   final String? message;
   final VoidCallback? onRetry;
   final bool compact;
 
-  const ErrorState({super.key, this.title = 'Something went wrong', this.message, this.onRetry, this.compact = false});
+  const ErrorState({super.key, this.title, this.message, this.onRetry, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
     return EmptyState(
       icon: Icons.cloud_off_rounded,
-      title: title,
-      message: message ?? 'We couldn\'t load this information. Please check your connection and try again.',
+      title: title ?? context.l10n.sharedSorryError,
+      message: message ?? context.l10n.sharedLoadFailed,
       compact: compact,
       action: onRetry == null
           ? null
           : OutlinedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Try again'),
+              label: Text(context.l10n.sharedTryAgain),
               style: OutlinedButton.styleFrom(minimumSize: const Size(140, 44)),
             ),
     );
@@ -410,9 +411,10 @@ class ErrorState extends StatelessWidget {
 }
 
 /// Turns an exception into a short, user-facing sentence.
-String friendlyErrorMessage(Object? error) {
-  final serverMessage = serverErrorMessage(error);
+String friendlyErrorMessage(Object? error, {AppLocalizations? l10n}) {
+  final serverMessage = serverErrorMessage(error, l10n: l10n);
   if (serverMessage != null) return serverMessage;
+  if (l10n != null && l10n.localeName == 'ta') return localizedRequestError(error, l10n);
   final text = (error ?? '').toString();
   final lower = text.toLowerCase();
   if (lower.contains('could not reach the local backend') ||
@@ -494,8 +496,8 @@ Future<bool> showConfirmDialog(
   BuildContext context, {
   required String title,
   required String message,
-  String confirmLabel = 'Confirm',
-  String cancelLabel = 'Cancel',
+  String? confirmLabel,
+  String? cancelLabel,
   bool destructive = false,
   IconData? icon,
 }) async {
@@ -523,7 +525,7 @@ Future<bool> showConfirmDialog(
                 child: OutlinedButton(
                   onPressed: () => Navigator.of(ctx).pop(false),
                   style: OutlinedButton.styleFrom(minimumSize: const Size(0, 46)),
-                  child: Text(cancelLabel),
+                  child: Text(cancelLabel ?? ctx.l10n.sharedCancel),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -535,7 +537,7 @@ Future<bool> showConfirmDialog(
                     backgroundColor: destructive ? p.danger.fg : p.primary,
                     foregroundColor: Colors.white,
                   ),
-                  child: Text(confirmLabel),
+                  child: Text(confirmLabel ?? ctx.l10n.sharedConfirm),
                 ),
               ),
             ],

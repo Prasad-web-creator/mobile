@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/design/widgets/app_shells.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -31,13 +32,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await ApiClient().dio.post('/auth/me/google', data: {'idToken': token});
       if (!mounted) return;
       ref.invalidate(authProvider);
-      showAppSnackBar(context, 'Google sign-in linked.', tone: AppTone.success);
+      showAppSnackBar(context, context.l10n.accountGoogleLinked, tone: AppTone.success);
     } on DioException catch (error) {
       if (mounted) {
-        showAppSnackBar(context, otpErrorFrom(error, 'Could not link Google sign-in.'), tone: AppTone.warning);
+        showAppSnackBar(
+          context,
+          otpErrorFrom(error, context.l10n.accountGoogleLinkError, context.l10n),
+          tone: AppTone.warning,
+        );
       }
     } catch (_) {
-      if (mounted) showAppSnackBar(context, 'Could not link Google sign-in.', tone: AppTone.warning);
+      if (mounted) showAppSnackBar(context, context.l10n.accountGoogleLinkError, tone: AppTone.warning);
     } finally {
       if (mounted) setState(() => _linkingGoogle = false);
     }
@@ -64,7 +69,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _promptEmailOtpVerification({required String name, required String newEmail}) async {
     try {
-      final response = await ApiClient().dio.post('/auth/me/change-email/send-otp', data: {'newEmail': newEmail});
+      final response = await ApiClient().dio.post(
+        '/auth/me/change-email/send-otp',
+        data: {'newEmail': newEmail},
+      );
       final masked = response.data['destination']?.toString() ?? newEmail;
       final otpLength = OtpSendResult.fromResponse(response, fallbackDestination: masked).otpLength;
 
@@ -92,10 +100,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('Verify New Email Address', style: ctx.text.titleLarge),
+                    Text(context.l10n.accountVerifyNewEmail, style: ctx.text.titleLarge),
                     const SizedBox(height: AppSpacing.xxs),
                     Text(
-                      'We sent a verification code to $masked. Please enter it below to confirm your new email.',
+                      ctx.l10n.accountOtpSent(masked),
                       style: ctx.text.bodyMedium?.copyWith(color: p.textSecondary),
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -126,13 +134,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ],
                     const SizedBox(height: AppSpacing.lg),
                     PrimaryButton(
-                      label: isSubmitting ? 'Verifying...' : 'Verify & Save',
+                      label: isSubmitting ? context.l10n.accountVerifying : context.l10n.accountVerifySave,
                       onPressed: isSubmitting
                           ? null
                           : () async {
                               final otp = otpController.text.trim();
                               if (otp.isEmpty) {
-                                setModalState(() => errorMessage = 'Please enter the verification code.');
+                                setModalState(() => errorMessage = context.l10n.accountEnterVerification);
                                 return;
                               }
                               setModalState(() {
@@ -144,16 +152,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   '/auth/me/change-email/verify',
                                   data: {'newEmail': newEmail, 'otp': otp, 'name': name},
                                 );
+                                if (!mounted || !ctx.mounted) return;
                                 ref.invalidate(authProvider);
-                                if (ctx.mounted) Navigator.pop(ctx);
-                                if (context.mounted) {
-                                  showAppSnackBar(context, 'Email updated successfully!', tone: AppTone.success);
+                                Navigator.pop(ctx);
+                                if (mounted) {
+                                  showAppSnackBar(
+                                    context,
+                                    context.l10n.accountEmailUpdated,
+                                    tone: AppTone.success,
+                                  );
                                   Navigator.pop(context);
                                 }
                               } catch (e) {
+                                if (!ctx.mounted) return;
                                 setModalState(() {
                                   isSubmitting = false;
-                                  errorMessage = friendlyErrorMessage(e);
+                                  errorMessage = friendlyErrorMessage(e, l10n: ctx.l10n);
                                 });
                               }
                             },
@@ -165,9 +179,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           );
         },
       );
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        showAppSnackBar(context, 'Could not send verification code: ${friendlyErrorMessage(e)}', tone: AppTone.danger);
+        showAppSnackBar(context, context.l10n.accountEmailSendError, tone: AppTone.danger);
       }
     }
   }
@@ -177,10 +191,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final p = context.palette;
     final clientId = ref.watch(appConfigProvider).value?.googleClientId;
     final currentUser = ref.watch(authProvider).value;
-    final canLinkGoogle = currentUser?.emailVerified == true && clientId != null && GoogleIdentity.isSupported;
+    final canLinkGoogle =
+        currentUser?.emailVerified == true && clientId != null && GoogleIdentity.isSupported;
 
     return PushedShell(
-      title: 'Edit Profile',
+      title: context.l10n.accountEditProfile,
       onBack: () => context.canPop() ? context.pop() : context.go('/dashboard'),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -190,22 +205,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SectionHeader(
-                  title: 'Personal Information',
-                  subtitle: 'Used on your account and analysis reports.',
+                SectionHeader(
+                  title: context.l10n.accountPersonalInfo,
+                  subtitle: context.l10n.accountPersonalInfoDescription,
                 ),
                 AppCard(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Full Name', style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                      Text(
+                        context.l10n.accountFullName,
+                        style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                      ),
                       const SizedBox(height: AppSpacing.xs),
                       TextField(
                         controller: _nameController,
                         textCapitalization: TextCapitalization.words,
                         decoration: InputDecoration(
-                          hintText: 'Enter your full name',
+                          hintText: context.l10n.accountFullNameHint,
                           prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
                           filled: true,
                           fillColor: p.surfaceMuted,
@@ -228,13 +246,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      Text('Email Address', style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                      Text(
+                        context.l10n.accountEmailAddress,
+                        style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                      ),
                       const SizedBox(height: AppSpacing.xs),
                       TextField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
                         decoration: InputDecoration(
-                          hintText: 'Enter your email address',
+                          hintText: context.l10n.accountEmailHint,
                           prefixIcon: const Icon(Icons.email_outlined, size: 20),
                           filled: true,
                           fillColor: p.surfaceMuted,
@@ -261,7 +282,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 PrimaryButton(
-                  label: _isSaving ? 'Saving...' : 'Save Changes',
+                  label: _isSaving ? context.l10n.accountSaving : context.l10n.accountSaveChanges,
                   onPressed: _isSaving
                       ? null
                       : () async {
@@ -269,14 +290,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           final email = _emailController.text.trim();
 
                           if (name.isEmpty) {
-                            showAppSnackBar(context, 'Name cannot be empty', tone: AppTone.warning);
+                            showAppSnackBar(context, context.l10n.accountEmptyName, tone: AppTone.warning);
                             return;
                           }
 
                           // Basic email validation regex
                           final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
                           if (email.isEmpty || !emailRegex.hasMatch(email)) {
-                            showAppSnackBar(context, 'Please enter a valid email address', tone: AppTone.warning);
+                            showAppSnackBar(context, context.l10n.accountValidEmail, tone: AppTone.warning);
                             return;
                           }
 
@@ -293,16 +314,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           // Only name changed
                           setState(() => _isSaving = true);
                           try {
-                            await ref.read(authProvider.notifier).updateProfile(name, currentUser?.email ?? email);
+                            await ref
+                                .read(authProvider.notifier)
+                                .updateProfile(name, currentUser?.email ?? email);
                             if (context.mounted) {
-                              showAppSnackBar(context, 'Profile updated successfully!', tone: AppTone.success);
+                              showAppSnackBar(context, context.l10n.accountUpdated, tone: AppTone.success);
                               Navigator.pop(context);
                             }
                           } catch (e) {
                             if (context.mounted) {
                               showAppSnackBar(
                                 context,
-                                'Failed to update profile: ${friendlyErrorMessage(e)}',
+                                context.l10n.accountProfileUpdateError,
                                 tone: AppTone.danger,
                               );
                             }
@@ -314,10 +337,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 if (canLinkGoogle || currentUser?.googleLinked == true) ...[
                   const SizedBox(height: AppSpacing.md),
                   if (currentUser?.googleLinked == true)
-                    const Text('Google sign-in is linked.')
+                    Text(context.l10n.accountGoogleIsLinked)
                   else
                     SecondaryButton(
-                      label: _linkingGoogle ? 'Linking Google…' : 'Link Google sign-in',
+                      label: _linkingGoogle
+                          ? context.l10n.accountGoogleLinking
+                          : context.l10n.accountLinkGoogle,
                       onPressed: _linkingGoogle ? null : () => _linkGoogle(clientId!),
                     ),
                 ],

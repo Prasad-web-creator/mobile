@@ -1,3 +1,6 @@
+import 'package:claimsupport/core/localization/translation_mapper.dart';
+import 'package:claimsupport/core/localization/localization.dart';
+import 'package:claimsupport/features/summary/presentation/widgets/localized_policy_wording.dart';
 // ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -12,7 +15,9 @@ DateTime? _questionDateHint(Map<String, dynamic> question, String key) {
   final value = question[key];
   if (value == null) return null;
   final parsed = DateTime.tryParse(value.toString());
-  return parsed == null ? null : DateTime(parsed.year, parsed.month, parsed.day);
+  return parsed == null
+      ? null
+      : DateTime(parsed.year, parsed.month, parsed.day);
 }
 
 /// Every date picker in the dialog opens the same way: on the date picked
@@ -25,24 +30,106 @@ Future<DateTime?> _pickQuestionDate(
 }) {
   final now = DateTime.now();
   final firstDate = _questionDateHint(question, 'minDate') ?? DateTime(1970);
-  final maxHint = _questionDateHint(question, 'maxDate') ?? DateTime(now.year + 10, 12, 31);
+  final maxHint =
+      _questionDateHint(question, 'maxDate') ?? DateTime(now.year + 10, 12, 31);
   final lastDate = maxHint.isBefore(firstDate) ? firstDate : maxHint;
-  var initialDate = current ?? _questionDateHint(question, 'initialDate') ?? DateTime(now.year, now.month, now.day);
+  var initialDate =
+      current ??
+      _questionDateHint(question, 'initialDate') ??
+      DateTime(now.year, now.month, now.day);
   if (initialDate.isBefore(firstDate)) initialDate = firstDate;
   if (initialDate.isAfter(lastDate)) initialDate = lastDate;
-  return showDatePicker(context: context, initialDate: initialDate, firstDate: firstDate, lastDate: lastDate);
+  return showDatePicker(
+    context: context,
+    initialDate: initialDate,
+    firstDate: firstDate,
+    lastDate: lastDate,
+  );
 }
 
 // ─── Individual Question Widgets ────────────────────────────────────────────
 // Each question is its own StatefulWidget so that setState() only
 // rebuilds the ONE question card that changed, not the entire dialog.
 
+String _optionKey(String option) => option
+    .trim()
+    .toLowerCase()
+    .replaceAll('’', "'")
+    .replaceAll('itemized', 'itemised')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .replaceFirst(RegExp(r'\.$'), '');
+
+const _annexureOptions = {
+  'yes, contains items from annexure i',
+  'no, all are integral surgical consumables / package items',
+  "don't know / need itemised breakdown",
+};
+
+String? _optionTranslation(
+  BuildContext context,
+  Map<String, dynamic> question,
+  String option,
+) {
+  final labels = question['displayOptions'];
+  final targetLanguage = context.l10n.localeName;
+  final questionLanguage = question['responseLanguage'];
+  final label =
+      labels is Map &&
+          (questionLanguage == null || questionLanguage == targetLanguage)
+      ? labels[option]
+      : null;
+  if (label is String &&
+      label.trim().isNotEmpty &&
+      (targetLanguage != 'ta' || hasTamilText(label)))
+    return label;
+  return switch (_optionKey(option)) {
+    'yes' => context.l10n.analysisYes,
+    'no' => context.l10n.analysisNo,
+    "don't know" ||
+    'not sure' when targetLanguage == 'ta' => context.l10n.sharedUnknown,
+    'yes, contains items from annexure i' when targetLanguage == 'ta' =>
+      context.l10n.analysisAnnexureItemsYes,
+    'no, all are integral surgical consumables / package items'
+        when targetLanguage == 'ta' =>
+      context.l10n.analysisAnnexureItemsNo,
+    "don't know / need itemised breakdown" when targetLanguage == 'ta' =>
+      context.l10n.analysisItemizedBillNeeded,
+    _ when targetLanguage == 'ta' && !hasTamilText(option) => null,
+    _ => option,
+  };
+}
+
+String _optionLabel(
+  BuildContext context,
+  Map<String, dynamic> question,
+  String option,
+) {
+  final options = question['options'] as List? ?? const [];
+  final answer =
+      _optionTranslation(context, question, option) ??
+      context.l10n.analysisOptionNumber(options.indexOf(option) + 1);
+  final statuses = question['optionStatuses'];
+  final status = switch (statuses is Map ? statuses[option] : null) {
+    'Covered' => context.l10n.analysisCovered,
+    'Partially Covered' => context.l10n.analysisPartlyCovered,
+    'Not Covered' => context.l10n.analysisNotCovered,
+    'Needs Verification' => context.l10n.analysisNeedsVerification,
+    _ => null,
+  };
+  return status == null ? answer : '$answer · $status';
+}
+
 class _SingleChoiceQuestion extends StatefulWidget {
   final Map<String, dynamic> question;
   final String? currentValue;
   final ValueChanged<String?> onChanged;
 
-  const _SingleChoiceQuestion({super.key, required this.question, required this.currentValue, required this.onChanged});
+  const _SingleChoiceQuestion({
+    super.key,
+    required this.question,
+    required this.currentValue,
+    required this.onChanged,
+  });
 
   @override
   State<_SingleChoiceQuestion> createState() => _SingleChoiceQuestionState();
@@ -88,16 +175,25 @@ class _SingleChoiceQuestionState extends State<_SingleChoiceQuestion> {
     final q = widget.question;
     final id = (q['id'] ?? '').toString().toLowerCase();
     final title = (q['title'] ?? '').toString().toLowerCase();
-    final qText = (q['question'] ?? '').toString().toLowerCase();
+    final qText = (q['canonicalQuestion'] ?? q['question'] ?? '')
+        .toString()
+        .toLowerCase();
     final optLower = optStr.toLowerCase();
 
-    return id.contains('date') || title.contains('date') || qText.contains('date') || optLower.contains('date');
+    return id.contains('date') ||
+        title.contains('date') ||
+        qText.contains('date') ||
+        optLower.contains('date');
   }
 
   Future<void> _pickDateForOption(String optStr) async {
-    final picked = await _pickQuestionDate(context, widget.question, current: _pickedDate);
+    final picked = await _pickQuestionDate(
+      context,
+      widget.question,
+      current: _pickedDate,
+    );
     if (picked != null && mounted) {
-      final formatted = DateFormat('dd-MMM-yyyy').format(picked);
+      final formatted = DateFormat('dd-MMM-yyyy', 'en_US').format(picked);
       setState(() {
         _pickedDate = picked;
         _customInputController.text = formatted;
@@ -117,7 +213,11 @@ class _SingleChoiceQuestionState extends State<_SingleChoiceQuestion> {
           _pickDateForOption(optStr);
         }
       } else {
-        widget.onChanged(_customInputController.text.isNotEmpty ? "$optStr: ${_customInputController.text}" : optStr);
+        widget.onChanged(
+          _customInputController.text.isNotEmpty
+              ? "$optStr: ${_customInputController.text}"
+              : optStr,
+        );
       }
     } else {
       widget.onChanged(optStr);
@@ -130,7 +230,10 @@ class _SingleChoiceQuestionState extends State<_SingleChoiceQuestion> {
     final options = List<dynamic>.from(widget.question['options'] ?? []);
 
     if (options.isEmpty) {
-      return _TextInputWidget(question: widget.question, onChanged: (val) => widget.onChanged(val));
+      return _TextInputWidget(
+        question: widget.question,
+        onChanged: (val) => widget.onChanged(val),
+      );
     }
 
     return Column(
@@ -146,11 +249,13 @@ class _SingleChoiceQuestionState extends State<_SingleChoiceQuestion> {
             selected: isSelected,
             onTap: () => _handleOptionSelection(optStr),
             indicator: Icon(
-              isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+              isSelected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_unchecked_rounded,
               size: 22,
               color: isSelected ? p.primary : p.borderStrong,
             ),
-            label: optStr,
+            label: _optionLabel(context, widget.question, optStr),
             mutuallyExclusive: true,
             footer: (isSelected && requiresInput)
                 ? (isDate
@@ -159,38 +264,65 @@ class _SingleChoiceQuestionState extends State<_SingleChoiceQuestion> {
                           children: [
                             OutlinedButton.icon(
                               onPressed: () => _pickDateForOption(optStr),
-                              icon: Icon(Icons.calendar_month_rounded, size: 18, color: p.primary),
+                              icon: Icon(
+                                Icons.calendar_month_rounded,
+                                size: 18,
+                                color: p.primary,
+                              ),
                               label: Text(
                                 _pickedDate != null
-                                    ? DateFormat('dd-MMM-yyyy').format(_pickedDate!)
-                                    : 'Select Date from Calendar',
+                                    ? DateFormat.yMMMd(
+                                        dateFormatLocale(
+                                          context.l10n.localeName,
+                                        ),
+                                      ).format(_pickedDate!)
+                                    : context.l10n.analysisSelectCalendar,
                               ),
-                              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(0, 44),
+                              ),
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             TextFormField(
                               controller: _customInputController,
                               decoration: InputDecoration(
-                                hintText: 'Or enter date (e.g. 15-Feb-2026)',
+                                hintText: context.l10n.analysisEnterDate,
                                 isDense: true,
-                                prefixIcon: Icon(Icons.edit_calendar_rounded, size: 18, color: p.primary),
+                                prefixIcon: Icon(
+                                  Icons.edit_calendar_rounded,
+                                  size: 18,
+                                  color: p.primary,
+                                ),
                                 suffixIcon: IconButton(
-                                  tooltip: 'Open calendar',
-                                  icon: Icon(Icons.calendar_month_rounded, size: 18, color: p.primary),
+                                  tooltip: context.l10n.analysisCalendar,
+                                  icon: Icon(
+                                    Icons.calendar_month_rounded,
+                                    size: 18,
+                                    color: p.primary,
+                                  ),
                                   onPressed: () => _pickDateForOption(optStr),
                                 ),
                               ),
                               onChanged: (val) {
-                                widget.onChanged(val.trim().isEmpty ? null : val.trim());
+                                widget.onChanged(
+                                  val.trim().isEmpty ? null : val.trim(),
+                                );
                               },
                             ),
                           ],
                         )
                       : TextFormField(
                           controller: _customInputController,
-                          decoration: const InputDecoration(hintText: 'Please specify details...', isDense: true),
+                          decoration: InputDecoration(
+                            hintText: context.l10n.analysisSpecifyDetails,
+                            isDense: true,
+                          ),
                           onChanged: (val) {
-                            widget.onChanged(val.trim().isEmpty ? null : "$optStr: ${val.trim()}");
+                            widget.onChanged(
+                              val.trim().isEmpty
+                                  ? null
+                                  : "$optStr: ${val.trim()}",
+                            );
                           },
                         ))
                 : null,
@@ -236,24 +368,35 @@ class _OptionTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: selected ? p.primarySoft : p.surface,
               borderRadius: AppRadius.mdAll,
-              border: Border.all(color: selected ? p.primary : p.border, width: selected ? 1.5 : 1),
+              border: Border.all(
+                color: selected ? p.primary : p.border,
+                width: selected ? 1.5 : 1,
+              ),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.sm,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Padding(padding: const EdgeInsets.only(top: 1), child: indicator),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 1),
+                        child: indicator,
+                      ),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: Text(
                           label,
                           style: context.text.bodyMedium?.copyWith(
                             color: p.textPrimary,
-                            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                            fontWeight: selected
+                                ? FontWeight.w600
+                                : FontWeight.w500,
                           ),
                         ),
                       ),
@@ -261,7 +404,10 @@ class _OptionTile extends StatelessWidget {
                   ),
                   if (footer != null) ...[
                     const SizedBox(height: AppSpacing.sm),
-                    Padding(padding: const EdgeInsets.only(left: 34), child: footer),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 34),
+                      child: footer,
+                    ),
                   ],
                 ],
               ),
@@ -278,7 +424,12 @@ class _MultiChoiceQuestion extends StatefulWidget {
   final List<String> currentValues;
   final ValueChanged<List<String>> onChanged;
 
-  const _MultiChoiceQuestion({super.key, required this.question, required this.currentValues, required this.onChanged});
+  const _MultiChoiceQuestion({
+    super.key,
+    required this.question,
+    required this.currentValues,
+    required this.onChanged,
+  });
 
   @override
   State<_MultiChoiceQuestion> createState() => _MultiChoiceQuestionState();
@@ -313,9 +464,11 @@ class _MultiChoiceQuestionState extends State<_MultiChoiceQuestion> {
           padding: const EdgeInsets.only(bottom: AppSpacing.xs),
           child: _OptionTile(
             selected: isSelected,
-            label: optStr,
+            label: _optionLabel(context, widget.question, optStr),
             indicator: Icon(
-              isSelected ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+              isSelected
+                  ? Icons.check_box_rounded
+                  : Icons.check_box_outline_blank_rounded,
               size: 22,
               color: isSelected ? p.primary : p.borderStrong,
             ),
@@ -341,7 +494,12 @@ class _BooleanQuestion extends StatefulWidget {
   final bool? currentValue;
   final ValueChanged<bool> onChanged;
 
-  const _BooleanQuestion({super.key, required this.question, required this.currentValue, required this.onChanged});
+  const _BooleanQuestion({
+    super.key,
+    required this.question,
+    required this.currentValue,
+    required this.onChanged,
+  });
 
   @override
   State<_BooleanQuestion> createState() => _BooleanQuestionState();
@@ -369,10 +527,16 @@ class _BooleanQuestionState extends State<_BooleanQuestion> {
       child: SwitchListTile(
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
         title: Text(
-          'Yes / No',
-          style: context.text.bodyMedium?.copyWith(color: p.textPrimary, fontWeight: FontWeight.w600),
+          context.l10n.analysisYesNo,
+          style: context.text.bodyMedium?.copyWith(
+            color: p.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        subtitle: Text(_value ? 'Yes' : 'No', style: context.text.bodySmall),
+        subtitle: Text(
+          _value ? context.l10n.analysisYes : context.l10n.analysisNo,
+          style: context.text.bodySmall,
+        ),
         value: _value,
         onChanged: (val) {
           setState(() => _value = val);
@@ -387,7 +551,11 @@ class _TextInputWidget extends StatefulWidget {
   final Map<String, dynamic> question;
   final ValueChanged<String?> onChanged;
 
-  const _TextInputWidget({super.key, required this.question, required this.onChanged});
+  const _TextInputWidget({
+    super.key,
+    required this.question,
+    required this.onChanged,
+  });
 
   @override
   State<_TextInputWidget> createState() => _TextInputWidgetState();
@@ -412,7 +580,9 @@ class _TextInputWidgetState extends State<_TextInputWidget> {
     final q = widget.question;
     final id = (q['id'] ?? '').toString().toLowerCase();
     final title = (q['title'] ?? '').toString().toLowerCase();
-    final qText = (q['question'] ?? '').toString().toLowerCase();
+    final qText = (q['canonicalQuestion'] ?? q['question'] ?? '')
+        .toString()
+        .toLowerCase();
     final type = (q['type'] ?? '').toString().toLowerCase();
     return type == 'date' ||
         type == 'datetime' ||
@@ -424,9 +594,13 @@ class _TextInputWidgetState extends State<_TextInputWidget> {
   DateTime? _pickedDate;
 
   Future<void> _pickDate() async {
-    final picked = await _pickQuestionDate(context, widget.question, current: _pickedDate);
+    final picked = await _pickQuestionDate(
+      context,
+      widget.question,
+      current: _pickedDate,
+    );
     if (picked != null && mounted) {
-      final formatted = DateFormat('dd-MMM-yyyy').format(picked);
+      final formatted = DateFormat('dd-MMM-yyyy', 'en_US').format(picked);
       setState(() {
         _pickedDate = picked;
         _controller.text = formatted;
@@ -443,17 +617,27 @@ class _TextInputWidgetState extends State<_TextInputWidget> {
 
     return TextFormField(
       controller: _controller,
-      keyboardType: type == 'number' ? TextInputType.number : TextInputType.text,
+      keyboardType: type == 'number'
+          ? TextInputType.number
+          : TextInputType.text,
       onChanged: (val) {
         widget.onChanged(val.isEmpty ? null : val);
       },
       decoration: InputDecoration(
-        hintText: isDate ? 'e.g., 15-Feb-2026 (or tap calendar)' : 'Type your answer',
-        prefixIcon: isDate ? Icon(Icons.edit_calendar_rounded, size: 18, color: p.primary) : null,
+        hintText: isDate
+            ? context.l10n.analysisDateExample
+            : context.l10n.analysisTypeAnswer,
+        prefixIcon: isDate
+            ? Icon(Icons.edit_calendar_rounded, size: 18, color: p.primary)
+            : null,
         suffixIcon: isDate
             ? IconButton(
-                tooltip: 'Open calendar',
-                icon: Icon(Icons.calendar_month_rounded, size: 20, color: p.primary),
+                tooltip: context.l10n.analysisCalendar,
+                icon: Icon(
+                  Icons.calendar_month_rounded,
+                  size: 20,
+                  color: p.primary,
+                ),
                 onPressed: _pickDate,
               )
             : null,
@@ -467,7 +651,12 @@ class _DateQuestionWidget extends StatefulWidget {
   final String? currentValue;
   final ValueChanged<String?> onChanged;
 
-  const _DateQuestionWidget({super.key, required this.question, required this.currentValue, required this.onChanged});
+  const _DateQuestionWidget({
+    super.key,
+    required this.question,
+    required this.currentValue,
+    required this.onChanged,
+  });
 
   @override
   State<_DateQuestionWidget> createState() => _DateQuestionWidgetState();
@@ -490,9 +679,13 @@ class _DateQuestionWidgetState extends State<_DateQuestionWidget> {
   }
 
   Future<void> _pickDate() async {
-    final picked = await _pickQuestionDate(context, widget.question, current: _selectedDate);
+    final picked = await _pickQuestionDate(
+      context,
+      widget.question,
+      current: _selectedDate,
+    );
     if (picked != null && mounted) {
-      final formatted = DateFormat('dd-MMM-yyyy').format(picked);
+      final formatted = DateFormat('dd-MMM-yyyy', 'en_US').format(picked);
       setState(() {
         _selectedDate = picked;
         _controller.text = formatted;
@@ -514,7 +707,10 @@ class _DateQuestionWidgetState extends State<_DateQuestionWidget> {
         borderRadius: AppRadius.mdAll,
         child: Container(
           constraints: const BoxConstraints(minHeight: 48),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.sm,
+          ),
           decoration: BoxDecoration(
             borderRadius: AppRadius.mdAll,
             border: Border.all(color: hasValue ? p.primary : p.border),
@@ -525,7 +721,7 @@ class _DateQuestionWidgetState extends State<_DateQuestionWidget> {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
-                  hasValue ? _controller.text : 'Select date *',
+                  hasValue ? _controller.text : context.l10n.analysisSelectDate,
                   style: context.text.bodyMedium?.copyWith(
                     fontWeight: hasValue ? FontWeight.w600 : FontWeight.w400,
                     color: hasValue ? p.textPrimary : p.textTertiary,
@@ -621,9 +817,14 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
     final qMark = trimmed.lastIndexOf('?');
     if (qMark <= 0) return (context: '', question: trimmed);
     final before = trimmed.substring(0, qMark);
-    final boundary = RegExp(r'[.!?]\s+').allMatches(before).fold<int>(-1, (_, m) => m.end);
+    final boundary = RegExp(
+      r'[.!?]\s+',
+    ).allMatches(before).fold<int>(-1, (_, m) => m.end);
     if (boundary <= 0) return (context: '', question: trimmed);
-    return (context: trimmed.substring(0, boundary).trim(), question: trimmed.substring(boundary).trim());
+    return (
+      context: trimmed.substring(0, boundary).trim(),
+      question: trimmed.substring(boundary).trim(),
+    );
   }
 
   void _handleSubmit() {
@@ -634,7 +835,8 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
     final String type = (q['type'] ?? 'text').toString().toLowerCase();
     final String id = (q['id'] ?? '').toString();
     final String title = (q['title'] ?? '').toString();
-    final String qText = (q['question'] ?? '').toString();
+    final String qText = (q['canonicalQuestion'] ?? q['question'] ?? '')
+        .toString();
     final options = List<dynamic>.from(q['options'] ?? []);
 
     final bool isDate =
@@ -687,7 +889,11 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
       case 'text':
       case 'number':
       default:
-        return _TextInputWidget(key: ValueKey('text_$id'), question: q, onChanged: (val) => _onAnswerChanged(id, val));
+        return _TextInputWidget(
+          key: ValueKey('text_$id'),
+          question: q,
+          onChanged: (val) => _onAnswerChanged(id, val),
+        );
     }
   }
 
@@ -696,101 +902,82 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
     final p = context.palette;
     final t = context.text;
     final canSubmit = _canSubmit();
-    final hasRequired = _questions.any((q) => q is Map && q['required'] == true);
+    final hasRequired = _questions.any(
+      (q) => q is Map && q['required'] == true,
+    );
+    final language = reportLanguage(
+      _questions.firstOrNull?['responseLanguage'] ??
+          widget.clarificationData['responseLanguage'],
+    );
 
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xl),
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xl,
+      ),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ── Header ──────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.md),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const IconTile(icon: Icons.quiz_outlined, size: 44),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Clarification Needed', style: t.titleLarge),
-                        // Multi-policy comparison only: which policy (by its
-                        // number on the comparison screen) is asking.
-                        if (widget.policyNumber != null) ...[
-                          const SizedBox(height: AppSpacing.xxs),
-                          StatusBadge(
-                            dense: true,
-                            tone: AppTone.warning,
-                            icon: Icons.shield_outlined,
-                            label: (widget.policyCount ?? 0) > 1
-                                ? 'Policy ${widget.policyNumber} of ${widget.policyCount}'
-                                : 'Policy ${widget.policyNumber}',
-                          ),
-                        ],
-                        const SizedBox(height: AppSpacing.xxs),
-                        Text(
-                          widget.contextLabel != null
-                              ? 'These questions are about one policy only.'
-                              : 'Answer to complete your coverage analysis.',
-                          style: t.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Divider(height: 1, color: p.border),
-
-            // ── Which policy is asking ───────────────────────────────
-            // In a multi-policy comparison the answers only apply to this one
-            // policy, so it is named up front rather than in fine print.
-            if (widget.contextLabel != null) ...[
-              Container(
-                color: p.primarySoft,
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Header ──────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (widget.policyNumber != null)
-                      Container(
-                        width: 32,
-                        height: 32,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(color: p.primary, shape: BoxShape.circle),
-                        child: Text(
-                          '${widget.policyNumber}',
-                          style: t.titleSmall?.copyWith(color: p.onPrimary, fontWeight: FontWeight.w700),
-                        ),
-                      )
-                    else
-                      Icon(Icons.shield_outlined, size: 20, color: p.primary),
+                    const IconTile(icon: Icons.quiz_outlined, size: 44),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            widget.policyNumber != null
-                                ? 'Asked about Policy ${widget.policyNumber}'
-                                      '${(widget.policyCount ?? 0) > 1 ? ' of ${widget.policyCount}' : ''}'
-                                : 'Asked about this policy',
-                            style: t.labelSmall,
+                            context.l10n.analysisClarificationNeeded,
+                            style: t.titleLarge,
                           ),
-                          const SizedBox(height: 2),
-                          Text(widget.contextLabel!, style: t.titleSmall),
-                          if ((widget.contextSubLabel ?? '').isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(widget.contextSubLabel!, style: t.bodySmall),
+                          if (language != context.l10n.localeName)
+                            Text(
+                              context.l10n.analysisOtherQuestionLanguage(
+                                reportLanguageName(context.l10n, language),
+                              ),
+                              style: t.bodySmall,
+                            ),
+
+                          // Multi-policy comparison only: which policy (by its
+                          // number on the comparison screen) is asking.
+                          if (widget.policyNumber != null) ...[
+                            const SizedBox(height: AppSpacing.xxs),
+                            StatusBadge(
+                              dense: true,
+                              tone: AppTone.warning,
+                              icon: Icons.shield_outlined,
+                              label: (widget.policyCount ?? 0) > 1
+                                  ? context.l10n.analysisPolicyOf(
+                                      widget.policyNumber!,
+                                      widget.policyCount!,
+                                    )
+                                  : context.l10n.analysisPolicyIndex(
+                                      widget.policyNumber!,
+                                    ),
+                            ),
                           ],
                           const SizedBox(height: AppSpacing.xxs),
-                          Text(widget.queueLabel ?? 'Your other policies are unaffected.', style: t.bodySmall),
+                          Text(
+                            widget.contextLabel != null
+                                ? context.l10n.analysisOnePolicyQuestions
+                                : context.l10n.analysisAnswerToComplete,
+                            style: t.bodySmall,
+                          ),
                         ],
                       ),
                     ),
@@ -798,14 +985,87 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
                 ),
               ),
               Divider(height: 1, color: p.border),
-            ],
 
-            // ── Scrollable Questions ─────────────────────────────────
-            Flexible(
-              child: ListView.separated(
+              // ── Which policy is asking ───────────────────────────────
+              // In a multi-policy comparison the answers only apply to this one
+              // policy, so it is named up front rather than in fine print.
+              if (widget.contextLabel != null) ...[
+                Container(
+                  color: p.primarySoft,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.sm,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (widget.policyNumber != null)
+                        Container(
+                          width: 32,
+                          height: 32,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: p.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '${widget.policyNumber}',
+                            style: t.titleSmall?.copyWith(
+                              color: p.onPrimary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        )
+                      else
+                        Icon(Icons.shield_outlined, size: 20, color: p.primary),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.policyNumber != null
+                                  ? context.l10n.analysisAskedPolicy(
+                                      (widget.policyCount ?? 0) > 1
+                                          ? context.l10n.analysisPolicyOf(
+                                              widget.policyNumber!,
+                                              widget.policyCount!,
+                                            )
+                                          : context.l10n.analysisPolicyIndex(
+                                              widget.policyNumber!,
+                                            ),
+                                    )
+                                  : context.l10n.analysisAskedThisPolicy,
+                              style: t.labelSmall,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(widget.contextLabel!, style: t.titleSmall),
+                            if ((widget.contextSubLabel ?? '').isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(widget.contextSubLabel!, style: t.bodySmall),
+                            ],
+                            const SizedBox(height: AppSpacing.xxs),
+                            Text(
+                              widget.queueLabel ??
+                                  context.l10n.analysisOtherPolicies,
+                              style: t.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: p.border),
+              ],
+
+              // ── Scrollable Questions ─────────────────────────────────
+              ListView.separated(
+                physics: const NeverScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 shrinkWrap: true,
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 itemCount: _questions.length,
                 separatorBuilder: (context, index) => Padding(
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
@@ -814,13 +1074,48 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
                 itemBuilder: (context, index) {
                   final q = _questions[index];
                   final reason = q['reason'];
+                  final tamil = context.l10n.localeName == 'ta';
+                  final options = (q['options'] as List? ?? const [])
+                      .whereType<String>()
+                      .toList();
+                  final originals = [
+                    for (final (index, option) in options.indexed)
+                      if (tamil &&
+                          _optionTranslation(context, q, option) == null)
+                        '${context.l10n.analysisOptionNumber(index + 1)} — $option',
+                  ];
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // Question header: topic, any context sentences, then the question itself.
                       Builder(
                         builder: (context) {
-                          final parts = _splitQuestion((q['question'] ?? '').toString());
+                          final raw = (q['question'] ?? '').toString();
+                          final canonical =
+                              q['canonicalQuestion']?.toString() ?? raw;
+                          final wantsEnglishOriginal =
+                              context.l10n.localeName == 'en' &&
+                              q['responseLanguage'] == 'ta';
+                          final optionKeys = options.map(_optionKey).toSet();
+                          final needsTranslation =
+                              tamil &&
+                              (!hasTamilText(raw) ||
+                                  q['questionTranslationMissing'] == true);
+                          final annexureFallback =
+                              needsTranslation &&
+                              optionKeys.length == _annexureOptions.length &&
+                              optionKeys.containsAll(_annexureOptions);
+                          final display = annexureFallback
+                              ? context.l10n.analysisAnnexureItemsQuestion
+                              : needsTranslation
+                              ? context
+                                    .l10n
+                                    .analysisDetailTranslationUnavailable
+                              : wantsEnglishOriginal && canonical.isNotEmpty
+                              ? canonical
+                              : raw;
+                          final title = q['title']?.toString() ?? '';
+                          final parts = _splitQuestion(display);
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -830,7 +1125,10 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
                                     width: 22,
                                     height: 22,
                                     alignment: Alignment.center,
-                                    decoration: BoxDecoration(color: p.primarySoft, shape: BoxShape.circle),
+                                    decoration: BoxDecoration(
+                                      color: p.primarySoft,
+                                      shape: BoxShape.circle,
+                                    ),
                                     child: Text(
                                       '${index + 1}',
                                       style: t.labelSmall?.copyWith(
@@ -843,37 +1141,86 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
                                   const SizedBox(width: AppSpacing.xs),
                                   Expanded(
                                     child: Text(
-                                      (q['title'] ?? 'Question ${index + 1}').toString(),
-                                      style: t.labelMedium?.copyWith(color: p.primary, fontWeight: FontWeight.w700),
+                                      title.isEmpty ||
+                                              (tamil && !hasTamilText(title))
+                                          ? context.l10n.analysisQuestionNumber(
+                                              index + 1,
+                                            )
+                                          : title,
+                                      style: t.labelMedium?.copyWith(
+                                        color: p.primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
                               if (parts.context.isNotEmpty) ...[
                                 const SizedBox(height: AppSpacing.sm),
-                                Text(parts.context, textAlign: TextAlign.start, style: t.bodyMedium),
+                                Text(
+                                  parts.context,
+                                  textAlign: TextAlign.start,
+                                  style: t.bodyMedium,
+                                ),
                               ],
                               if (parts.question.isNotEmpty) ...[
                                 const SizedBox(height: AppSpacing.xs),
-                                Text(parts.question, style: t.titleMedium?.copyWith(height: 1.35)),
+                                Text(
+                                  parts.question,
+                                  style: t.titleMedium?.copyWith(height: 1.35),
+                                ),
                               ],
+                              if (needsTranslation &&
+                                  !annexureFallback &&
+                                  canonical.isNotEmpty)
+                                Material(
+                                  type: MaterialType.transparency,
+                                  child: ExpansionTile(
+                                    tilePadding: EdgeInsets.zero,
+                                    title: Text(
+                                      context.l10n.analysisViewOriginalQuestion,
+                                    ),
+                                    children: [SelectableText(canonical)],
+                                  ),
+                                ),
                             ],
                           );
                         },
                       ),
-                      if (reason != null && (reason as String).isNotEmpty) ...[
+                      if (reason is String &&
+                          reason.isNotEmpty &&
+                          (!tamil || hasTamilText(reason))) ...[
                         const SizedBox(height: AppSpacing.sm),
                         InfoBanner(
                           tone: AppTone.warning,
                           icon: Icons.info_outline_rounded,
-                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                            vertical: AppSpacing.xs,
+                          ),
                           child: Text(
                             reason,
                             textAlign: TextAlign.start,
-                            style: t.bodySmall?.copyWith(color: p.textPrimary.withAlpha(220)),
+                            style: t.bodySmall?.copyWith(
+                              color: p.textPrimary.withAlpha(220),
+                            ),
                           ),
                         ),
                       ],
+                      if (originals.isNotEmpty)
+                        Material(
+                          type: MaterialType.transparency,
+                          child: ExpansionTile(
+                            tilePadding: EdgeInsets.zero,
+                            title: Text(
+                              context.l10n.analysisViewOriginalOptions,
+                            ),
+                            children: [
+                              for (final original in originals)
+                                SelectableText(original),
+                            ],
+                          ),
+                        ),
                       const SizedBox(height: AppSpacing.sm),
                       // Input widget — isolated StatefulWidget per question
                       _buildQuestionInput(q),
@@ -881,52 +1228,62 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
                   );
                 },
               ),
-            ),
 
-            // ── Footer ───────────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: p.border)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (hasRequired && !canSubmit) ...[
-                    Text(
-                      'Please answer the questions above to continue.',
-                      textAlign: TextAlign.center,
-                      style: t.bodySmall,
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                  ],
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () {
-                            developer.log('[Clarification] Cancel pressed');
-                            widget.onCancel();
-                          },
-                          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
-                          child: const Text('Cancel'),
-                        ),
+              // ── Footer ───────────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                ),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: p.border)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (hasRequired && !canSubmit) ...[
+                      Text(
+                        context.l10n.analysisAnswerAbove,
+                        textAlign: TextAlign.center,
+                        style: t.bodySmall,
                       ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        flex: 2,
-                        child: FilledButton(
-                          onPressed: canSubmit ? _handleSubmit : null,
-                          style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-                          child: const Text('Submit Answers', overflow: TextOverflow.ellipsis),
-                        ),
-                      ),
+                      const SizedBox(height: AppSpacing.xs),
                     ],
-                  ),
-                ],
+                    OverflowBar(
+                      alignment: MainAxisAlignment.spaceBetween,
+                      spacing: AppSpacing.sm,
+                      overflowSpacing: AppSpacing.xs,
+                      overflowAlignment: OverflowBarAlignment.end,
+                      children: [
+                        OutlinedButton(
+                          onPressed: widget.onCancel,
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 48),
+                          ),
+                          child: Text(
+                            context.l10n.analysisCancel,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        FilledButton(
+                          onPressed: canSubmit ? _handleSubmit : null,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(0, 48),
+                          ),
+                          child: Text(
+                            context.l10n.analysisSubmitAnswers,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

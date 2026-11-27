@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:claimsupport/core/design/app_icons.dart';
 
@@ -13,9 +14,9 @@ class CheckSteps extends StatelessWidget {
     final c = context.colors;
     final i = context.illustration;
     final steps = [
-      (AppIcons.pillFill, i.paperWarmTop, i.paperWarmEdge, i.accentRedTop, 'Select prescription'),
-      (AppIcons.shieldCheckFill, i.paperCoolTop, i.paperCoolEdge, i.accentBlueTop, 'Select policy'),
-      (AppIcons.listChecks, c.surfaceCard, c.borderSubtle, c.textPrimary, 'View claim coverage'),
+      (AppIcons.pillFill, i.paperWarmTop, i.paperWarmEdge, i.accentRedTop, context.l10n.sharedSelectPrescription),
+      (AppIcons.shieldCheckFill, i.paperCoolTop, i.paperCoolEdge, i.accentBlueTop, context.l10n.sharedSelectPolicy),
+      (AppIcons.listChecks, c.surfaceCard, c.borderSubtle, c.textPrimary, context.l10n.sharedViewClaimCoverage),
     ];
 
     return Column(

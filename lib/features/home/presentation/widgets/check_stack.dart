@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
@@ -39,8 +40,8 @@ class AppCheckStack extends StatefulWidget {
 enum _StackMotion { idle, out, tuck, cancel, fade, insert }
 
 class _AppCheckStackState extends State<AppCheckStack> with SingleTickerProviderStateMixin {
-  static const _next = CustomSemanticsAction(label: 'Next check');
-  static const _previous = CustomSemanticsAction(label: 'Previous check');
+  CustomSemanticsAction get _next => CustomSemanticsAction(label: context.l10n.sharedNextCheck);
+  CustomSemanticsAction get _previous => CustomSemanticsAction(label: context.l10n.sharedPreviousCheck);
   static const _spring = HomeEntrance.spring;
   static const _commitDistance = 0.35;
   static const _commitVelocity = 700.0;
@@ -444,7 +445,7 @@ class CheckStackViewAll extends StatelessWidget {
             border: BorderSide(color: c.borderSubtle),
             radius: DsShape.radiusFull,
             onTap: onTap,
-            semanticLabel: 'View all',
+            semanticLabel: context.l10n.sharedViewAll,
             child: ExcludeSemantics(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 13),
@@ -454,7 +455,7 @@ class CheckStackViewAll extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     spacing: DsSpace.s6,
                     children: [
-                      Text('View all', style: AppTextStyles.label.copyWith(color: c.textPrimary)),
+                      Text(context.l10n.sharedViewAll, style: AppTextStyles.label.copyWith(color: c.textPrimary)),
                       Icon(AppIcons.caretRight, size: DsSize.iconXs, color: c.iconDefault),
                     ],
                   ),

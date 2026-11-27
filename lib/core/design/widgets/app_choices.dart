@@ -1,4 +1,6 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:flutter/material.dart';
+import 'package:claimsupport/core/localization/translation_mapper.dart';
 
 import 'package:claimsupport/core/design/app_check_status.dart';
 import 'package:claimsupport/core/design/design.dart';
@@ -121,8 +123,8 @@ class AppPolicySwitcher extends StatelessWidget {
             selected: i == selectedIndex,
             semanticLabel: [
               policy.label,
-              policy.kind.coverageLabel ?? policy.statusLabel,
-              if (policy.best) 'Best',
+              localizedCheckStatus(context.l10n, policy.kind.coverageLabel ?? policy.statusLabel),
+              if (policy.best) context.l10n.sharedBest,
             ].join(', '),
             onTap: () => onChanged(i),
             child: Row(
@@ -144,7 +146,7 @@ class AppPolicySwitcher extends StatelessWidget {
                     decoration: ShapeDecoration(color: c.surfaceCard, shape: DsShape.shape(DsShape.radiusXs)),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: DsSpace.s4, vertical: DsSpace.s2),
-                      child: Text('Best', style: AppTextStyles.captionStrong.copyWith(color: c.textPrimary)),
+                      child: Text(context.l10n.sharedBest, style: AppTextStyles.captionStrong.copyWith(color: c.textPrimary)),
                     ),
                   ),
                 ],

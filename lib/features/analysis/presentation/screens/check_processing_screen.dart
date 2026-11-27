@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -29,10 +30,12 @@ class CheckProcessingScreen extends ConsumerStatefulWidget {
   final String jobId;
 
   @override
-  ConsumerState<CheckProcessingScreen> createState() => _CheckProcessingScreenState();
+  ConsumerState<CheckProcessingScreen> createState() =>
+      _CheckProcessingScreenState();
 }
 
-class _CheckProcessingScreenState extends ConsumerState<CheckProcessingScreen> with WidgetsBindingObserver {
+class _CheckProcessingScreenState extends ConsumerState<CheckProcessingScreen>
+    with WidgetsBindingObserver {
   late final VoidCallback _viewClosed;
   late final VoidCallback _removeExitGuard;
   Timer? _pollTimer;
@@ -49,7 +52,8 @@ class _CheckProcessingScreenState extends ConsumerState<CheckProcessingScreen> w
   bool _cancelFailed = false;
   int _readGeneration = 0;
 
-  bool get _canLeave => _stopped.contains(_status) || _finished.contains(_status);
+  bool get _canLeave =>
+      _stopped.contains(_status) || _finished.contains(_status);
 
   @override
   void initState() {
@@ -139,7 +143,9 @@ class _CheckProcessingScreenState extends ConsumerState<CheckProcessingScreen> w
         _disconnected = false;
         _answerFailed = false;
       });
-      ref.read(checkCompletionMonitorProvider.notifier).acknowledge(widget.jobId);
+      ref
+          .read(checkCompletionMonitorProvider.notifier)
+          .acknowledge(widget.jobId);
       ref.invalidate(homeChecksProvider);
       ref.invalidate(dashboardStatsProvider);
       return true;
@@ -156,17 +162,23 @@ class _CheckProcessingScreenState extends ConsumerState<CheckProcessingScreen> w
     if (_submitting || !_foreground || _exitRequest != null) return;
     final generation = ++_readGeneration;
     try {
-      final job = await ref.read(newCheckRepositoryProvider).readJob(widget.jobId);
+      final job = await ref
+          .read(newCheckRepositoryProvider)
+          .readJob(widget.jobId);
       if (!mounted || generation != _readGeneration) return;
       final status = job['status'] as String? ?? 'queued';
-      final session = MultiAnalysisSession.fromJson(AnalysisRepository.jobSession(job));
+      final session = MultiAnalysisSession.fromJson(
+        AnalysisRepository.jobSession(job),
+      );
       setState(() {
         _status = status;
         _question = session.pendingClarification;
         _disconnected = false;
       });
       if (_finished.contains(status)) {
-        ref.read(checkCompletionMonitorProvider.notifier).acknowledge(widget.jobId);
+        ref
+            .read(checkCompletionMonitorProvider.notifier)
+            .acknowledge(widget.jobId);
         context.pushReplacement('/checks/${widget.jobId}');
         return;
       }
@@ -189,13 +201,18 @@ class _CheckProcessingScreenState extends ConsumerState<CheckProcessingScreen> w
       builder: (context) => AppDesignSurface(
         child: ClarificationDialog(
           clarificationData: {'questions': question.questions},
-          contextLabel: question.displayName,
+          contextLabel: question.displayName == 'Policy' ? context.l10n.sharedPolicy : question.displayName,
           onSubmit: (answers) => Navigator.of(context).pop(answers),
           onCancel: () => Navigator.of(context).pop(),
         ),
       ),
     );
-    if (!mounted || answers == null || _submitting || _canLeave || _exitRequest != null) return;
+    if (!mounted ||
+        answers == null ||
+        _submitting ||
+        _canLeave ||
+        _exitRequest != null)
+      return;
     _pollTimer?.cancel();
     _readGeneration++;
     setState(() {
@@ -203,7 +220,9 @@ class _CheckProcessingScreenState extends ConsumerState<CheckProcessingScreen> w
       _answerFailed = false;
     });
     try {
-      await ref.read(newCheckRepositoryProvider).submitAnswers(widget.jobId, question.policyId, answers);
+      await ref
+          .read(newCheckRepositoryProvider)
+          .submitAnswers(widget.jobId, question.policyId, answers);
       if (mounted && !_canLeave) {
         setState(() {
           _question = null;
@@ -227,15 +246,18 @@ class _CheckProcessingScreenState extends ConsumerState<CheckProcessingScreen> w
     final awaitingInput = status == 'waiting_for_user';
     final question = _question;
     final title = switch (status) {
-      _ when _cancelling => 'Stopping the analysis…',
-      'cancelling' => 'Stopping the analysis…',
-      'waiting_for_user' => 'We need a little more information',
-      'failed' => "Couldn't finish this check",
-      'cancelled' => 'This check was cancelled',
-      'expired' => 'This check expired',
-      'created' => 'This check hasn’t started',
-      'extracting_policy_metadata' || 'analyzing' || 'reanalyzing' || 'completed' => 'Checking your policies…',
-      _ => 'Reading your documents…',
+      _ when _cancelling => context.l10n.analysisStopping,
+      'cancelling' => context.l10n.analysisStopping,
+      'waiting_for_user' => context.l10n.analysisNeedMoreInformation,
+      'failed' => context.l10n.analysisCouldNotFinish,
+      'cancelled' => context.l10n.analysisCheckCancelled,
+      'expired' => context.l10n.analysisCheckExpired,
+      'created' => context.l10n.analysisCheckNotStarted,
+      'extracting_policy_metadata' ||
+      'analyzing' ||
+      'reanalyzing' ||
+      'completed' => context.l10n.analysisCheckingPolicies,
+      _ => context.l10n.analysisReadingDocuments,
     };
 
     return FlowShell(
@@ -248,13 +270,15 @@ class _CheckProcessingScreenState extends ConsumerState<CheckProcessingScreen> w
           textStyle: AppTextStyles.subheadStrong,
         ),
         onPressed: _cancelling ? null : () => _leave(goHome: true),
-        child: const Text('Go to Home'),
+        child: Text(context.l10n.analysisGoHome),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final c = context.colors;
           return SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: DsSpace.screenPadding),
+            padding: const EdgeInsets.symmetric(
+              horizontal: DsSpace.screenPadding,
+            ),
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
               child: Column(
@@ -262,17 +286,23 @@ class _CheckProcessingScreenState extends ConsumerState<CheckProcessingScreen> w
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 spacing: DsSpace.s16,
                 children: [
-                  if (!stopped) Center(child: _ProcessingArtwork(active: !awaitingInput)),
+                  if (!stopped)
+                    Center(child: _ProcessingArtwork(active: !awaitingInput)),
                   Semantics(
                     header: true,
                     liveRegion: true,
                     child: Text(
                       title,
                       textAlign: TextAlign.center,
-                      style: AppTextStyles.headline.copyWith(color: c.textPrimary),
+                      style: AppTextStyles.headline.copyWith(
+                        color: c.textPrimary,
+                      ),
                     ),
                   ),
-                  if (!stopped && !awaitingInput && !_disconnected && !_cancelling)
+                  if (!stopped &&
+                      !awaitingInput &&
+                      !_disconnected &&
+                      !_cancelling)
                     Center(
                       child: SizedBox(
                         width: 120,
@@ -280,7 +310,9 @@ class _CheckProcessingScreenState extends ConsumerState<CheckProcessingScreen> w
                           child: LinearProgressIndicator(
                             value: DsMotion.reduced(context) ? 0.45 : null,
                             minHeight: 4,
-                            borderRadius: const BorderRadius.all(Radius.circular(4)),
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(4),
+                            ),
                             color: c.buttonPrimary,
                             backgroundColor: c.borderSubtle,
                           ),
@@ -290,29 +322,36 @@ class _CheckProcessingScreenState extends ConsumerState<CheckProcessingScreen> w
                   if (_disconnected)
                     AppInlineBanner(
                       kind: AppInlineBannerKind.offline,
-                      message: "Couldn't refresh. Your check can keep running.",
+                      message: context.l10n.analysisRefreshFailed,
                       onRetry: () => unawaited(_read()),
                     ),
                   if (_answerFailed)
-                    const AppInlineBanner(
+                    AppInlineBanner(
                       kind: AppInlineBannerKind.error,
-                      message: "Couldn't save your answer. Try again.",
+                      message: context.l10n.analysisSaveAnswerFailed,
                     ),
                   if (_cancelFailed)
                     AppInlineBanner(
                       kind: AppInlineBannerKind.error,
-                      message: "Couldn't confirm the analysis stopped. Try again.",
+                      message: context.l10n.analysisStopFailed,
                       onRetry: () => unawaited(_confirmExit()),
                     ),
                   if (stopped)
-                    AppButton(label: 'Start a new check', onPressed: () => context.pushReplacement('/check/new'))
+                    AppButton(
+                      label: context.l10n.analysisStartNewCheck,
+                      onPressed: () => context.pushReplacement('/check/new'),
+                    )
                   else if (!_cancelling && awaitingInput)
                     if (question != null)
-                      AppButton(label: 'Answer question', busy: _submitting, onPressed: () => _answer(question))
+                      AppButton(
+                        label: context.l10n.analysisAnswerQuestion,
+                        busy: _submitting,
+                        onPressed: () => _answer(question),
+                      )
                     else
                       AppInlineBanner(
                         kind: AppInlineBannerKind.info,
-                        message: 'No question is available yet.',
+                        message: context.l10n.analysisNoQuestionAvailable,
                         onRetry: () => unawaited(_read()),
                       ),
                 ],
@@ -334,8 +373,12 @@ class _ProcessingArtwork extends StatefulWidget {
   State<_ProcessingArtwork> createState() => _ProcessingArtworkState();
 }
 
-class _ProcessingArtworkState extends State<_ProcessingArtwork> with SingleTickerProviderStateMixin {
-  late final _controller = AnimationController(vsync: this, duration: DsMotion.slow * 4);
+class _ProcessingArtworkState extends State<_ProcessingArtwork>
+    with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: DsMotion.slow * 4,
+  );
 
   void _updateMotion() {
     if (!widget.active || DsMotion.reduced(context)) {
@@ -378,7 +421,9 @@ class _ProcessingArtworkState extends State<_ProcessingArtwork> with SingleTicke
             top: 0,
             width: 112,
             height: 140,
-            child: FittedBox(child: AppIllustration(AppIllustrationKind.policy)),
+            child: FittedBox(
+              child: AppIllustration(AppIllustrationKind.policy),
+            ),
           ),
           Positioned(
             left: 0,
@@ -386,8 +431,12 @@ class _ProcessingArtworkState extends State<_ProcessingArtwork> with SingleTicke
             width: 112,
             height: 140,
             child: SlideTransition(
-              position: progress.drive(Tween(begin: Offset.zero, end: const Offset(.28, -.12))),
-              child: const FittedBox(child: AppIllustration(AppIllustrationKind.prescription)),
+              position: progress.drive(
+                Tween(begin: Offset.zero, end: const Offset(.28, -.12)),
+              ),
+              child: const FittedBox(
+                child: AppIllustration(AppIllustrationKind.prescription),
+              ),
             ),
           ),
         ],

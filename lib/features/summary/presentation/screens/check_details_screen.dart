@@ -1,3 +1,5 @@
+import 'package:claimsupport/core/localization/localization.dart';
+import 'package:claimsupport/core/localization/translation_mapper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,29 +22,40 @@ import 'package:claimsupport/features/home/data/check_summary.dart';
 import 'package:claimsupport/features/summary/data/check_details_repository.dart';
 import 'package:claimsupport/features/summary/presentation/screens/coverage_check_report.dart';
 
-final checkDetailsRepositoryProvider = Provider((ref) => CheckDetailsRepository());
-
-final checkDetailsProvider = FutureProvider.autoDispose.family<AnalysisReportGroup, String>(
-  (ref, groupId) => ref.watch(checkDetailsRepositoryProvider).loadGroup(groupId),
+final checkDetailsRepositoryProvider = Provider(
+  (ref) => CheckDetailsRepository(),
 );
 
-final _treatmentDetails = FutureProvider.autoDispose.family<CheckDocumentDetails, AnalysisReportGroup>(
-  (ref, group) => ref.watch(checkDetailsRepositoryProvider).loadTreatment(group),
-);
+final checkDetailsProvider = FutureProvider.autoDispose
+    .family<AnalysisReportGroup, String>(
+      (ref, groupId) =>
+          ref.watch(checkDetailsRepositoryProvider).loadGroup(groupId),
+    );
 
-final _policyDetails = FutureProvider.autoDispose.family<CheckDocumentDetails, PolicyReportRow>(
-  (ref, policy) => ref.watch(checkDetailsRepositoryProvider).loadPolicy(policy),
-);
+final _treatmentDetails = FutureProvider.autoDispose
+    .family<CheckDocumentDetails, AnalysisReportGroup>(
+      (ref, group) =>
+          ref.watch(checkDetailsRepositoryProvider).loadTreatment(group),
+    );
+
+final _policyDetails = FutureProvider.autoDispose
+    .family<CheckDocumentDetails, PolicyReportRow>(
+      (ref, policy) =>
+          ref.watch(checkDetailsRepositoryProvider).loadPolicy(policy),
+    );
 
 final _treatmentFile = FutureProvider.autoDispose.family(
   (ref, String id) => ref.watch(checkDetailsRepositoryProvider).loadFile(id),
 );
 
-const _disclaimer = 'An estimate from your documents. Your insurer makes the final decision.';
 const _shareChannel = MethodChannel('policy_pal/share');
 
 class CheckDetailsScreen extends ConsumerStatefulWidget {
-  const CheckDetailsScreen({super.key, required this.groupId, this.initialGroup});
+  const CheckDetailsScreen({
+    super.key,
+    required this.groupId,
+    this.initialGroup,
+  });
 
   final String groupId;
   final AnalysisReportGroup? initialGroup;
@@ -64,17 +77,21 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
   Widget build(BuildContext context) {
     final details = ref.watch(checkDetailsProvider(widget.groupId));
     final initial = widget.initialGroup;
-    final group = details.value ?? (initial?.groupId == widget.groupId ? initial : null);
+    final group =
+        details.value ?? (initial?.groupId == widget.groupId ? initial : null);
     final summary = group == null ? null : CheckSummary.fromGroup(group);
     final policies = group?.policyReports ?? const <PolicyReportRow>[];
     if (group != null &&
         policies.isNotEmpty &&
-        (policies.any((row) => row.hasReport) || policies.length == 1 && group.reportIds.length == 1)) {
+        (policies.any((row) => row.hasReport) ||
+            policies.length == 1 && group.reportIds.length == 1)) {
       return CoverageCheckReport(
         key: ValueKey(group.groupId),
         group: group,
         loadReport: ref.watch(checkDetailsRepositoryProvider).loadReport,
-        loadPolicyProductName: ref.watch(checkDetailsRepositoryProvider).loadPolicyProductName,
+        loadPolicyProductName: ref
+            .watch(checkDetailsRepositoryProvider)
+            .loadPolicyProductName,
         onOpenTreatment: (title, subtitle) => _openDocument(
           context,
           title: title,
@@ -94,28 +111,38 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
     }
     final bestIndex = group == null || group.bestPolicyId.isEmpty
         ? -1
-        : policies.indexWhere((policy) => policy.policyId == group.bestPolicyId);
+        : policies.indexWhere(
+            (policy) => policy.policyId == group.bestPolicyId,
+          );
     final chosenIndex = _selectedPolicyIndex ?? (bestIndex < 0 ? 0 : bestIndex);
     final selectedIndex = chosenIndex < policies.length ? chosenIndex : 0;
     final selected = policies.elementAtOrNull(selectedIndex);
-    final status = selected == null ? null : _statusOption(selected, selectedIndex == bestIndex);
+    final status = selected == null
+        ? null
+        : _statusOption(context, selected, selectedIndex == bestIndex);
     final selectedReportId = selected?.reportId.trim() ?? '';
     final singleReportId =
-        group != null && group.policyCount <= 1 && policies.length <= 1 && group.reportIds.length == 1
+        group != null &&
+            group.policyCount <= 1 &&
+            policies.length <= 1 &&
+            group.reportIds.length == 1
         ? group.reportIds.single.trim()
         : '';
-    final reportId = selectedReportId.isNotEmpty ? selectedReportId : singleReportId;
+    final reportId = selectedReportId.isNotEmpty
+        ? selectedReportId
+        : singleReportId;
     void retry() => ref.invalidate(checkDetailsProvider(widget.groupId));
 
     return PushedShell(
-      title: summary?.treatment ?? 'Check details',
-      titleMaxLines: 2,
+      title:
+          summary?.displayTreatment(context.l10n) ??
+          context.l10n.analysisCheckDetails,
       onBack: () => context.canPop() ? context.pop() : context.go('/reports'),
       action: summary == null
           ? null
           : AppIconButton(
               icon: AppIcons.share,
-              label: 'Share',
+              label: context.l10n.analysisShare,
               onPressed: () => _share(context, summary, status),
             ),
       body: ListView(
@@ -131,8 +158,8 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
               AppInlineBanner(
                 kind: AppInlineBannerKind.error,
                 message: details.error is CheckNotFoundException
-                    ? 'Check not found.'
-                    : 'Could not load this check.',
+                    ? context.l10n.analysisCheckNotFound
+                    : context.l10n.analysisLoadCheckFailed,
                 onRetry: retry,
               )
             else
@@ -141,7 +168,7 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
             if (details.hasError) ...[
               AppInlineBanner(
                 kind: AppInlineBannerKind.offline,
-                message: 'Showing saved check details.',
+                message: context.l10n.analysisShowingSavedCheck,
                 onRetry: retry,
               ),
               const SizedBox(height: DsSpace.gridGap),
@@ -165,23 +192,31 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
               const SizedBox(height: DsSpace.sectionGap),
               AppPolicySwitcher(
                 policies: [
-                  for (final (index, policy) in policies.indexed) _statusOption(policy, index == bestIndex),
+                  for (final (index, policy) in policies.indexed)
+                    _statusOption(context, policy, index == bestIndex),
                 ],
                 selectedIndex: selectedIndex,
-                onChanged: (index) => setState(() => _selectedPolicyIndex = index),
+                onChanged: (index) =>
+                    setState(() => _selectedPolicyIndex = index),
               ),
             ],
-            if (group.status == 'waiting_for_user' || summary.statusKind == CheckStatusKind.checking) ...[
+            if (group.status == 'waiting_for_user' ||
+                summary.statusKind == CheckStatusKind.checking) ...[
               const SizedBox(height: DsSpace.gridGap),
               AppLink(
-                label: group.status == 'waiting_for_user' ? 'Answer questions' : 'View progress',
+                label: group.status == 'waiting_for_user'
+                    ? context.l10n.analysisAnswerQuestions
+                    : context.l10n.analysisViewProgress,
                 trailing: AppIcons.caretRight,
                 onPressed: () {
                   final id = group.groupId;
                   context.push(
                     group.isDurableJob
                         ? '/check/processing/${Uri.encodeComponent(id)}'
-                        : Uri(path: '/analysis-multi', queryParameters: {'session': id}).toString(),
+                        : Uri(
+                            path: '/analysis-multi',
+                            queryParameters: {'session': id},
+                          ).toString(),
                   );
                 },
               ),
@@ -189,9 +224,10 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
             if (reportId.isNotEmpty) ...[
               const SizedBox(height: DsSpace.sectionGap),
               AppButton(
-                label: 'View coverage report',
+                label: context.l10n.analysisViewCoverageReport,
                 icon: AppIcons.caretRight,
-                onPressed: () => context.push('/summary/${Uri.encodeComponent(reportId)}'),
+                onPressed: () =>
+                    context.push('/summary/${Uri.encodeComponent(reportId)}'),
               ),
             ],
             const SizedBox(height: DsSpace.sectionGap),
@@ -202,29 +238,43 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 spacing: DsSpace.gridGap,
                 children: [
-                  if (selected != null && selected.reasons.isNotEmpty) _Reasons(reasons: selected.reasons),
+                  if (selected != null && selected.reasons.isNotEmpty)
+                    _Reasons(reasons: selected.reasons),
                   if (group.prescriptionId.isNotEmpty ||
                       summary.treatment != 'Prescription' ||
                       summary.patientName.isNotEmpty ||
                       group.visitDate.trim().isNotEmpty)
                     AppDocumentRow(
                       type: DocumentCardType.prescription,
-                      title: 'Treatment document',
-                      meta: summary.treatment == 'Prescription' ? '' : summary.treatment,
+                      title: context.l10n.analysisTreatmentDocument,
+                      meta: summary.treatment == 'Prescription'
+                          ? ''
+                          : summary.displayTreatment(context.l10n),
                       onTap: () => _openDocument(
                         context,
-                        title: 'Treatment document',
+                        title: context.l10n.analysisTreatmentDocument,
                         details: _treatmentDetails(group),
                       ),
                     ),
                   if (selected != null && _hasPolicy(selected))
                     AppDocumentRow(
                       type: DocumentCardType.policy,
-                      title: 'Policy',
-                      meta: selected.displayName == 'Policy' ? '' : selected.displayName,
-                      onTap: () => _openDocument(context, title: 'Policy', details: _policyDetails(selected)),
+                      title: context.l10n.analysisPolicy,
+                      meta: selected.displayName == 'Policy'
+                          ? ''
+                          : selected.displayName,
+                      onTap: () => _openDocument(
+                        context,
+                        title: context.l10n.analysisPolicy,
+                        details: _policyDetails(selected),
+                      ),
                     ),
-                  Text(_disclaimer, style: AppTextStyles.label.copyWith(color: context.colors.textTertiary)),
+                  Text(
+                    context.l10n.analysisCheckDisclaimer,
+                    style: AppTextStyles.label.copyWith(
+                      color: context.colors.textTertiary,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -236,7 +286,8 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
 
   static Widget _metadata(BuildContext context, CheckSummary summary) {
     final parts = [
-      if (summary.patientName.isNotEmpty) 'For ${summary.patientName}',
+      if (summary.patientName.isNotEmpty)
+        context.l10n.analysisForPatient(summary.patientName),
       if (summary.dateLabel.isNotEmpty) summary.dateLabel,
     ];
     if (parts.isEmpty) return const SizedBox.shrink();
@@ -244,7 +295,9 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
       padding: const EdgeInsetsDirectional.only(bottom: DsSpace.s12),
       child: Text(
         parts.join(' · '),
-        style: AppTextStyles.label.copyWith(color: context.colors.textSecondary),
+        style: AppTextStyles.label.copyWith(
+          color: context.colors.textSecondary,
+        ),
       ),
     );
   }
@@ -256,38 +309,58 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
       policy.policyNumber.trim().isNotEmpty ||
       policy.policyEndDate.trim().isNotEmpty;
 
-  static AppPolicyOption _statusOption(PolicyReportRow policy, bool best) {
+  static AppPolicyOption _statusOption(
+    BuildContext context,
+    PolicyReportRow policy,
+    bool best,
+  ) {
     final raw = policy.overallStatus.trim();
     final (kind, label) = switch (policy.status) {
-      'pending' ||
-      'queued' ||
-      'extracting' ||
-      'analyzing' ||
-      'reanalyzing' => (CheckStatusKind.checking, 'Checking…'),
-      'waiting_for_user' => (CheckStatusKind.other, 'Needs your input'),
+      'pending' || 'queued' || 'extracting' || 'analyzing' || 'reanalyzing' => (
+        CheckStatusKind.checking,
+        context.l10n.analysisChecking,
+      ),
+      'waiting_for_user' => (
+        CheckStatusKind.other,
+        context.l10n.analysisNeedsInput,
+      ),
       'failed' => (
         CheckStatusKind.failed,
-        policy.failedAtStage.contains('extract') ? "Couldn't read" : 'Check failed',
+        policy.failedAtStage.contains('extract')
+            ? context.l10n.analysisCouldNotRead
+            : context.l10n.analysisCheckFailed,
       ),
       _ when raw.isNotEmpty => (CheckSummary.statusKindFor(raw), raw),
-      'manual_review_required' => (CheckStatusKind.other, 'Needs verification'),
-      'invalid' => (CheckStatusKind.other, 'Invalid policy'),
-      _ => (CheckStatusKind.other, 'Result not available'),
+      'manual_review_required' => (
+        CheckStatusKind.other,
+        context.l10n.analysisNeedsVerification,
+      ),
+      'invalid' => (CheckStatusKind.other, context.l10n.analysisInvalidPolicy),
+      _ => (CheckStatusKind.other, context.l10n.analysisResultUnavailable),
     };
     return AppPolicyOption(
-      label: policy.displayName,
+      label: policy.displayName == 'Policy'
+          ? context.l10n.sharedPolicy
+          : policy.displayName,
       kind: kind,
       statusLabel: kind.coverageLabel ?? label,
       best: best,
     );
   }
 
-  static Future<void> _share(BuildContext context, CheckSummary summary, AppPolicyOption? policy) async {
+  static Future<void> _share(
+    BuildContext context,
+    CheckSummary summary,
+    AppPolicyOption? policy,
+  ) async {
     final text = [
-      summary.treatment,
+      summary.displayTreatment(context.l10n),
       if (policy != null) policy.label,
-      policy?.statusLabel ?? summary.statusLabel,
-      _disclaimer,
+      localizedCheckStatus(
+        context.l10n,
+        policy?.statusLabel ?? summary.statusLabel,
+      ),
+      context.l10n.analysisCheckDisclaimer,
     ].join('\n');
     try {
       await _shareChannel.invokeMethod<void>('shareText', text);
@@ -295,9 +368,9 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
       if (!context.mounted) return;
       await AppSheet.show<void>(
         context: context,
-        title: 'Share check',
+        title: context.l10n.analysisShareCheck,
         bodyBuilder: (sheetContext) => AppButton(
-          label: 'Copy check summary',
+          label: context.l10n.analysisCopyCheckSummary,
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: text));
             if (sheetContext.mounted) Navigator.pop(sheetContext);
@@ -308,9 +381,11 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
       if (!context.mounted) return;
       await AppSheet.show<void>(
         context: context,
-        title: 'Share check',
-        bodyBuilder: (context) =>
-            const AppInlineBanner(kind: AppInlineBannerKind.error, message: 'Sharing is unavailable.'),
+        title: context.l10n.analysisShareCheck,
+        bodyBuilder: (context) => AppInlineBanner(
+          kind: AppInlineBannerKind.error,
+          message: context.l10n.analysisSharingUnavailable,
+        ),
       );
     }
   }
@@ -335,12 +410,14 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
           if (fileId == null) return const SizedBox.shrink();
           return DecoratedBox(
             decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: sheetContext.colors.borderDivider)),
+              border: Border(
+                top: BorderSide(color: sheetContext.colors.borderDivider),
+              ),
             ),
             child: Padding(
               padding: const EdgeInsets.only(top: DsSpace.s12),
               child: AppButton(
-                label: 'View document',
+                label: context.l10n.analysisViewDocument,
                 style: AppButtonStyle.secondary,
                 onPressed: () {
                   if (data?.mimeType?.startsWith('image/') == true) {
@@ -348,7 +425,8 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
                       context: sheetContext,
                       title: title,
                       showClose: true,
-                      bodyBuilder: (_) => _DocumentPreview(fileId: fileId, isPdf: false),
+                      bodyBuilder: (_) =>
+                          _DocumentPreview(fileId: fileId, isPdf: false),
                     );
                   } else {
                     Navigator.pop(sheetContext);
@@ -374,7 +452,7 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
               loading: () => const AppSkeleton(kind: AppSkeletonKind.row),
               error: (_, _) => AppInlineBanner(
                 kind: AppInlineBannerKind.error,
-                message: 'Could not load these details.',
+                message: context.l10n.analysisLoadDetailsFailed,
                 onRetry: () => ref.invalidate(details),
               ),
               data: (data) {
@@ -382,19 +460,35 @@ class _CheckDetailsScreenState extends ConsumerState<CheckDetailsScreen> {
                 final mimeType = data.mimeType ?? '';
                 if (!data.hasData) {
                   return Text(
-                    'No additional details.',
-                    style: AppTextStyles.bodyStrong.copyWith(color: sheetContext.colors.textSecondary),
+                    context.l10n.analysisNoAdditionalDetails,
+                    style: AppTextStyles.bodyStrong.copyWith(
+                      color: sheetContext.colors.textSecondary,
+                    ),
                   );
                 }
                 return AppSheetList(
                   rows: [
                     if (artwork == null &&
                         fileId != null &&
-                        (mimeType.startsWith('image/') || mimeType == 'application/pdf'))
-                      _DocumentPreview(fileId: fileId, isPdf: mimeType == 'application/pdf'),
-                    for (final (label, value) in data.fields)
-                      AppSheetKeyValue(label: label, value: value, monospace: label == 'Policy number'),
-                    if (data.listField case (final label, final values))
+                        (mimeType.startsWith('image/') ||
+                            mimeType == 'application/pdf'))
+                      _DocumentPreview(
+                        fileId: fileId,
+                        isPdf: mimeType == 'application/pdf',
+                      ),
+                    for (final (label, value) in data.displayFields(
+                      sheetContext.l10n,
+                    ))
+                      AppSheetKeyValue(
+                        label: label,
+                        value: value,
+                        monospace:
+                            label == sheetContext.l10n.sharedPolicyNumber,
+                      ),
+                    if (data.displayList(sheetContext.l10n) case (
+                      final label,
+                      final values,
+                    ))
                       AppSheetFieldList(label: label, values: values),
                   ],
                 );
@@ -418,11 +512,13 @@ class _DocumentPreview extends ConsumerWidget {
         loading: () => const AppSkeleton(kind: AppSkeletonKind.card),
         error: (_, _) => AppInlineBanner(
           kind: AppInlineBannerKind.error,
-          message: 'Could not load the document preview.',
+          message: context.l10n.analysisLoadPreviewFailed,
           onRetry: () => ref.invalidate(_treatmentFile(fileId)),
         ),
         data: (bytes) => ClipRSuperellipse(
-          borderRadius: const BorderRadius.all(Radius.circular(DsShape.radiusLg)),
+          borderRadius: const BorderRadius.all(
+            Radius.circular(DsShape.radiusLg),
+          ),
           child: AspectRatio(
             aspectRatio: 4 / 3,
             child: isPdf
@@ -437,10 +533,10 @@ class _DocumentPreview extends ConsumerWidget {
                 : Image.memory(
                     bytes,
                     fit: BoxFit.contain,
-                    semanticLabel: 'Treatment document image',
-                    errorBuilder: (_, _, _) => const AppInlineBanner(
+                    semanticLabel: context.l10n.analysisTreatmentImage,
+                    errorBuilder: (_, _, _) => AppInlineBanner(
                       kind: AppInlineBannerKind.error,
-                      message: 'Could not read the document image.',
+                      message: context.l10n.analysisReadImageFailed,
                     ),
                   ),
           ),
@@ -455,23 +551,33 @@ class _Reasons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = AppTextStyles.label.copyWith(color: context.colors.textSecondary);
+    final style = AppTextStyles.label.copyWith(
+      color: context.colors.textSecondary,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         AppSectionHeader(
-          title: 'Why this result',
+          title: context.l10n.analysisWhyResult,
           onSeeAll: reasons.length <= 3
               ? null
               : () => AppSheet.show<void>(
                   context: context,
-                  title: 'Why this result',
-                  bodyBuilder: (_) =>
-                      AppSheetList(rows: [for (final reason in reasons) Text(reason, style: style)]),
+                  title: context.l10n.analysisWhyResult,
+                  bodyBuilder: (_) => AppSheetList(
+                    rows: [
+                      for (final reason in reasons) Text(reason, style: style),
+                    ],
+                  ),
                 ),
         ),
         for (final reason in reasons.take(3))
-          Text(reason, maxLines: 1, overflow: TextOverflow.ellipsis, style: style),
+          Text(
+            reason,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
       ],
     );
   }

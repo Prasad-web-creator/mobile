@@ -2,23 +2,30 @@
 class PolicyEvidence {
   PolicyEvidence(String? source) : _source = source ?? '' {
     final normalized = StringBuffer();
-    for (var index = 0; index < _source.length; index++) {
-      final character = _asciiLower(_source.codeUnitAt(index));
-      if (character == null) continue;
-      normalized.writeCharCode(character);
-      _offsets.add(index);
+    for (final match in _wordCharacter.allMatches(_source)) {
+      final character = match[0]!.toLowerCase();
+      normalized.write(character);
+      for (var unit = 0; unit < character.length; unit++) {
+        _starts.add(match.start);
+        _ends.add(match.end);
+      }
     }
     _normalized = normalized.toString();
   }
 
   final String _source;
-  final _offsets = <int>[];
+  final _starts = <int>[];
+  final _ends = <int>[];
   late final String _normalized;
+  static final _wordCharacter = RegExp(r'[\p{L}\p{N}\p{M}]', unicode: true);
   static final _quoted = RegExp(r'“([^”]+)”|"([^"]+)"', dotAll: true);
   static final _closingPunctuation = RegExp(r'''[.,;:!?)\]”’"']+''');
   static const _sectionNumber = r'[A-Z][ \t]*\.[ \t]*\d+(?:[ \t]*\.[ \t]*\d+)*';
   static const _exclusionCode = r'Excl[ \t-]*\d+';
-  static final _reference = RegExp('\\b(?:$_sectionNumber|$_exclusionCode)\\b', caseSensitive: false);
+  static final _reference = RegExp(
+    '\\b(?:$_sectionNumber|$_exclusionCode)\\b',
+    caseSensitive: false,
+  );
   static final _heading = RegExp(
     '^[ \\t]*(?:Section[ \\t]+)?($_sectionNumber)[.:)]?[ \\t]+(?=\\S)|^[ \\t]*--- PAGE \\d+ ---',
     caseSensitive: false,
@@ -34,10 +41,13 @@ class PolicyEvidence {
     void add(Map<String, dynamic> clause, {required bool structured}) {
       final raw = clause['quote'];
       if (raw is! String || raw.trim().isEmpty) return;
-      final wording = _find(raw) ?? (_source.trim().isEmpty && structured ? raw.trim() : null);
+      final wording =
+          _find(raw) ??
+          (_source.trim().isEmpty && structured ? raw.trim() : null);
       if (wording == null) return;
       final section = clause['section']?.toString().trim() ?? '';
-      if (seen.add((section, wording))) result.add({...clause, 'quote': wording});
+      if (seen.add((section, wording)))
+        result.add({...clause, 'quote': wording});
     }
 
     if (saved is List) {
@@ -49,7 +59,12 @@ class PolicyEvidence {
       for (final match in _quoted.allMatches(evidence)) {
         add({'quote': match[1] ?? match[2]}, structured: false);
       }
-      if (result.isEmpty) add({'quote': evidence}, structured: false);
+      if (result.isEmpty) {
+        add({
+          'quote': evidence,
+          'localizedText': item['localizedPolicyEvidence'],
+        }, structured: false);
+      }
     }
     if (result.isEmpty && _normalized.isNotEmpty) {
       final citations = [
@@ -59,15 +74,22 @@ class PolicyEvidence {
         item['explanation'],
         item['reason'],
         if (saved is List)
-          for (final clause in saved.whereType<Map<String, dynamic>>()) clause['section'],
+          for (final clause in saved.whereType<Map<String, dynamic>>())
+            clause['section'],
       ].whereType<String>().join('\n');
       for (final match in _reference.allMatches(citations)) {
         final reference = _referenceKey(match[0]!);
-        final exact = _sections.where((section) => section.keys.contains(reference));
+        final exact = _sections.where(
+          (section) => section.keys.contains(reference),
+        );
         final compact = reference.replaceAll('.', '');
         final matches = exact.isNotEmpty
             ? exact
-            : _sections.where((section) => section.keys.any((key) => key.replaceAll('.', '') == compact));
+            : _sections.where(
+                (section) => section.keys.any(
+                  (key) => key.replaceAll('.', '') == compact,
+                ),
+              );
         final section = matches.singleOrNull;
         if (section != null && seen.add((section.number, section.quote))) {
           result.add({'section': section.number, 'quote': section.quote});
@@ -82,45 +104,59 @@ class PolicyEvidence {
     return [
       for (final (index, heading) in headings.indexed)
         if (heading[1] case final number?)
-          _readSection(number, heading.start, index + 1 < headings.length ? headings[index + 1].start : _source.length),
+          _readSection(
+            number,
+            heading.start,
+            index + 1 < headings.length
+                ? headings[index + 1].start
+                : _source.length,
+          ),
     ];
   }
 
-  ({String number, String quote, Set<String> keys}) _readSection(String number, int start, int end) {
+  ({String number, String quote, Set<String> keys}) _readSection(
+    String number,
+    int start,
+    int end,
+  ) {
     const maxLength = 900;
     var quote = _source.substring(start, end).trim();
     if (quote.length > maxLength) {
       final prefix = quote.substring(0, maxLength);
-      quote = prefix.substring(0, RegExp(r'\s').allMatches(prefix).lastOrNull?.start ?? maxLength).trimRight();
+      quote = prefix
+          .substring(
+            0,
+            RegExp(r'\s').allMatches(prefix).lastOrNull?.start ?? maxLength,
+          )
+          .trimRight();
     }
     return (
       number: number,
       quote: quote,
       keys: {
         _referenceKey(number),
-        for (final code in _exclusion.allMatches(quote.split('\n').first)) _referenceKey(code[0]!),
+        for (final code in _exclusion.allMatches(quote.split('\n').first))
+          _referenceKey(code[0]!),
       },
     );
   }
 
-  static String _referenceKey(String text) => text.toLowerCase().replaceAll(RegExp(r'[\s-]+'), '');
+  static String _referenceKey(String text) =>
+      text.toLowerCase().replaceAll(RegExp(r'[\s-]+'), '');
 
   String? _find(String quote) {
-    if (_normalized.isEmpty) return null;
     final exact = quote.trim();
     if (_source.contains(exact)) return exact;
-    final key = String.fromCharCodes(quote.codeUnits.map(_asciiLower).whereType<int>());
+    if (_normalized.isEmpty) return null;
+    final key = _wordCharacter
+        .allMatches(quote)
+        .map((match) => match[0]!.toLowerCase())
+        .join();
     if (key.length < 8) return null;
     final start = _normalized.indexOf(key);
     if (start < 0) return null;
-    final end = _offsets[start + key.length - 1] + 1;
+    final end = _ends[start + key.length - 1];
     final suffix = _closingPunctuation.matchAsPrefix(_source, end)?.end ?? end;
-    return _source.substring(_offsets[start], suffix);
-  }
-
-  static int? _asciiLower(int unit) {
-    if (unit >= 65 && unit <= 90) return unit + 32;
-    if ((unit >= 97 && unit <= 122) || (unit >= 48 && unit <= 57)) return unit;
-    return null;
+    return _source.substring(_starts[start], suffix);
   }
 }

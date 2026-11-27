@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -11,7 +12,7 @@ import 'package:claimsupport/features/authentication/presentation/controllers/au
 import 'package:claimsupport/features/authentication/presentation/widgets/otp_method_selector.dart';
 
 /// Shows the user's email and phone with their verification status. A verified contact
-/// can be used to log in; an unverified one gets a "Verify" button (OTP sent to it).
+/// can be used to log in; an unverified one gets a context.l10n.authVerify button (OTP sent to it).
 class LoginMethodsCard extends ConsumerWidget {
   final User user;
 
@@ -35,9 +36,12 @@ class LoginMethodsCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Text('Login methods', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Text(
+                context.l10n.accountLoginMethods,
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+              ),
             ),
             _row(context, ref, OtpChannel.email, user.email, user.emailVerified),
           ],
@@ -50,11 +54,11 @@ class LoginMethodsCard extends ConsumerWidget {
     return ListTile(
       leading: Icon(channel.icon),
       title: Text(value, overflow: TextOverflow.ellipsis),
-      subtitle: Text(verified ? '${channel.label} login enabled' : 'Verify to enable ${channel.label} login'),
+      subtitle: Text(verified ? context.l10n.accountEmailLoginEnabled : context.l10n.accountEmailLoginVerify),
       trailing: verified
-          ? const Chip(
-              avatar: Icon(Icons.verified, color: Colors.green, size: 18),
-              label: Text('Verified'),
+          ? Chip(
+              avatar: const Icon(Icons.verified, color: Colors.green, size: 18),
+              label: Text(context.l10n.accountVerified),
               visualDensity: VisualDensity.compact,
             )
           : FilledButton.tonal(
@@ -63,7 +67,7 @@ class LoginMethodsCard extends ConsumerWidget {
                 barrierDismissible: false,
                 builder: (_) => _VerifyContactDialog(channel: channel, value: value),
               ).then((_) => ref.invalidate(authProvider)),
-              child: const Text('Verify'),
+              child: Text(context.l10n.authVerify),
             ),
     );
   }
@@ -117,9 +121,10 @@ class _VerifyContactDialogState extends State<_VerifyContactDialog> {
       _error = null;
     });
     try {
-      final response = await ApiClient().dio.post('/auth/me/verify/send-otp', data: {
-        'channel': widget.channel.apiValue,
-      });
+      final response = await ApiClient().dio.post(
+        '/auth/me/verify/send-otp',
+        data: {'channel': widget.channel.apiValue},
+      );
       if (!mounted) return;
       final sent = OtpSendResult.fromResponse(response, fallbackDestination: widget.value);
       setState(() {
@@ -128,7 +133,7 @@ class _VerifyContactDialogState extends State<_VerifyContactDialog> {
       });
       _startTimer(sent.resendAfterSeconds);
     } on DioException catch (e) {
-      if (mounted) setState(() => _error = otpErrorFrom(e, 'Could not send OTP. Please try again.'));
+      if (mounted) setState(() => _error = otpErrorFrom(e, context.l10n.authSendOtpError, context.l10n));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -136,7 +141,7 @@ class _VerifyContactDialogState extends State<_VerifyContactDialog> {
 
   Future<void> _verify() async {
     if (_otpController.text.isEmpty) {
-      setState(() => _error = 'Please enter the OTP.');
+      setState(() => _error = context.l10n.authEnterOtp);
       return;
     }
     setState(() {
@@ -144,19 +149,15 @@ class _VerifyContactDialogState extends State<_VerifyContactDialog> {
       _error = null;
     });
     try {
-      await ApiClient().dio.post('/auth/me/verify', data: {
-        'channel': widget.channel.apiValue,
-        'otp': _otpController.text,
-      });
+      await ApiClient().dio.post(
+        '/auth/me/verify',
+        data: {'channel': widget.channel.apiValue, 'otp': _otpController.text},
+      );
       if (!mounted) return;
       Navigator.of(context).pop();
-      showAppSnackBar(
-        context,
-        'Email verified successfully.',
-        tone: AppTone.success,
-      );
+      showAppSnackBar(context, context.l10n.accountEmailVerified, tone: AppTone.success);
     } on DioException catch (e) {
-      if (mounted) setState(() => _error = otpErrorFrom(e, 'Verification failed. Please try again.'));
+      if (mounted) setState(() => _error = otpErrorFrom(e, context.l10n.authVerifyError, context.l10n));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -166,13 +167,13 @@ class _VerifyContactDialogState extends State<_VerifyContactDialog> {
   Widget build(BuildContext context) {
     final sent = _sent;
     return AlertDialog(
-      title: const Text('Verify Email Address'),
+      title: Text(context.l10n.accountVerifyEmail),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (sent == null)
-            Text('Sending a code to ${widget.value}...')
+            Text(context.l10n.accountOtpSending(widget.value))
           else
             OtpStatusText(sent: sent, channel: widget.channel),
           const SizedBox(height: 16),
@@ -186,7 +187,7 @@ class _VerifyContactDialogState extends State<_VerifyContactDialog> {
               FilteringTextInputFormatter.digitsOnly,
               LengthLimitingTextInputFormatter(sent?.otpLength ?? 8),
             ],
-            decoration: const InputDecoration(hintText: 'OTP', border: OutlineInputBorder()),
+            decoration: InputDecoration(hintText: context.l10n.authOtp, border: const OutlineInputBorder()),
             onSubmitted: (_) => _verify(),
           ),
           if (_error != null) ...[
@@ -197,18 +198,24 @@ class _VerifyContactDialogState extends State<_VerifyContactDialog> {
           Align(
             alignment: Alignment.centerLeft,
             child: _resendSeconds > 0
-                ? Text('Resend OTP in ${_resendSeconds}s', style: const TextStyle(color: Colors.grey))
-                : TextButton(onPressed: _loading ? null : _send, child: const Text('Resend OTP')),
+                ? Text(
+                    context.l10n.accountOtpResendTimer(_resendSeconds),
+                    style: const TextStyle(color: Colors.grey),
+                  )
+                : TextButton(onPressed: _loading ? null : _send, child: Text(context.l10n.authResendOtp)),
           ),
         ],
       ),
       actions: [
-        TextButton(onPressed: _loading ? null : () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(
+          onPressed: _loading ? null : () => Navigator.of(context).pop(),
+          child: Text(context.l10n.accountCancel),
+        ),
         FilledButton(
           onPressed: _loading || sent == null ? null : _verify,
           child: _loading
               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Verify'),
+              : Text(context.l10n.authVerify),
         ),
       ],
     );

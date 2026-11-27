@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:async';
 
 import 'package:claimsupport/core/design/widgets/app_design_surface.dart';
@@ -37,18 +38,16 @@ Future<bool> confirmStoppingAnalysis(BuildContext context) async {
         context: context,
         builder: (context) => AppDesignSurface(
           child: AlertDialog(
-            title: const Text('Stop the analysis?'),
-            content: const Text(
-              'The report will be discarded. Your policy and prescription documents will stay saved.',
-            ),
+            title: Text(context.l10n.analysisStopQuestion),
+            content: Text(context.l10n.analysisStopExplanation),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Keep analyzing'),
+                child: Text(context.l10n.analysisKeepAnalyzing),
               ),
               TextButton(
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Stop analysis'),
+                child: Text(context.l10n.analysisStop),
               ),
             ],
           ),

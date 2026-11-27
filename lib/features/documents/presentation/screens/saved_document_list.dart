@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/design/app_icons.dart';
 import 'package:claimsupport/core/design/widgets/app_buttons.dart';
 import 'package:claimsupport/core/design/widgets/app_choices.dart';
@@ -115,15 +116,15 @@ class _SavedDocumentListState<T> extends State<SavedDocumentList<T>> with SavedL
     final lowerTitle = title.toLowerCase();
     return PushedShell(
       title: title,
-      subtitle: page == null ? null : '${page.totalDocs} saved',
+      subtitle: page == null ? null : context.l10n.sharedSavedCount(page.totalDocs),
       action: widget.onAdd == null
           ? null
-          : AppIconButton(icon: AppIcons.plus, label: 'Add prescription', onPressed: widget.onAdd),
+          : AppIconButton(icon: AppIcons.plus, label: context.l10n.sharedAddPrescription, onPressed: widget.onAdd),
       showTitleInSelection: true,
       selectionHeader: selecting ? selectionHeader(source, widget.fetchPage, widget.idOf) : null,
       bottom: selecting
           ? selectionFooter(
-              singular: widget.singular,
+              singular: widget.singular == 'policy' ? context.l10n.sharedPolicy.toLowerCase() : context.l10n.sharedPrescription.toLowerCase(),
               plural: lowerTitle,
               isDocument: true,
               delete: (ids) async {
@@ -144,7 +145,7 @@ class _SavedDocumentListState<T> extends State<SavedDocumentList<T>> with SavedL
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: DsSpace.screenPadding, vertical: DsSpace.s8),
               child: AppFilterChipRow<String>(
-                options: {'All': 'All', for (final name in widget.filters.keys) name: name},
+                options: {'All': context.l10n.sharedAll, for (final name in widget.filters.keys) name: _filterLabel(name)},
                 selected: _filter,
                 onChanged: listBusy
                     ? null
@@ -173,8 +174,8 @@ class _SavedDocumentListState<T> extends State<SavedDocumentList<T>> with SavedL
                     if (error != null && !loading)
                       SavedListError(
                         error: error,
-                        offlineMessage: page == null ? "You're offline." : "You're offline. Showing saved $lowerTitle.",
-                        message: 'Couldn’t load $lowerTitle.',
+                        offlineMessage: page == null ? context.l10n.sharedOffline : context.l10n.sharedOfflineShowSaved(lowerTitle),
+                        message: context.l10n.sharedCouldNotLoadItems(lowerTitle),
                         onRetry: _refresh,
                       ),
                     if (page == null && loading) const SavedListSkeleton(),
@@ -182,16 +183,16 @@ class _SavedDocumentListState<T> extends State<SavedDocumentList<T>> with SavedL
                       if (records.isEmpty)
                         SavedListMessage(
                           _filter == 'All'
-                              ? '$title you add in a check show up here.'
-                              : 'No ${_filter.toLowerCase()} $lowerTitle.',
+                              ? context.l10n.sharedDocumentsShownHere(title)
+                              : context.l10n.sharedNoFilteredDocuments(_filterLabel(_filter).toLowerCase(), lowerTitle),
                         ),
                       if (records.isNotEmpty) ...[
                         AppRowGroup(rows: [for (final record in records) _row(context, record)]),
                         const SizedBox(height: DsSpace.s12),
                         Text(
                           widget.singular == 'policy'
-                              ? 'Add policies when you start a check.'
-                              : 'Long-press to select and delete.',
+                              ? context.l10n.sharedAddPolicyWithCheck
+                              : context.l10n.sharedLongPressDelete,
                           style: AppTextStyles.captionRegular.copyWith(color: context.colors.textSecondary),
                         ),
                       ],
@@ -206,6 +207,12 @@ class _SavedDocumentListState<T> extends State<SavedDocumentList<T>> with SavedL
       ),
     );
   }
+
+  String _filterLabel(String key) => switch (key) {
+    'Uploaded' => context.l10n.sharedUploaded,
+    'Manual' => context.l10n.sharedManual,
+    _ => key,
+  };
 
   Widget _row(BuildContext context, T record) {
     final summary = widget.describe(record);

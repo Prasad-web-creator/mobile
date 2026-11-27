@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -29,12 +30,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   String? _wordText;
   bool _isImage = false;
   bool _isLoading = true;
-  String? _error;
+  Object? _error;
+  bool _isInvalid = false;
 
   String get _invalidDocument {
-    if (widget.title.startsWith('PSCT')) return 'Invalid prescription Uploaded';
-    if (widget.title.startsWith('PCY')) return 'Invalid policy Uploaded';
-    return 'Invalid document';
+    if (widget.title.startsWith('PSCT')) return context.l10n.sharedInvalidPrescription;
+    if (widget.title.startsWith('PCY')) return context.l10n.sharedInvalidPolicy;
+    return context.l10n.sharedInvalidDocument;
   }
 
   @override
@@ -59,7 +61,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       if (!mounted) return;
       final data = response.data;
       if (data == null || data.length < 10) {
-        _fail(_invalidDocument);
+        _fail(invalid: true);
         return;
       }
 
@@ -74,20 +76,17 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         _isLoading = false;
       });
     } on FormatException {
-      _fail(_invalidDocument);
+      _fail(invalid: true);
     } catch (error) {
-      _fail(
-        error is DioException && error.response?.statusCode == 404
-            ? _invalidDocument
-            : "Couldn't load the document. ${friendlyErrorMessage(error)}",
-      );
+      _fail(error: error, invalid: error is DioException && error.response?.statusCode == 404);
     }
   }
 
-  void _fail(String message) {
+  void _fail({Object? error, bool invalid = false}) {
     if (!mounted) return;
     setState(() {
-      _error = message;
+      _error = error;
+      _isInvalid = invalid;
       _isLoading = false;
     });
   }
@@ -96,19 +95,19 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), tooltip: 'Back', onPressed: () => context.pop()),
+      leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), tooltip: context.l10n.sharedBack, onPressed: () => context.pop()),
     ),
     body: _buildDocument(),
   );
 
   Widget _buildDocument() {
-    if (_isLoading) return const LoadingState(message: 'Loading document…');
-    if (_error case final error?) {
-      final isInvalid = error.startsWith('Invalid');
+    if (_isLoading) return LoadingState(message: context.l10n.sharedLoadingDocument);
+    if (_error != null || _isInvalid) {
+      final isInvalid = _isInvalid;
       return EmptyState(
         icon: isInvalid ? Icons.insert_drive_file_outlined : Icons.cloud_off_rounded,
-        title: error,
-        message: isInvalid ? 'This file could not be opened. Upload a readable copy of the document.' : null,
+        title: isInvalid ? _invalidDocument : context.l10n.sharedLoadingFileFailed,
+        message: isInvalid ? context.l10n.sharedUnreadableDocument : friendlyErrorMessage(_error, l10n: context.l10n),
         action: isInvalid
             ? null
             : OutlinedButton.icon(
@@ -120,7 +119,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   _fetchDocument();
                 },
                 icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('Try again'),
+                label: Text(context.l10n.sharedTryAgain),
               ),
       );
     }
@@ -136,7 +135,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             fit: BoxFit.contain,
             semanticLabel: widget.title,
             errorBuilder: (_, _, _) =>
-                const EmptyState(icon: Icons.broken_image_outlined, title: 'Could not open this image.'),
+                EmptyState(icon: Icons.broken_image_outlined, title: context.l10n.sharedImageOpenFailed),
           ),
         ),
       );
@@ -145,7 +144,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       _bytes!,
       canShowScrollHead: false,
       canShowScrollStatus: true,
-      onDocumentLoadFailed: (_) => Future.microtask(() => _fail(_invalidDocument)),
+      onDocumentLoadFailed: (_) => Future.microtask(() => _fail(invalid: true)),
     );
   }
 }

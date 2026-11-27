@@ -1,3 +1,5 @@
+import 'package:claimsupport/core/localization/localization.dart';
+import 'package:claimsupport/core/localization/locale_provider.dart';
 import 'package:claimsupport/features/analysis_reports/presentation/controllers/analysis_report_controller.dart';
 import 'package:claimsupport/features/home/presentation/controllers/home_checks_provider.dart';
 import 'package:claimsupport/features/policies/presentation/controllers/policy_controller.dart';
@@ -72,6 +74,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (refreshToken != null) await AuthStorage.saveRefreshToken(refreshToken);
     AuthInterceptor.resetSessionExpiredFlag();
     if (!mounted) return;
+    final preferredLanguage = response.data['user']?['preferredLanguage'] as String?;
+    await ref.read(localeProvider.notifier).restoreFromProfile(preferredLanguage);
+    if (!mounted) return;
     ref.read(homeCheckCacheProvider).clear();
     ref.read(historyCacheProvider).clear();
     ref.invalidate(policiesProvider);
@@ -90,12 +95,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final response = await ApiClient().dio.post('/auth/google', data: {'idToken': token});
       await _finishLogin(response);
     } on DioException catch (error) {
-      _showMessage(
-        otpErrorFrom(error, 'Could not sign in with Google. Try again or use Email OTP.'),
-        tone: AppTone.warning,
-      );
+      if (!mounted) return;
+      _showMessage(otpErrorFrom(error, context.l10n.authGoogleError, context.l10n), tone: AppTone.warning);
     } catch (_) {
-      _showMessage('Could not sign in with Google. Try again or use Email OTP.', tone: AppTone.warning);
+      if (!mounted) return;
+      _showMessage(context.l10n.authGoogleError, tone: AppTone.warning);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -104,16 +108,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _sendOtp() async {
     if (_loading || (_otpSent && _resendSeconds > 0)) return;
     final email = _emailController.text.trim();
-    if (email.isEmpty) return _showMessage('Please enter your email address.', tone: AppTone.warning);
+    if (email.isEmpty) return _showMessage(context.l10n.authEnterEmail, tone: AppTone.warning);
     if (!emailPattern.hasMatch(email)) {
-      return _showMessage('Please enter a valid email address.', tone: AppTone.warning);
+      return _showMessage(context.l10n.authEnterValidEmail, tone: AppTone.warning);
     }
 
     setState(() => _loading = true);
     try {
       final response = await ApiClient().dio.post(
         '/auth/send-otp',
-        data: {'channel': _channel.apiValue, 'purpose': 'login', ..._contact},
+        data: {'channel': _channel.apiValue, 'purpose': 'login', 'language': context.l10n.localeName, ..._contact},
       );
       if (!mounted) return;
       final sent = OtpSendResult.fromResponse(response, fallbackDestination: _contact['email']!);
@@ -125,11 +129,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       FocusScope.of(context).unfocus();
       _startResendTimer(sent.resendAfterSeconds);
 
-      if (!sent.delivered) _showMessage(sent.message, tone: AppTone.warning);
+      if (!sent.delivered) _showMessage(sent.statusText(context.l10n), tone: AppTone.warning);
     } on DioException catch (e) {
-      _showMessage(otpErrorFrom(e, 'Could not send OTP. Please try again.'), tone: AppTone.danger);
-    } catch (e) {
-      _showMessage('Could not send a verification code. Please try again.', tone: AppTone.danger);
+      if (!mounted) return;
+      _showMessage(otpErrorFrom(e, context.l10n.authSendOtpError, context.l10n), tone: AppTone.danger);
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage(context.l10n.authSendCodeError, tone: AppTone.danger);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -151,9 +157,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       if (response.statusCode == 200) await _finishLogin(response);
     } on DioException catch (e) {
-      if (mounted) setState(() => _codeError = authVerificationError(e));
-    } catch (e) {
-      _showMessage('Could not sign in. Please try again.', tone: AppTone.danger);
+      if (mounted) setState(() => _codeError = authVerificationError(e, context.l10n));
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage(context.l10n.authSignInError, tone: AppTone.danger);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -181,9 +188,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: ValueListenableBuilder(
           valueListenable: _otpController,
           builder: (context, code, _) => AuthPage(
-            title: 'Check your email',
+            title: context.l10n.authCheckEmail,
             onBack: _changeEmail,
-            actionLabel: 'Verify',
+            actionLabel: context.l10n.authVerify,
             onAction: code.text.length == sent.otpLength ? _verifyOtp : null,
             busy: _loading,
             body: [
@@ -208,28 +215,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final googleClientId = config.googleClientId;
     final showGoogle = googleClientId != null && GoogleIdentity.isSupported;
     return AuthPage(
-      title: 'Log in',
+      title: context.l10n.authLogin,
       showLogo: true,
       busy: _loading,
-      actionLabel: config.emailOtpEnabled ? 'Send code' : '',
+      actionLabel: config.emailOtpEnabled ? context.l10n.authSendCode : '',
       onAction: config.emailOtpEnabled ? _sendOtp : null,
       footer: config.emailOtpEnabled
           ? AuthTextAction(
-              prefix: 'New to Policy Pal? ',
-              label: 'Create account',
+              prefix: context.l10n.authNewUser,
+              label: context.l10n.authCreateAccount,
               center: true,
               onTap: _loading ? null : () => context.push('/register'),
             )
           : null,
       body: [
         Text(
-          "Enter your email. We'll send you a code to log in.",
+          context.l10n.authLoginDescription,
           style: AppTextStyles.subheadRegular.copyWith(color: c.textSecondary),
         ),
         const SizedBox(height: DsSpace.s20),
         if (config.emailOtpEnabled)
           AuthField(
-            label: 'Email',
+            label: context.l10n.authEmail,
             controller: _emailController,
             email: true,
             enabled: !_loading,
@@ -238,12 +245,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         if (showGoogle) ...[
           const SizedBox(height: DsSpace.s16),
           AppButton(
-            label: 'Continue with Google',
+            label: context.l10n.authContinueGoogle,
             style: AppButtonStyle.secondary,
             onPressed: _loading ? null : () => _signInWithGoogle(googleClientId),
           ),
         ] else if (!config.emailOtpEnabled)
-          const Text('Sign-in is temporarily unavailable. Please try again later.'),
+          Text(context.l10n.authSignInUnavailable),
       ],
     );
   }

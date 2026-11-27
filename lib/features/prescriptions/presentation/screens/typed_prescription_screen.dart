@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/design/design.dart';
 import 'package:claimsupport/core/design/widgets/app_buttons.dart';
 import 'package:claimsupport/core/design/widgets/app_shells.dart';
@@ -43,7 +44,7 @@ class _TypedPrescriptionScreenState extends ConsumerState<TypedPrescriptionScree
       ref.invalidate(dashboardStatsProvider);
       context.pop(saved);
     } catch (_) {
-      if (mounted) setState(() => _error = "Couldn't save your prescription. Try again.");
+      if (mounted) setState(() => _error = context.l10n.sharedSavePrescriptionFailed);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -53,14 +54,14 @@ class _TypedPrescriptionScreenState extends ConsumerState<TypedPrescriptionScree
   Widget build(BuildContext context) {
     final colors = context.colors;
     return FlowShell(
-      title: 'Type it in',
+      title: context.l10n.sharedManualEntry,
       onClose: () => context.pop(),
       backButton: true,
       body: ListView(
         padding: const EdgeInsets.all(DsSpace.screenPadding),
         children: [
           Text(
-            'Write the illness, symptoms, tests or surgery the doctor advised. A few words is enough.',
+            context.l10n.sharedEnterTreatment,
             style: AppTextStyles.bodyStrong.copyWith(color: colors.textSecondary),
           ),
           const SizedBox(height: DsSpace.s16),
@@ -72,7 +73,7 @@ class _TypedPrescriptionScreenState extends ConsumerState<TypedPrescriptionScree
             onChanged: (_) => setState(() {}),
             style: AppTextStyles.bodyStrong.copyWith(color: colors.textPrimary, height: 1.5),
             decoration: InputDecoration(
-              labelText: 'Treatment',
+              labelText: context.l10n.sharedTreatment,
               alignLabelWithHint: true,
               errorText: _error,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(DsShape.radiusMd)),
@@ -84,13 +85,13 @@ class _TypedPrescriptionScreenState extends ConsumerState<TypedPrescriptionScree
           ),
           const SizedBox(height: DsSpace.s12),
           Text(
-            "We'll check it as if you're admitted to hospital today.",
+            context.l10n.sharedCheckAsAdmittedToday,
             style: AppTextStyles.label.copyWith(color: colors.textSecondary),
           ),
         ],
       ),
       bottomAction: AppButton(
-        label: 'Save prescription',
+        label: context.l10n.sharedSavePrescription,
         busy: _saving,
         onPressed: _saving || _text.text.trim().isEmpty ? null : _save,
       ),

@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/design/design.dart';
 import 'package:claimsupport/core/design/widgets/home_background.dart';
 import 'package:claimsupport/core/utils/auth_storage.dart';
@@ -54,10 +55,13 @@ class _SplashScreenState extends State<SplashScreen> {
                     children: [
                       const AuthBrandMark(size: 82),
                       const SizedBox(height: DsSpace.s24),
-                      Text('Policy Pal', style: AppTextStyles.largeTitle.copyWith(color: c.textPrimary)),
+                      Text(
+                        context.l10n.policyPal,
+                        style: AppTextStyles.largeTitle.copyWith(color: c.textPrimary),
+                      ),
                       const SizedBox(height: DsSpace.s6),
                       Text(
-                        'Know what your policy covers',
+                        context.l10n.authSplashTagline,
                         textAlign: TextAlign.center,
                         style: AppTextStyles.subheadRegular.copyWith(color: c.textSecondary),
                       ),

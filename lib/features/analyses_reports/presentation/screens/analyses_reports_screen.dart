@@ -1,3 +1,5 @@
+import 'package:claimsupport/core/localization/translation_mapper.dart';
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/features/analysis_reports/data/models/analysis_report_group.dart';
 import 'package:claimsupport/core/design/design.dart';
 import 'package:claimsupport/core/design/widgets/app_choices.dart';
@@ -23,7 +25,8 @@ class AnalysesReportsScreen extends ConsumerStatefulWidget {
   const AnalysesReportsScreen({super.key});
 
   @override
-  ConsumerState<AnalysesReportsScreen> createState() => _AnalysesReportsScreenState();
+  ConsumerState<AnalysesReportsScreen> createState() =>
+      _AnalysesReportsScreenState();
 }
 
 typedef _ReportPage = PaginationResponse<AnalysisReportGroup>;
@@ -46,7 +49,9 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen>
     final policies = check.policyResults;
     return policies.isEmpty
         ? check.statusKind == kind
-        : policies.any((policy) => CheckSummary.resultForPolicy(policy).$1 == kind);
+        : policies.any(
+            (policy) => CheckSummary.resultForPolicy(policy).$1 == kind,
+          );
   }
 
   Future<_ReportPage> _matchingReports(
@@ -57,7 +62,11 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen>
     final matches = <AnalysisReportGroup>[];
     var page = first;
     while (true) {
-      matches.addAll(page.docs.where((group) => _matches(CheckSummary.fromGroup(group), filter)));
+      matches.addAll(
+        page.docs.where(
+          (group) => _matches(CheckSummary.fromGroup(group), filter),
+        ),
+      );
       if (!page.hasNextPage || page.docs.isEmpty) break;
       page = await notifier.fetchPage(page.page + 1);
     }
@@ -88,28 +97,32 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen>
       await notifier.fetchAnalysisReports(isRefresh: true);
     }
 
-    Widget contents(_ReportPage? source, Future<_ReportPage> Function(int) fetch, {Object? filterError}) =>
-        _buildList(
-          context,
-          source: source,
-          fetch: fetch,
-          isLoading:
-              (state.isLoading && first == null) || (first != null && source == null && filterError == null),
-          error: filterError ?? state.error,
-          hasSaved: first != null,
-          startCheck: startCheck,
-          refresh: refresh,
-          delete: (ids) async {
-            try {
-              return await notifier.deleteReports(ids);
-            } finally {
-              if (mounted) {
-                ref.invalidate(homeChecksProvider);
-                ref.invalidate(dashboardStatsProvider);
-              }
-            }
-          },
-        );
+    Widget contents(
+      _ReportPage? source,
+      Future<_ReportPage> Function(int) fetch, {
+      Object? filterError,
+    }) => _buildList(
+      context,
+      source: source,
+      fetch: fetch,
+      isLoading:
+          (state.isLoading && first == null) ||
+          (first != null && source == null && filterError == null),
+      error: filterError ?? state.error,
+      hasSaved: first != null,
+      startCheck: startCheck,
+      refresh: refresh,
+      delete: (ids) async {
+        try {
+          return await notifier.deleteReports(ids);
+        } finally {
+          if (mounted) {
+            ref.invalidate(homeChecksProvider);
+            ref.invalidate(dashboardStatsProvider);
+          }
+        }
+      },
+    );
 
     Widget body;
     if (first == null || _filter == AppCheckFilter.all) {
@@ -123,20 +136,29 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen>
       body = FutureBuilder(
         future: _filtered,
         builder: (context, snapshot) {
-          final result = snapshot.connectionState == ConnectionState.done ? snapshot.data : null;
-          return contents(result, notifier.fetchPage, filterError: snapshot.error);
+          final result = snapshot.connectionState == ConnectionState.done
+              ? snapshot.data
+              : null;
+          return contents(
+            result,
+            notifier.fetchPage,
+            filterError: snapshot.error,
+          );
         },
       );
     }
     return RootShell(
-      title: selecting ? null : 'History',
+      title: selecting ? null : context.l10n.analysisHistory,
       body: body,
       useHomeBackgroundColor: Theme.of(context).brightness == Brightness.dark,
     );
   }
 
   String _deletableId(AnalysisReportGroup group, CheckSummary check) =>
-      check.statusKind == CheckStatusKind.checking || group.status == 'waiting_for_user' ? '' : group.groupId;
+      check.statusKind == CheckStatusKind.checking ||
+          group.status == 'waiting_for_user'
+      ? ''
+      : group.groupId;
 
   Widget _buildList(
     BuildContext context, {
@@ -154,13 +176,19 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen>
     if (page != null) {
       final groups = page.docs.toList();
       final earliest = DateTime.fromMillisecondsSinceEpoch(0);
-      groups.sort((a, b) => (b.createdAt ?? earliest).compareTo(a.createdAt ?? earliest));
-      final format = DateFormat.yMMMM();
-      final accountName = ref.watch(authProvider.select((state) => state.value?.name));
+      groups.sort(
+        (a, b) => (b.createdAt ?? earliest).compareTo(a.createdAt ?? earliest),
+      );
+      final format = DateFormat.yMMMM(
+        dateFormatLocale(context.l10n.localeName),
+      );
+      final accountName = ref.watch(
+        authProvider.select((state) => state.value?.name),
+      );
       for (final group in groups) {
         final check = CheckSummary.fromGroup(group, accountName: accountName);
         final month = group.createdAt == null
-            ? 'Date unavailable'
+            ? context.l10n.analysisDateUnavailable
             : format.format(group.createdAt!.toLocal());
         byMonth.putIfAbsent(month, () => []).add((group, check));
       }
@@ -179,11 +207,15 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen>
             0,
             DsSpace.s4,
             0,
-            selecting ? DsSpace.s8 : FloatingNavBar.scrollClearance(context) + DsSpace.sectionGap,
+            selecting
+                ? DsSpace.s8
+                : FloatingNavBar.scrollClearance(context) + DsSpace.sectionGap,
           ),
           children: [
             AppFilterChips(
-              padding: const EdgeInsets.symmetric(horizontal: DsSpace.screenPadding),
+              padding: const EdgeInsets.symmetric(
+                horizontal: DsSpace.screenPadding,
+              ),
               selected: _filter,
               onChanged: (filter) {
                 if (_filter == filter || listBusy) return;
@@ -198,8 +230,10 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen>
               if (error != null && !isLoading)
                 SavedListError(
                   error: error,
-                  offlineMessage: hasSaved ? "You're offline. Showing saved checks." : "You're offline.",
-                  message: 'Couldn’t load checks.',
+                  offlineMessage: hasSaved
+                      ? context.l10n.analysisOfflineSaved
+                      : context.l10n.analysisOffline,
+                  message: context.l10n.analysisLoadChecksFailed,
                   onRetry: refresh,
                 ),
               if (page == null && isLoading) const SavedListSkeleton(),
@@ -207,18 +241,22 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen>
                 if (page.docs.isEmpty && _filter == AppCheckFilter.all)
                   AppEmptyState(
                     illustration: AppIllustrationKind.prescription,
-                    message: 'No checks yet',
-                    actionLabel: 'Start a check',
+                    message: context.l10n.analysisNoChecks,
+                    actionLabel: context.l10n.analysisStartCheck,
                     onAction: startCheck,
                   )
                 else if (byMonth.isEmpty)
-                  const SavedListMessage('No checks match this filter.'),
+                  SavedListMessage(context.l10n.analysisNoChecksFilter),
                 for (final entry in byMonth.entries) ...[
                   Padding(
-                    padding: const EdgeInsetsDirectional.only(start: DsSpace.s4),
+                    padding: const EdgeInsetsDirectional.only(
+                      start: DsSpace.s4,
+                    ),
                     child: Text(
                       entry.key,
-                      style: AppTextStyles.captionStrong.copyWith(color: context.colors.textSecondary),
+                      style: AppTextStyles.captionStrong.copyWith(
+                        color: context.colors.textSecondary,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 9),
@@ -230,12 +268,17 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen>
                           check: check,
                           onAction: selecting || check.actionRoute == null
                               ? null
-                              : () => context.push(check.actionRoute!, extra: group),
+                              : () => context.push(
+                                  check.actionRoute!,
+                                  extra: group,
+                                ),
                           selected: itemSelection(_deletableId(group, check)),
-                          onLongPress: selecting || _deletableId(group, check).isEmpty
+                          onLongPress:
+                              selecting || _deletableId(group, check).isEmpty
                               ? null
                               : () => beginSelection(check.id),
-                          onTap: selecting && _deletableId(group, check).isNotEmpty
+                          onTap:
+                              selecting && _deletableId(group, check).isNotEmpty
                               ? () => toggleItem(check.id)
                               : () => context.push(check.route, extra: group),
                         ),
@@ -247,7 +290,9 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen>
               ],
             ].map(
               (child) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: DsSpace.screenPadding),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: DsSpace.screenPadding,
+                ),
                 child: child,
               ),
             ),
@@ -258,10 +303,19 @@ class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen>
     return Column(
       children: [
         if (selecting)
-          selectionHeader(source, fetch, (group) => _deletableId(group, CheckSummary.fromGroup(group))),
+          selectionHeader(
+            source,
+            fetch,
+            (group) => _deletableId(group, CheckSummary.fromGroup(group)),
+          ),
         Expanded(child: list),
         if (selecting)
-          selectionFooter(singular: 'check', plural: 'checks', isDocument: false, delete: delete),
+          selectionFooter(
+            singular: 'check',
+            plural: 'checks',
+            isDocument: false,
+            delete: delete,
+          ),
       ],
     );
   }

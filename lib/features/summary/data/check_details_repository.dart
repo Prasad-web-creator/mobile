@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import 'package:claimsupport/core/network/api_client.dart';
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/features/documents/data/document_detail_fields.dart';
 import 'package:claimsupport/features/analysis_reports/data/models/analysis_report_group.dart';
 import 'package:claimsupport/features/policies/data/models/policy.dart';
@@ -11,14 +12,31 @@ import 'package:claimsupport/features/prescriptions/data/models/prescription.dar
 typedef CheckDetailField = (String label, String value);
 
 class CheckDocumentDetails {
-  const CheckDocumentDetails({required this.fields, this.listField, this.fileId, this.mimeType});
+  const CheckDocumentDetails({
+    required this.fields,
+    this.localizedFields,
+    this.listField,
+    this.fileId,
+    this.mimeType,
+  });
 
   final List<CheckDetailField> fields;
+  final List<CheckDetailField> Function(AppLocalizations)? localizedFields;
   final (String label, List<String> values)? listField;
   final String? fileId;
   final String? mimeType;
 
   bool get hasData => fields.isNotEmpty || listField != null || fileId != null;
+
+  List<CheckDetailField> displayFields(AppLocalizations l10n) =>
+      localizedFields?.call(l10n) ?? fields;
+
+  (String, List<String>)? displayList(AppLocalizations l10n) =>
+      switch (listField) {
+        ('Items', final values) => (l10n.sharedItems, values),
+        ('Members', final values) => (l10n.sharedMembers, values),
+        _ => listField,
+      };
 }
 
 class CheckDetailsRepository {
@@ -26,7 +44,8 @@ class CheckDetailsRepository {
 
   final Dio _client;
 
-  Future<Map<String, dynamic>?> loadReport(String reportId) => _getById('/analysis', reportId);
+  Future<Map<String, dynamic>?> loadReport(String reportId) =>
+      _getById('/analysis', reportId);
 
   Future<String?> loadPolicyProductName(String policyId) async {
     final record = await _getById('/policies', policyId);
@@ -58,7 +77,9 @@ class CheckDetailsRepository {
   }
 
   Future<CheckDocumentDetails> loadTreatment(AnalysisReportGroup group) async {
-    final firstReport = group.policyReports.where((row) => row.hasReport).firstOrNull;
+    final firstReport = group.policyReports
+        .where((row) => row.hasReport)
+        .firstOrNull;
     final [record, snapshot] = await Future.wait([
       _getById('/prescriptions', group.prescriptionId),
       _getById('/analysis', firstReport?.reportId ?? ''),
@@ -73,7 +94,11 @@ class CheckDetailsRepository {
     });
     return CheckDocumentDetails(
       fields: prescriptionDetailFields(prescription),
-      listField: prescription.items.isEmpty ? null : ('Items', prescription.items),
+      localizedFields: (l10n) =>
+          prescriptionDetailFields(prescription, l10n: l10n),
+      listField: prescription.items.isEmpty
+          ? null
+          : ('Items', prescription.items),
       fileId: _first([prescription.gridFsFileId]),
       mimeType: prescription.mimeType,
     );
@@ -96,7 +121,10 @@ class CheckDetailsRepository {
     });
     return CheckDocumentDetails(
       fields: policyDetailFields(policy),
-      listField: policy.insuredMembers.isEmpty ? null : ('Members', policy.insuredMembers),
+      localizedFields: (l10n) => policyDetailFields(policy, l10n: l10n),
+      listField: policy.insuredMembers.isEmpty
+          ? null
+          : ('Members', policy.insuredMembers),
       fileId: _first([policy.gridFsFileId]),
       mimeType: policy.mimeType,
     );
@@ -111,7 +139,9 @@ class CheckDetailsRepository {
   }
 
   Future<Map<String, dynamic>?> _getById(String path, String id) =>
-      id.trim().isEmpty ? Future.value() : _get('$path/${Uri.encodeComponent(id)}');
+      id.trim().isEmpty
+      ? Future.value()
+      : _get('$path/${Uri.encodeComponent(id)}');
 
   Future<Map<String, dynamic>?> _get(String path) async {
     try {
@@ -123,12 +153,19 @@ class CheckDetailsRepository {
     }
   }
 
-  static AnalysisReportGroup _groupFromJob(String id, Map<String, dynamic> job) {
+  static AnalysisReportGroup _groupFromJob(
+    String id,
+    Map<String, dynamic> job,
+  ) {
     final result = _map(job['result']);
     final status = switch (job['status']) {
       'created' || 'queued' => 'queued',
       'extracting_documents' || 'extracting_policy_metadata' => 'extracting',
-      'analyzing' || 'reanalyzing' || 'waiting_for_user' || 'cancelled' || 'failed' => job['status'],
+      'analyzing' ||
+      'reanalyzing' ||
+      'waiting_for_user' ||
+      'cancelled' ||
+      'failed' => job['status'],
       'expired' => 'failed',
       _ => result['status'] ?? job['status'],
     };
@@ -137,11 +174,15 @@ class CheckDetailsRepository {
       'isDurableJob': true,
       'status': status,
       'createdAt': result['createdAt'] ?? job['createdAt'],
-      'policyCount': result['policyCount'] ?? (job['policyIds'] as List?)?.length,
+      'policyCount':
+          result['policyCount'] ?? (job['policyIds'] as List?)?.length,
     });
   }
 
-  static AnalysisReportGroup _groupFromSession(String id, Map<String, dynamic> session) {
+  static AnalysisReportGroup _groupFromSession(
+    String id,
+    Map<String, dynamic> session,
+  ) {
     final rows = (session['policyAnalyses'] as List?) ?? const [];
     return AnalysisReportGroup.fromJson({
       ...session,
@@ -155,7 +196,10 @@ class CheckDetailsRepository {
     });
   }
 
-  static AnalysisReportGroup _groupFromReport(String id, Map<String, dynamic> report) {
+  static AnalysisReportGroup _groupFromReport(
+    String id,
+    Map<String, dynamic> report,
+  ) {
     final policy = _map(report['policyJson']);
     return AnalysisReportGroup.fromJson({
       ...report,
@@ -181,10 +225,19 @@ class CheckDetailsRepository {
     });
   }
 
-  static Map<String, dynamic> _map(Object? value) => value is Map ? Map<String, dynamic>.from(value) : const {};
+  static Map<String, dynamic> _map(Object? value) =>
+      value is Map ? Map<String, dynamic>.from(value) : const {};
 
   static String? _first(List<Object?> candidates) {
-    const missing = {'', '-', 'unknown', 'n/a', 'null', 'none', 'not specified'};
+    const missing = {
+      '',
+      '-',
+      'unknown',
+      'n/a',
+      'null',
+      'none',
+      'not specified',
+    };
     for (final candidate in candidates) {
       final value = switch (candidate) {
         String() => candidate.trim(),

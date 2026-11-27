@@ -1,4 +1,6 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:flutter/material.dart';
+import 'package:claimsupport/core/localization/translation_mapper.dart';
 
 import 'package:claimsupport/core/design/app_check_status.dart';
 import 'package:claimsupport/core/design/design.dart';
@@ -46,7 +48,7 @@ class AppStatusLabel extends StatelessWidget {
         const SizedBox(width: DsSpace.s8),
         Flexible(
           child: Text(
-            kind.coverageLabel ?? label,
+            localizedCheckStatus(context.l10n, kind.coverageLabel ?? label),
             style: (prominent ? AppTextStyles.headline : AppTextStyles.captionStrong).copyWith(
               color: foreground,
             ),

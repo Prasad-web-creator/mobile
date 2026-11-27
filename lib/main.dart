@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:claimsupport/core/localization/localization.dart';
+import 'package:claimsupport/core/localization/locale_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:syncfusion_localizations/syncfusion_localizations.dart';
 import 'package:claimsupport/core/theme/app_theme.dart';
 import 'package:claimsupport/core/theme/theme_provider.dart';
 import 'package:claimsupport/core/routing/app_router.dart';
@@ -39,13 +42,13 @@ Future<void> main() async {
                   Icon(AppIcons.warning, color: c.statusNotCovered, size: DsSize.iconXl),
                   const SizedBox(height: DsSpace.s16),
                   Text(
-                    'Something went wrong',
+                    context.l10n.startupErrorTitle,
                     textAlign: TextAlign.center,
                     style: AppTextStyles.headline.copyWith(color: c.textPrimary),
                   ),
                   const SizedBox(height: DsSpace.s8),
                   Text(
-                    'This section could not be displayed. Please go back and try again.',
+                    context.l10n.startupErrorBody,
                     textAlign: TextAlign.center,
                     style: AppTextStyles.label.copyWith(color: c.textSecondary),
                   ),
@@ -110,7 +113,13 @@ class ClaimSupportApp extends ConsumerWidget {
     final themeMode = ref.watch(themeProvider);
 
     return MaterialApp.router(
-      title: 'Policy Pal',
+      onGenerateTitle: (context) => context.l10n.policyPal,
+      locale: ref.watch(localeProvider),
+      localizationsDelegates: const [
+        ...AppLocalizations.localizationsDelegates,
+        SfGlobalLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
       themeMode: themeMode,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

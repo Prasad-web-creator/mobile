@@ -1,3 +1,6 @@
+import 'package:claimsupport/core/localization/localization.dart';
+import 'package:claimsupport/features/summary/presentation/widgets/localized_policy_wording.dart';
+import 'package:claimsupport/core/localization/translation_mapper.dart';
 import 'dart:math' as math;
 
 import 'package:claimsupport/core/design/app_icons.dart';
@@ -34,7 +37,8 @@ class CoverageCheckReport extends StatefulWidget {
   final Future<String?> Function(String) loadPolicyProductName;
   final VoidCallback onBack;
   final void Function(String title, String subtitle)? onOpenTreatment;
-  final void Function(PolicyReportRow policy, String title, String subtitle)? onOpenPolicy;
+  final void Function(PolicyReportRow policy, String title, String subtitle)?
+  onOpenPolicy;
 
   @override
   State<CoverageCheckReport> createState() => _CoverageCheckReportState();
@@ -54,16 +58,20 @@ class _CoverageCheckReportState extends State<CoverageCheckReport> {
     super.dispose();
   }
 
-  (CheckStatusKind, String) _status(PolicyReportRow row, [String? reportStatus]) =>
-      CheckSummary.resultForPolicy(row, overallStatus: reportStatus);
+  (CheckStatusKind, String) _status(
+    PolicyReportRow row, [
+    String? reportStatus,
+  ]) => CheckSummary.resultForPolicy(row, overallStatus: reportStatus);
 
   String _reportId(PolicyReportRow row) => row.hasReport
       ? row.reportId
-      : widget.group.policyReports.length == 1 && widget.group.reportIds.length == 1
+      : widget.group.policyReports.length == 1 &&
+            widget.group.reportIds.length == 1
       ? widget.group.reportIds.single
       : '';
 
-  Future<Map<String, dynamic>?> _report(String id) => _reports.putIfAbsent(id, () => widget.loadReport(id));
+  Future<Map<String, dynamic>?> _report(String id) =>
+      _reports.putIfAbsent(id, () => widget.loadReport(id));
 
   Future<String?> _resolveName(PolicyReportRow row, String reportId) async {
     if (reportId.isNotEmpty) {
@@ -90,15 +98,26 @@ class _CoverageCheckReportState extends State<CoverageCheckReport> {
     }
   }
 
-  Widget _withName(PolicyReportRow row, int index, Widget Function(String) build) {
+  Widget _withName(
+    PolicyReportRow row,
+    int index,
+    Widget Function(String) build,
+  ) {
     final name = row.productName;
-    if (name != null && name.toLowerCase() != row.insuranceCompany.trim().toLowerCase()) return build(name);
+    if (name != null &&
+        name.toLowerCase() != row.insuranceCompany.trim().toLowerCase())
+      return build(name);
     final reportId = _reportId(row);
-    final fallback = row.displayName == 'Policy' && widget.group.policyReports.length > 1
-        ? 'Policy ${index + 1}'
-        : row.displayName;
+    final fallback = row.displayName != 'Policy'
+        ? row.displayName
+        : widget.group.policyReports.length > 1
+        ? context.l10n.analysisPolicyIndex(index + 1)
+        : context.l10n.sharedPolicy;
     return FutureBuilder<String?>(
-      future: _names.putIfAbsent((row.policyId, reportId), () => _resolveName(row, reportId)),
+      future: _names.putIfAbsent((
+        row.policyId,
+        reportId,
+      ), () => _resolveName(row, reportId)),
       builder: (_, snapshot) => build(snapshot.data ?? fallback),
     );
   }
@@ -116,12 +135,18 @@ class _CoverageCheckReportState extends State<CoverageCheckReport> {
       _expanded = 0;
     });
     if (_tabs.hasClients) {
-      final target = (index * (cardWidth + 10) - 28).clamp(0.0, _tabs.position.maxScrollExtent).toDouble();
+      final target = (index * (cardWidth + 10) - 28)
+          .clamp(0.0, _tabs.position.maxScrollExtent)
+          .toDouble();
       if (DsMotion.reduced(context)) {
         _tabs.jumpTo(target);
         return;
       }
-      _tabs.animateTo(target, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+      _tabs.animateTo(
+        target,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
     }
   }
 
@@ -132,21 +157,47 @@ class _CoverageCheckReportState extends State<CoverageCheckReport> {
     final originalOrder = {for (final (index, row) in rows.indexed) row: index};
     rows.sort((a, b) {
       final order = _rank(a).compareTo(_rank(b));
-      return order == 0 ? originalOrder[a]!.compareTo(originalOrder[b]!) : order;
+      return order == 0
+          ? originalOrder[a]!.compareTo(originalOrder[b]!)
+          : order;
     });
-    final selected = rows.where((row) => row.policyId == _policyKey).firstOrNull ?? rows.first;
+    final selected =
+        rows.where((row) => row.policyId == _policyKey).firstOrNull ??
+        rows.first;
     final id = _reportId(selected);
     final future = id.isEmpty ? null : _report(id);
     return FutureBuilder<Map<String, dynamic>?>(
       future: future,
       builder: (context, snapshot) {
         final c = context.colors;
-        final report = snapshot.connectionState == ConnectionState.done ? snapshot.data : null;
+        final report = snapshot.connectionState == ConnectionState.done
+            ? snapshot.data
+            : null;
+        final language = reportLanguage(report?['responseLanguage']);
+        final matchesLanguage = language == context.l10n.localeName;
         final prescription = report?['prescriptionJson'];
-        final extracted = prescription is Map ? prescription : group.prescription;
-        final title = CheckSummary.cleanTreatment(_text(extracted['diagnosis']) ?? group.diagnosis);
-        final documentTitle = _text(extracted['title']) ?? 'Treatment document';
-        final hasTreatment = group.prescriptionId.isNotEmpty || _text(extracted['diagnosis']) != null;
+        final extracted = prescription is Map
+            ? prescription
+            : group.prescription;
+        final localizedPrescription = report?['localizedPrescription'];
+        final localizedDiagnosis = localizedPrescription is Map
+            ? _text(localizedPrescription['diagnosis'])
+            : null;
+        final rawDiagnosis = _text(extracted['diagnosis']) ?? group.diagnosis;
+        final diagnosis = context.l10n.localeName == 'ta'
+            ? rawDiagnosis
+            : (matchesLanguage ? localizedDiagnosis : null) ??
+                  group.localizedDiagnosis(context.l10n.localeName) ??
+                  rawDiagnosis;
+        final displayTitle =
+            CheckSummary.cleanTreatment(diagnosis) == 'Prescription'
+            ? context.l10n.sharedPrescription
+            : diagnosis;
+        final documentTitle =
+            _text(extracted['title']) ?? context.l10n.analysisTreatmentDocument;
+        final hasTreatment =
+            group.prescriptionId.isNotEmpty ||
+            _text(extracted['diagnosis']) != null;
         final documentMeta = [
           _text(extracted['doctorName']) ?? _text(extracted['doctor']),
           _text(extracted['hospitalName']) ?? _text(extracted['hospital']),
@@ -155,40 +206,60 @@ class _CoverageCheckReportState extends State<CoverageCheckReport> {
         final terms = policy is Map ? policy : const {};
         final cover = terms['coverageAmount'] ?? terms['sumInsured'];
         final policyMeta = [
-          if (selected.insuranceCompany.trim().isNotEmpty) selected.insuranceCompany.trim(),
+          if (selected.insuranceCompany.trim().isNotEmpty)
+            selected.insuranceCompany.trim(),
           if (cover is num && cover.isFinite && cover > 0)
-            NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0).format(cover),
+            NumberFormat.currency(
+              locale: context.l10n.localeName == 'ta' ? 'ta_IN' : 'en_IN',
+              symbol: '₹',
+              decimalDigits: 0,
+            ).format(cover),
         ].join(' · ');
-        final patient = CheckSummary.cleanPatientName(_text(extracted['patientName']) ?? group.patientName);
+        final patient = CheckSummary.cleanPatientName(
+          _text(extracted['patientName']) ?? group.patientName,
+        );
         final visit = _text(extracted['visitDate']) ?? group.visitDate;
         final date = DateTime.tryParse(visit);
         final meta = [
           if (patient.isNotEmpty) patient,
           if (group.createdAt case final checkedAt?)
-            formatActivityTimestamp(checkedAt)
+            formatActivityTimestamp(checkedAt, l10n: context.l10n)
           else if (date != null)
-            formatActivityDate(date),
+            formatActivityDate(date, l10n: context.l10n),
         ];
-        final (kind, label) = _status(selected, _text(report?['overallStatus']));
+        final (kind, label) = _status(
+          selected,
+          _text(report?['overallStatus']),
+        );
         final items = _maps(report?['comparison']);
         final continuity = report?['policyContinuity'];
         final evidence = report == null
             ? null
-            : _evidence.putIfAbsent(id, () => PolicyEvidence(_text(report['policyText'])));
+            : _evidence.putIfAbsent(
+                id,
+                () => PolicyEvidence(_text(report['policyText'])),
+              );
         return PushedShell(
-          title: title,
+          title: displayTitle,
           subtitle: meta.join(' · '),
-          titleMaxLines: 2,
-          titleStyle: AppTextStyles.title.copyWith(fontSize: 28, height: 34 / 28, color: c.textPrimary),
+          titleStyle: AppTextStyles.title.copyWith(
+            fontSize: 28,
+            height: 34 / 28,
+            color: c.textPrimary,
+          ),
           onBack: widget.onBack,
           body: ListView(
             padding: const EdgeInsets.only(bottom: DsSpace.sectionGap),
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: DsSpace.screenPadding),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: DsSpace.screenPadding,
+                ),
                 child: Text(
-                  '${rows.length} ${rows.length == 1 ? 'policy' : 'policies'} checked',
-                  style: AppTextStyles.subheadStrong.copyWith(color: c.textPrimary),
+                  context.l10n.analysisCheckedPolicies(rows.length),
+                  style: AppTextStyles.subheadStrong.copyWith(
+                    color: c.textPrimary,
+                  ),
                 ),
               ),
               const SizedBox(height: DsSpace.s12),
@@ -196,7 +267,10 @@ class _CoverageCheckReportState extends State<CoverageCheckReport> {
                 builder: (context, constraints) {
                   final width = math.max(
                     0.0,
-                    math.min(252.0, constraints.maxWidth - 2 * DsSpace.screenPadding),
+                    math.min(
+                      252.0,
+                      constraints.maxWidth - 2 * DsSpace.screenPadding,
+                    ),
                   );
                   final tabs = [
                     for (final (index, row) in rows.indexed)
@@ -214,17 +288,24 @@ class _CoverageCheckReportState extends State<CoverageCheckReport> {
                   ];
                   if (tabs.length == 1) {
                     return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: DsSpace.screenPadding),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: DsSpace.screenPadding,
+                      ),
                       child: tabs.single,
                     );
                   }
                   return SingleChildScrollView(
                     controller: _tabs,
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: DsSpace.screenPadding),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: DsSpace.screenPadding,
+                    ),
                     child: Row(
                       spacing: 10,
-                      children: [for (final tab in tabs) SizedBox(width: width, child: tab)],
+                      children: [
+                        for (final tab in tabs)
+                          SizedBox(width: width, child: tab),
+                      ],
                     ),
                   );
                 },
@@ -243,66 +324,96 @@ class _CoverageCheckReportState extends State<CoverageCheckReport> {
                     _withName(
                       selected,
                       originalOrder[selected]!,
-                      (name) => _ResultCard(name: name, kind: kind, label: label),
+                      (name) => _ResultCard(
+                        name: name,
+                        kind: kind,
+                        label: localizedCheckStatus(context.l10n, label),
+                      ),
                     ),
                     if (snapshot.connectionState == ConnectionState.waiting)
                       const AppSkeleton(kind: AppSkeletonKind.card),
                     if (snapshot.hasError ||
-                        id.isNotEmpty && snapshot.connectionState == ConnectionState.done && report == null)
+                        id.isNotEmpty &&
+                            snapshot.connectionState == ConnectionState.done &&
+                            report == null)
                       AppInlineBanner(
                         kind: AppInlineBannerKind.error,
-                        message: "Couldn't load this policy's report.",
+                        message: context.l10n.analysisLoadPolicyReportFailed,
                         onRetry: () => setState(() {
                           _reports.remove(id);
                           _names.remove((selected.policyId, id));
                         }),
                       ),
+                    if (report != null && !matchesLanguage)
+                      AppInlineBanner(
+                        kind: AppInlineBannerKind.info,
+                        message: context.l10n.analysisOtherReportLanguage(
+                          reportLanguageName(context.l10n, language),
+                        ),
+                      ),
                     if (items.isNotEmpty) ...[
                       Text(
-                        'What was checked',
-                        style: AppTextStyles.subheadStrong.copyWith(color: c.textPrimary),
+                        context.l10n.analysisWhatWasChecked,
+                        style: AppTextStyles.subheadStrong.copyWith(
+                          color: c.textPrimary,
+                        ),
                       ),
                       DecoratedBox(
                         decoration: ShapeDecoration(
                           color: c.surfaceCard,
-                          shape: DsShape.shape(DsShape.radiusXl, side: BorderSide(color: c.borderSubtle)),
+                          shape: DsShape.shape(
+                            DsShape.radiusXl,
+                            side: BorderSide(color: c.borderSubtle),
+                          ),
                         ),
                         child: Column(
                           children: [
                             for (final (index, item) in items.indexed) ...[
-                              if (index > 0) Divider(height: 1, color: c.borderSubtle),
+                              if (index > 0)
+                                Divider(height: 1, color: c.borderSubtle),
                               _ComparisonRow(
                                 item: item,
+                                language: language,
                                 evidence: evidence!,
                                 expanded: _expanded == index,
-                                onToggle: () => setState(() => _expanded = _expanded == index ? null : index),
+                                onToggle: () => setState(
+                                  () => _expanded = _expanded == index
+                                      ? null
+                                      : index,
+                                ),
                               ),
                             ],
                           ],
                         ),
                       ),
                     ],
-                    if (continuity is Map && _text(continuity['status']) != null)
+                    if (continuity is Map &&
+                        _text(continuity['status']) != null)
                       PolicyContinuityCard(
                         continuity: Map<String, dynamic>.from(continuity),
                         isDark: Theme.of(context).brightness == Brightness.dark,
                       ),
-                    if (hasTreatment && widget.onOpenTreatment != null || widget.onOpenPolicy != null) ...[
-                      const AppSectionHeader(title: 'Documents'),
+                    if (hasTreatment && widget.onOpenTreatment != null ||
+                        widget.onOpenPolicy != null) ...[
+                      AppSectionHeader(title: context.l10n.analysisDocuments),
                       AppRowGroup(
                         rows: [
-                          if (widget.onOpenTreatment case final open? when hasTreatment)
+                          if (widget.onOpenTreatment case final open?
+                              when hasTreatment)
                             AppDocumentRow(
                               type: DocumentCardType.prescription,
-                              category: 'Prescription',
+                              category: context.l10n.analysisPrescription,
                               title: documentTitle,
                               meta: documentMeta,
                               grouped: true,
                               onTap: () => open(
                                 documentTitle,
                                 [
-                                  'Prescription',
-                                  if (date != null) DateFormat('d MMM yyyy').format(date.toLocal()),
+                                  context.l10n.analysisPrescription,
+                                  if (date != null)
+                                    DateFormat.yMMMd(
+                                      dateFormatLocale(context.l10n.localeName),
+                                    ).format(date.toLocal()),
                                 ].join(' · '),
                               ),
                             ),
@@ -312,7 +423,7 @@ class _CoverageCheckReportState extends State<CoverageCheckReport> {
                               originalOrder[selected]!,
                               (name) => AppDocumentRow(
                                 type: DocumentCardType.policy,
-                                category: 'Policy',
+                                category: context.l10n.analysisPolicy,
                                 title: name,
                                 meta: policyMeta,
                                 grouped: true,
@@ -323,8 +434,10 @@ class _CoverageCheckReportState extends State<CoverageCheckReport> {
                       ),
                     ],
                     Text(
-                      'An estimate from your documents. Your insurer makes the final decision.',
-                      style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary),
+                      context.l10n.analysisCheckDisclaimer,
+                      style: AppTextStyles.captionRegular.copyWith(
+                        color: c.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -360,9 +473,16 @@ class _PolicyTab extends StatelessWidget {
       child: AppPressableSurface(
         color: c.surfaceCard,
         radius: 18,
-        border: BorderSide(color: selected ? c.buttonPrimary : c.borderSubtle, width: selected ? 2 : 1),
+        border: BorderSide(
+          color: selected ? c.buttonPrimary : c.borderSubtle,
+          width: selected ? 2 : 1,
+        ),
         onTap: onTap,
-        semanticLabel: [name, status.$2, if (best) 'Best'].join(', '),
+        semanticLabel: [
+          name,
+          localizedCheckStatus(context.l10n, status.$2),
+          if (best) context.l10n.analysisBest,
+        ].join(', '),
         child: ExcludeSemantics(
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
@@ -374,7 +494,9 @@ class _PolicyTab extends StatelessWidget {
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.subheadStrong.copyWith(color: c.textPrimary),
+                  style: AppTextStyles.subheadStrong.copyWith(
+                    color: c.textPrimary,
+                  ),
                 ),
                 Row(
                   spacing: DsSpace.s4,
@@ -382,7 +504,11 @@ class _PolicyTab extends StatelessWidget {
                     Expanded(
                       child: AppStatusLabel(kind: status.$1, label: status.$2),
                     ),
-                    if (best) _Tag('Best', positive: status.$1 == CheckStatusKind.covered),
+                    if (best)
+                      _Tag(
+                        context.l10n.analysisBest,
+                        positive: status.$1 == CheckStatusKind.covered,
+                      ),
                   ],
                 ),
               ],
@@ -395,7 +521,11 @@ class _PolicyTab extends StatelessWidget {
 }
 
 class _ResultCard extends StatelessWidget {
-  const _ResultCard({required this.name, required this.kind, required this.label});
+  const _ResultCard({
+    required this.name,
+    required this.kind,
+    required this.label,
+  });
 
   final String name;
   final CheckStatusKind kind;
@@ -405,9 +535,18 @@ class _ResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final (fill, reason) = switch (kind) {
-      CheckStatusKind.covered => (c.statusCoveredBackground, '$name covers this treatment.'),
-      CheckStatusKind.partial => (c.statusPartialBackground, '$name covers part of this treatment.'),
-      CheckStatusKind.notCovered => (c.statusNotCoveredBackground, "$name doesn't cover this treatment."),
+      CheckStatusKind.covered => (
+        c.statusCoveredBackground,
+        context.l10n.analysisCoversTreatment(name),
+      ),
+      CheckStatusKind.partial => (
+        c.statusPartialBackground,
+        context.l10n.analysisCoversPartTreatment(name),
+      ),
+      CheckStatusKind.notCovered => (
+        c.statusNotCoveredBackground,
+        context.l10n.analysisDoesNotCoverTreatment(name),
+      ),
       _ => (c.surfaceCardSubtle, null),
     };
     return DecoratedBox(
@@ -425,13 +564,22 @@ class _ResultCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     label,
-                    style: AppTextStyles.title.copyWith(fontSize: 24, height: 30 / 24, color: c.textPrimary),
+                    style: AppTextStyles.title.copyWith(
+                      fontSize: 24,
+                      height: 30 / 24,
+                      color: c.textPrimary,
+                    ),
                   ),
                 ),
               ],
             ),
             if (reason != null)
-              Text(reason, style: AppTextStyles.subheadRegular.copyWith(color: c.textPrimary)),
+              Text(
+                reason,
+                style: AppTextStyles.subheadRegular.copyWith(
+                  color: c.textPrimary,
+                ),
+              ),
           ],
         ),
       ),
@@ -443,31 +591,51 @@ class _ComparisonRow extends StatelessWidget {
   const _ComparisonRow({
     required this.item,
     required this.evidence,
+    required this.language,
     required this.expanded,
     required this.onToggle,
   });
 
   final Map<String, dynamic> item;
   final PolicyEvidence evidence;
+  final String language;
   final bool expanded;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final name = _text(item['displayName']) ?? _text(item['item']) ?? 'Treatment item';
+    final name = reportItemName(context.l10n, language, item);
     final type = _text(item['itemType']);
-    final raw = _text(item['coverageStatus']) ?? 'Result not available';
+    final raw =
+        _text(item['coverageStatus']) ?? context.l10n.analysisResultUnavailable;
+    final needsVerification =
+        raw.toLowerCase().replaceAll('_', ' ') == 'needs verification';
     final kind = CheckSummary.statusKindFor(raw);
     final label = switch (kind) {
-      CheckStatusKind.covered => 'Covered',
-      CheckStatusKind.partial => 'Partly covered',
-      CheckStatusKind.notCovered => 'Not covered',
-      _ when raw.toLowerCase().replaceAll('_', ' ') == 'needs verification' => 'Needs info',
-      _ => raw,
+      CheckStatusKind.covered => context.l10n.analysisCovered,
+      CheckStatusKind.partial => context.l10n.analysisPartlyCovered,
+      CheckStatusKind.notCovered => context.l10n.analysisNotCovered,
+      _ when needsVerification => context.l10n.analysisNeedsVerification,
+      _ => localizedCheckStatus(context.l10n, raw),
     };
-    final clauses = expanded ? evidence.clausesFor(item) : const <Map<String, dynamic>>[];
-    final reason = _text(item['coverageStatusReason']) ?? _text(item['explanation']) ?? _text(item['reason']);
+    final clauses = expanded
+        ? evidence.clausesFor(item)
+        : const <Map<String, dynamic>>[];
+    final reason = reportNarrative(
+      context.l10n,
+      language,
+      item['coverageStatusReason'] ?? item['explanation'] ?? item['reason'],
+      item['localizedStatusReason'],
+    );
+    final condition = needsVerification
+        ? reportNarrative(
+            context.l10n,
+            language,
+            item['verificationCondition'],
+            item['localizedVerificationCondition'],
+          )
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -483,22 +651,49 @@ class _ComparisonRow extends StatelessWidget {
                     spacing: DsSpace.s4,
                     children: [
                       if (type != null)
-                        Text(type, style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary)),
+                        Text(
+                          localizedItemType(context.l10n, type),
+                          style: AppTextStyles.captionRegular.copyWith(
+                            color: c.textSecondary,
+                          ),
+                        ),
                       Text(
                         name,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.rowTitle.copyWith(color: c.textPrimary),
+                        style: AppTextStyles.rowTitle.copyWith(
+                          color: c.textPrimary,
+                        ),
                       ),
                       Row(
                         children: [
                           AppStatusDot(kind: kind),
                           const SizedBox(width: DsSpace.s8),
                           Flexible(
-                            child: Text(label, style: AppTextStyles.label.copyWith(color: c.textSecondary)),
+                            child: Text(
+                              label,
+                              style: AppTextStyles.label.copyWith(
+                                color: c.textSecondary,
+                              ),
+                            ),
                           ),
                         ],
                       ),
+                      if (needsVerification && reason != null)
+                        Text(
+                          reason,
+                          style: AppTextStyles.reportBody.copyWith(
+                            color: c.textSecondary,
+                          ),
+                        ),
+                      if (condition != null &&
+                          !(reason?.contains(condition) ?? false))
+                        Text(
+                          condition,
+                          style: AppTextStyles.reportBody.copyWith(
+                            color: c.textPrimary,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -516,16 +711,32 @@ class _ComparisonRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (reason != null)
+                if (!needsVerification && reason != null)
                   Text(
                     reason,
-                    style: AppTextStyles.subheadRegular.copyWith(height: 22 / 15, color: c.textPrimary),
+                    style: AppTextStyles.subheadRegular.copyWith(
+                      height: 22 / 15,
+                      color: c.textPrimary,
+                    ),
                   ),
                 AppLink(
-                  label: clauses.isEmpty ? 'See policy clauses' : 'See policy clauses (${clauses.length})',
+                  label: clauses.isEmpty
+                      ? context.l10n.analysisSeeClauses
+                      : context.l10n.analysisSeeClauseCount(clauses.length),
                   trailing: AppIcons.caretRight,
-                  onPressed: () =>
-                      _openClauses(context, name, clauses, _text(item['policyEvidence']) ?? reason),
+                  onPressed: () => _openClauses(
+                    context,
+                    name,
+                    clauses,
+                    ((language == context.l10n.localeName)
+                            ? _text(item['localizedPolicyEvidence'])
+                            : null) ??
+                        (context.l10n.localeName == 'en'
+                            ? _text(item['policyEvidence'])
+                            : null) ??
+                        reason,
+                    language: language,
+                  ),
                 ),
               ],
             ),
@@ -536,10 +747,15 @@ class _ComparisonRow extends StatelessWidget {
 }
 
 class _PolicyEvidenceCard extends StatelessWidget {
-  const _PolicyEvidenceCard({required this.clauses, required this.analysisBasis});
+  const _PolicyEvidenceCard({
+    required this.clauses,
+    required this.analysisBasis,
+    required this.language,
+  });
 
   final List<Map<String, dynamic>> clauses;
   final String? analysisBasis;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -549,21 +765,35 @@ class _PolicyEvidenceCard extends StatelessWidget {
       padding: const EdgeInsets.all(DsSpace.s12),
       decoration: ShapeDecoration(
         color: c.surfaceCardSubtle,
-        shape: DsShape.shape(DsShape.radiusMd, side: BorderSide(color: c.borderSubtle)),
+        shape: DsShape.shape(
+          DsShape.radiusMd,
+          side: BorderSide(color: c.borderSubtle),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: DsSpace.s8,
         children: [
-          Text('Policy evidence', style: AppTextStyles.subheadStrong.copyWith(color: c.textPrimary)),
+          Text(
+            context.l10n.analysisPolicyEvidence,
+            style: AppTextStyles.subheadStrong.copyWith(color: c.textPrimary),
+          ),
           if (clauses.isEmpty) ...[
             Text(
-              'Exact policy wording is unavailable for this term.',
+              context.l10n.analysisNoExactWording,
               style: AppTextStyles.label.copyWith(color: c.textSecondary),
             ),
             if (analysisBasis case final basis?) ...[
-              Text('Analysis basis', style: AppTextStyles.subheadStrong.copyWith(color: c.textPrimary)),
-              SelectableText(basis, style: AppTextStyles.secondary.copyWith(color: c.textSecondary)),
+              Text(
+                context.l10n.analysisAnalysisBasis,
+                style: AppTextStyles.subheadStrong.copyWith(
+                  color: c.textPrimary,
+                ),
+              ),
+              SelectableText(
+                basis,
+                style: AppTextStyles.secondary.copyWith(color: c.textSecondary),
+              ),
             ],
           ],
           for (final clause in clauses)
@@ -572,17 +802,36 @@ class _PolicyEvidenceCard extends StatelessWidget {
               spacing: DsSpace.s8,
               children: [
                 if (clauses.length > 1)
-                  Text('•', style: AppTextStyles.label.copyWith(color: c.textSecondary)),
+                  Text(
+                    '•',
+                    style: AppTextStyles.label.copyWith(color: c.textSecondary),
+                  ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     spacing: DsSpace.s4,
                     children: [
-                      if (_text(clause['section']) case final section?)
-                        Text(section, style: AppTextStyles.subheadStrong.copyWith(color: c.textPrimary)),
-                      SelectableText(
-                        clause['quote'] as String,
-                        style: AppTextStyles.secondary.copyWith(color: c.textSecondary),
+                      if (reportNarrative(
+                            context.l10n,
+                            language,
+                            clause['section'],
+                            clause['localizedSection'],
+                          )
+                          case final section?)
+                        Text(
+                          section,
+                          style: AppTextStyles.subheadStrong.copyWith(
+                            color: c.textPrimary,
+                          ),
+                        ),
+                      LocalizedPolicyWording(
+                        original: clause['quote'] as String,
+                        translation: (language == context.l10n.localeName)
+                            ? _text(clause['localizedText'])
+                            : null,
+                        style: AppTextStyles.secondary.copyWith(
+                          color: c.textSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -599,40 +848,57 @@ void _openClauses(
   BuildContext context,
   String item,
   List<Map<String, dynamic>> clauses,
-  String? analysisBasis,
-) {
+  String? analysisBasis, {
+  required String language,
+}) {
   final reviewed = clauses.where(
     (clause) =>
-        clause['decisive'] is bool || _text(clause['effect']) != null || _text(clause['explanation']) != null,
+        clause['decisive'] is bool ||
+        _text(clause['effect']) != null ||
+        _text(clause['explanation']) != null,
   );
-  final deciding = reviewed.where((clause) => clause['decisive'] == true).toList();
-  final considered = clauses.where((clause) => clause['decisive'] != true).toList();
+  final deciding = reviewed
+      .where((clause) => clause['decisive'] == true)
+      .toList();
+  final considered = clauses
+      .where((clause) => clause['decisive'] != true)
+      .toList();
   AppSheet.show<void>(
     context: context,
-    title: 'Policy clauses',
+    title: context.l10n.analysisPolicyClauses,
     showClose: true,
     bodyBuilder: (context) => AppSheetList(
       rows: [
-        Text(item, style: AppTextStyles.subheadRegular.copyWith(color: context.colors.textSecondary)),
+        Text(
+          item,
+          style: AppTextStyles.subheadRegular.copyWith(
+            color: context.colors.textSecondary,
+          ),
+        ),
         if (reviewed.isNotEmpty)
           for (final (heading, rows) in [
-            ('Deciding clauses', deciding),
-            ('Also considered', considered),
+            (context.l10n.analysisDecidingClauses, deciding),
+            (context.l10n.analysisAlsoConsidered, considered),
           ]) ...[
             AppSectionHeader(title: '$heading · ${rows.length}'),
-            for (final row in rows) _ClauseCard(row),
+            for (final row in rows) _ClauseCard(row, language: language),
           ]
         else
-          _PolicyEvidenceCard(clauses: clauses, analysisBasis: analysisBasis),
+          _PolicyEvidenceCard(
+            clauses: clauses,
+            analysisBasis: analysisBasis,
+            language: language,
+          ),
       ],
     ),
   );
 }
 
 class _ClauseCard extends StatelessWidget {
-  const _ClauseCard(this.clause);
+  const _ClauseCard(this.clause, {required this.language});
 
   final Map<String, dynamic> clause;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -649,18 +915,39 @@ class _ClauseCard extends StatelessWidget {
           spacing: DsSpace.s8,
           children: [
             if (_text(clause['effect']) case final effect?)
-              Align(alignment: AlignmentDirectional.centerStart, child: _Tag(effect)),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: _Tag(localizedClauseEffect(context.l10n, effect)),
+              ),
             Text(
-              _text(clause['section']) ?? 'Policy clause',
+              reportNarrative(
+                    context.l10n,
+                    language,
+                    clause['section'],
+                    clause['localizedSection'],
+                  ) ??
+                  context.l10n.analysisPolicyClause,
               style: AppTextStyles.rowTitle.copyWith(color: c.textPrimary),
             ),
             if (_text(clause['quote']) case final text?)
-              SelectableText(
-                '\u201c$text\u201d',
+              LocalizedPolicyWording(
+                original: '\u201c$text\u201d',
+                translation: (language == context.l10n.localeName)
+                    ? _text(clause['localizedText'])
+                    : null,
                 style: AppTextStyles.reportBody.copyWith(color: c.textPrimary),
               ),
-            if (_text(clause['explanation']) case final explanation?)
-              Text(explanation, style: AppTextStyles.secondary.copyWith(color: c.textSecondary)),
+            if (reportNarrative(
+                  context.l10n,
+                  language,
+                  clause['explanation'],
+                  clause['localizedExplanation'],
+                )
+                case final explanation?)
+              Text(
+                explanation,
+                style: AppTextStyles.secondary.copyWith(color: c.textSecondary),
+              ),
           ],
         ),
       ),
@@ -677,14 +964,22 @@ class _Tag extends StatelessWidget {
   Widget build(BuildContext context) => DecoratedBox(
     decoration: ShapeDecoration(
       color: positive ? context.colors.statusCoveredBackground : null,
-      shape: DsShape.shape(DsShape.radiusFull, side: BorderSide(color: context.colors.borderDivider)),
+      shape: DsShape.shape(
+        DsShape.radiusFull,
+        side: BorderSide(color: context.colors.borderDivider),
+      ),
     ),
     child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: DsSpace.s8, vertical: DsSpace.s2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: DsSpace.s8,
+        vertical: DsSpace.s2,
+      ),
       child: Text(
         label,
         style: AppTextStyles.chip.copyWith(
-          color: positive ? context.colors.statusCovered : context.colors.textSecondary,
+          color: positive
+              ? context.colors.statusCovered
+              : context.colors.textSecondary,
         ),
       ),
     ),
@@ -696,5 +991,6 @@ String? _text(Object? value) {
   return value.trim();
 }
 
-List<Map<String, dynamic>> _maps(Object? value) =>
-    value is List ? [for (final item in value.whereType<Map<String, dynamic>>()) item] : const [];
+List<Map<String, dynamic>> _maps(Object? value) => value is List
+    ? [for (final item in value.whereType<Map<String, dynamic>>()) item]
+    : const [];

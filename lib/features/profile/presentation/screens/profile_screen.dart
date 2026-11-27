@@ -1,3 +1,5 @@
+import 'package:claimsupport/core/localization/locale_provider.dart';
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/config/app_config_provider.dart';
 import 'package:claimsupport/core/design/app_icons.dart';
 import 'package:claimsupport/core/design/design.dart';
@@ -45,6 +47,7 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final account = ref.watch(authProvider);
     final mode = ref.watch(themeProvider);
+    final language = ref.watch(localeProvider).languageCode;
     final version = ref.watch(_appVersionProvider).value;
     final user = account.value;
     final c = context.colors;
@@ -81,9 +84,9 @@ class ProfileScreen extends ConsumerWidget {
                         SavedListError(
                           error: account.error,
                           offlineMessage: user == null
-                              ? "You're offline."
-                              : "You're offline. Showing saved account details.",
-                          message: "Couldn't load your account.",
+                              ? context.l10n.accountOffline
+                              : context.l10n.accountOfflineCached,
+                          message: context.l10n.accountLoadError,
                           onRetry: () => _refresh(ref),
                         ),
                       if (user != null) ...[
@@ -102,7 +105,7 @@ class ProfileScreen extends ConsumerWidget {
                               children: [
                                 Icon(AppIcons.pencil, size: DsSize.iconSm, color: c.textPrimary),
                                 Text(
-                                  'Edit name',
+                                  context.l10n.accountEditName,
                                   style: AppTextStyles.label.copyWith(
                                     color: c.textPrimary,
                                     fontWeight: FontWeight.w600,
@@ -115,35 +118,45 @@ class ProfileScreen extends ConsumerWidget {
                       ] else if (account.isLoading)
                         const AppSkeleton(kind: AppSkeletonKind.row)
                       else if (!account.hasError)
-                        const SavedListMessage('Account details are unavailable.'),
+                        SavedListMessage(context.l10n.accountUnavailable),
                       const SizedBox(height: 28),
-                      const _ProfileLabel('Preferences'),
+                      _ProfileLabel(context.l10n.accountPreferences),
                       const SizedBox(height: DsSpace.s8),
                       _ProfileGroup(
                         children: [
                           _ProfileRow(
                             icon: AppIcons.appearance,
-                            label: 'Appearance',
-                            detail: _appearanceLabel(mode),
+                            label: context.l10n.accountAppearance,
+                            detail: _appearanceLabel(context, mode),
                             onTap: () => _appearance(context),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.language,
+                            label: context.l10n.accountLanguage,
+                            detail: _languageLabel(context, language),
+                            onTap: user == null ? null : () => _chooseLanguage(context, ref),
                           ),
                           const _NotificationRow(),
                         ],
                       ),
                       const SizedBox(height: 28),
-                      const _ProfileLabel('Help'),
+                      _ProfileLabel(context.l10n.accountHelp),
                       const SizedBox(height: DsSpace.s8),
                       _ProfileGroup(
                         children: [
-                          _ProfileRow(icon: AppIcons.help, label: 'Help and support', onTap: () => _help(context)),
+                          _ProfileRow(
+                            icon: AppIcons.help,
+                            label: context.l10n.accountHelpSupport,
+                            onTap: () => _help(context),
+                          ),
                           _ProfileRow(
                             icon: AppIcons.fileText,
-                            label: 'Terms of use',
+                            label: context.l10n.authTermsTitle,
                             onTap: () => AccountNotice.terms.show(context),
                           ),
                           _ProfileRow(
                             icon: AppIcons.lock,
-                            label: 'Privacy policy',
+                            label: context.l10n.authPrivacyTitle,
                             onTap: () => AccountNotice.privacy.show(context),
                           ),
                         ],
@@ -153,7 +166,7 @@ class ProfileScreen extends ConsumerWidget {
                         children: [
                           _ProfileRow(
                             icon: AppIcons.signOut,
-                            label: 'Log out',
+                            label: context.l10n.accountLogout,
                             showChevron: false,
                             onTap: () => _logout(context, ref),
                           ),
@@ -162,7 +175,7 @@ class ProfileScreen extends ConsumerWidget {
                       if (version != null) ...[
                         const SizedBox(height: DsSpace.s24),
                         Text(
-                          'Policy Pal · Version $version',
+                          context.l10n.accountVersion(version),
                           textAlign: TextAlign.center,
                           style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary),
                         ),
@@ -180,7 +193,7 @@ class ProfileScreen extends ConsumerWidget {
 
   void _appearance(BuildContext context) => AppSheet.show<void>(
     context: context,
-    title: 'Appearance',
+    title: context.l10n.accountAppearance,
     showClose: true,
     bodyBuilder: (_) => Consumer(
       builder: (context, ref, _) {
@@ -191,8 +204,8 @@ class ProfileScreen extends ConsumerWidget {
             for (final mode in ThemeMode.values) ...[
               if (mode != ThemeMode.system) const _ProfileDivider(),
               _AppearanceRow(
-                label: _appearanceLabel(mode),
-                hint: mode == ThemeMode.system ? "Match your phone's setting" : null,
+                label: _appearanceLabel(context, mode),
+                hint: mode == ThemeMode.system ? context.l10n.accountMatchDevice : null,
                 selected: mode == selected,
                 onTap: () => ref.read(themeProvider.notifier).selectTheme(mode),
               ),
@@ -203,16 +216,53 @@ class ProfileScreen extends ConsumerWidget {
     ),
   );
 
-  static String _appearanceLabel(ThemeMode mode) => switch (mode) {
-    ThemeMode.system => 'System',
-    ThemeMode.light => 'Light',
-    ThemeMode.dark => 'Dark',
+  static String _appearanceLabel(BuildContext context, ThemeMode mode) => switch (mode) {
+    ThemeMode.system => context.l10n.accountThemeSystem,
+    ThemeMode.light => context.l10n.accountThemeLight,
+    ThemeMode.dark => context.l10n.accountThemeDark,
   };
+
+  static String _languageLabel(BuildContext context, String code) =>
+      code == 'ta' ? context.l10n.accountLanguageTamil : context.l10n.accountLanguageEnglish;
+
+  Future<void> _chooseLanguage(BuildContext context, WidgetRef ref) async {
+    final selected = ref.read(localeProvider).languageCode;
+    final language = await AppSheet.show<String>(
+      context: context,
+      title: context.l10n.accountLanguage,
+      showClose: true,
+      bodyBuilder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final code in ['en', 'ta']) ...[
+            if (code == 'ta') const _ProfileDivider(),
+            _AppearanceRow(
+              label: _languageLabel(context, code),
+              selected: code == selected,
+              onTap: () => Navigator.of(context).pop(code),
+            ),
+          ],
+        ],
+      ),
+    );
+    if (language == null || !context.mounted) return;
+    try {
+      await ref
+          .read(localeProvider.notifier)
+          .selectLanguage(language, () => ref.read(authProvider.notifier).updateLanguage(language));
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.l10n.accountLanguageUpdateError)));
+      }
+    }
+  }
 
   void _help(BuildContext context) {
     AppSheet.show<void>(
       context: context,
-      title: 'Help and support',
+      title: context.l10n.accountHelpSupport,
       showClose: true,
       bodyBuilder: (_) => Consumer(
         builder: (context, ref, _) {
@@ -224,23 +274,27 @@ class ProfileScreen extends ConsumerWidget {
               if (!state.isLoading && email == null)
                 SavedListError(
                   error: state.error,
-                  offlineMessage: "You're offline.",
-                  message: 'Support contact is unavailable.',
+                  offlineMessage: context.l10n.accountOffline,
+                  message: context.l10n.accountSupportUnavailable,
                   onRetry: () => ref.invalidate(supportEmailProvider),
                 ),
               if (email != null) ...[
-                AppSheetKeyValue(label: 'Support email', value: email),
+                AppSheetKeyValue(label: context.l10n.accountSupportEmail, value: email),
                 AppButton(
-                  label: 'Send email',
+                  label: context.l10n.accountSendEmail,
                   onPressed: () async {
                     final opened = await launchUrl(
-                      Uri(scheme: 'mailto', path: email, query: 'subject=Policy%20Pal%20Assistance'),
+                      Uri(
+                        scheme: 'mailto',
+                        path: email,
+                        query: 'subject=${Uri.encodeComponent(context.l10n.accountSupportSubject)}',
+                      ),
                     );
                     if (!opened) await Clipboard.setData(ClipboardData(text: email));
                   },
                 ),
                 AppLink(
-                  label: 'Copy email',
+                  label: context.l10n.accountCopyEmail,
                   onPressed: () => Clipboard.setData(ClipboardData(text: email)),
                 ),
               ],
@@ -270,15 +324,18 @@ class ProfileScreen extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('Log out?', style: AppTextStyles.headline.copyWith(color: c.textPrimary)),
+                      Text(
+                        context.l10n.accountLogoutQuestion,
+                        style: AppTextStyles.headline.copyWith(color: c.textPrimary),
+                      ),
                       const SizedBox(height: DsSpace.s8),
                       Text(
-                        'Your documents and checks stay saved. Log in with your email to see them again.',
+                        context.l10n.accountLogoutDescription,
                         style: AppTextStyles.label.copyWith(color: c.textSecondary),
                       ),
                       const SizedBox(height: DsSpace.s20),
                       AppButton(
-                        label: 'Log out',
+                        label: context.l10n.accountLogout,
                         style: AppButtonStyle.secondary,
                         onPressed: () => Navigator.of(context).pop(true),
                       ),
@@ -286,8 +343,11 @@ class ProfileScreen extends ConsumerWidget {
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(false),
                         child: Text(
-                          'Cancel',
-                          style: AppTextStyles.label.copyWith(color: c.textPrimary, fontWeight: FontWeight.w600),
+                          context.l10n.accountCancel,
+                          style: AppTextStyles.label.copyWith(
+                            color: c.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -348,14 +408,20 @@ class _Identity extends StatelessWidget {
           height: 72,
           alignment: Alignment.center,
           decoration: BoxDecoration(color: c.surfaceSelected, shape: BoxShape.circle),
-          child: Text(initials.isEmpty ? '?' : initials, style: AppTextStyles.title.copyWith(color: c.iconActive)),
+          child: Text(
+            initials.isEmpty ? '?' : initials,
+            style: AppTextStyles.title.copyWith(color: c.iconActive),
+          ),
         ),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             spacing: DsSpace.s4,
             children: [
-              Text(name.isEmpty ? 'Account' : name, style: AppTextStyles.title.copyWith(color: c.textPrimary)),
+              Text(
+                name.isEmpty ? context.l10n.accountLabel : name,
+                style: AppTextStyles.title.copyWith(color: c.textPrimary),
+              ),
               if (user.email.isNotEmpty)
                 Text(user.email, style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary)),
             ],
@@ -444,7 +510,14 @@ class _ProfileRow extends StatelessWidget {
               Expanded(
                 child: Text(label, style: AppTextStyles.subheadRegular.copyWith(color: c.textPrimary)),
               ),
-              if (detail != null) Text(detail!, style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary)),
+              if (detail != null)
+                Flexible(
+                  child: Text(
+                    detail!,
+                    textAlign: TextAlign.end,
+                    style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary),
+                  ),
+                ),
               if (trailing != null)
                 trailing!
               else if (showChevron)
@@ -483,7 +556,8 @@ class _AppearanceRow extends StatelessWidget {
                   spacing: DsSpace.s4,
                   children: [
                     Text(label, style: AppTextStyles.subheadRegular.copyWith(color: c.textPrimary)),
-                    if (hint != null) Text(hint!, style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary)),
+                    if (hint != null)
+                      Text(hint!, style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary)),
                   ],
                 ),
               ),
@@ -492,7 +566,10 @@ class _AppearanceRow extends StatelessWidget {
                 height: 24,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: selected ? c.buttonPrimary : c.borderStrong, width: selected ? 7 : 1.4),
+                  border: Border.all(
+                    color: selected ? c.buttonPrimary : c.borderStrong,
+                    width: selected ? 7 : 1.4,
+                  ),
                 ),
               ),
             ],
@@ -522,13 +599,13 @@ class _NotificationRowState extends ConsumerState<_NotificationRow> {
       if (enabled && await service.requestPermission() == false && mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Allow notifications in your phone settings to receive alerts.')));
+        ).showSnackBar(SnackBar(content: Text(context.l10n.accountNotificationPermission)));
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text("Couldn't save your notification setting.")));
+        ).showSnackBar(SnackBar(content: Text(context.l10n.accountNotificationSaveError)));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -543,9 +620,9 @@ class _NotificationRowState extends ConsumerState<_NotificationRow> {
       valueListenable: service.enabled,
       builder: (context, enabled, _) => _ProfileRow(
         icon: AppIcons.bell,
-        label: 'Notifications',
+        label: context.l10n.accountNotifications,
         trailing: Semantics(
-          label: 'Notifications',
+          label: context.l10n.accountNotifications,
           child: Switch(
             value: enabled,
             activeThumbColor: c.textOnButton,

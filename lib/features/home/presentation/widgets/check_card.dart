@@ -1,6 +1,8 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:claimsupport/core/localization/translation_mapper.dart';
 import 'package:flutter/semantics.dart';
 
 import 'package:claimsupport/core/design/app_icons.dart';
@@ -37,8 +39,57 @@ class AppCheckCard extends StatelessWidget {
   final bool backLayer;
   final bool blurGlass;
 
-  static double heightFor(BuildContext context) =>
-      158 + ((MediaQuery.textScalerOf(context).scale(16) / 16 - 1) * 94).clamp(0, double.infinity);
+  static double heightFor(BuildContext context, {bool includesNote = false}) {
+    final l10n = context.l10n;
+    final painter = TextPainter(
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    );
+    double lineHeight(String text, TextStyle style) {
+      painter.text = TextSpan(text: text, style: style);
+      painter.layout();
+      return painter.height;
+    }
+
+    final title = lineHeight(l10n.sharedPrescription, AppTextStyles.headline);
+    final meta = lineHeight(
+      l10n.sharedForPatient(l10n.sharedYou),
+      AppTextStyles.captionRegular,
+    );
+    final status = lineHeight(
+      l10n.sharedFullyCovered,
+      AppTextStyles.checkStatus,
+    );
+    final caption = lineHeight(l10n.sharedPolicy, AppTextStyles.secondary);
+    final note = includesNote
+        ? 2 + lineHeight(l10n.sharedReviewLater, AppTextStyles.secondary)
+        : 0.0;
+    painter.dispose();
+
+    // Include the card ring, insets, divider, spacing, and the tallest possible
+    // one-line status/action and caption. The stack uses the same box height.
+    final minimum =
+        32 +
+        title * (l10n.localeName == 'ta' ? 2 : 1) +
+        2 +
+        meta +
+        14 +
+        status.clamp(24, double.infinity) +
+        note +
+        21 +
+        caption.clamp(21, double.infinity) +
+        4;
+    return minimum.clamp(158, double.infinity).ceilToDouble();
+  }
+
+  static double stackHeight(
+    BuildContext context,
+    Iterable<CheckSummary> checks,
+  ) => heightFor(
+    context,
+    includesNote: checks.any((check) => _noteFor(check, context.l10n) != null),
+  );
 
   @override
   Widget build(BuildContext context) => AppCheckCardSurface(
@@ -57,7 +108,11 @@ class AppCheckCard extends StatelessWidget {
             // The surface's ring contributes 2pt to its total height.
             height: fitContent && constraints.hasBoundedHeight
                 ? constraints.maxHeight
-                : heightFor(context) - 2 + (_noteFor(check) == null ? 0 : 22),
+                : heightFor(
+                        context,
+                        includesNote: _noteFor(check, context.l10n) != null,
+                      ) -
+                      2,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
               child: _CheckContent(
@@ -87,7 +142,10 @@ class AppCheckCardSurface extends StatelessWidget {
     this.customActions,
   });
 
-  static final _frontBlur = ImageFilter.blur(sigmaX: DsEffect.checkCardBlur, sigmaY: DsEffect.checkCardBlur);
+  static final _frontBlur = ImageFilter.blur(
+    sigmaX: DsEffect.checkCardBlur,
+    sigmaY: DsEffect.checkCardBlur,
+  );
 
   final Widget child;
   final Color? surfaceColor;
@@ -101,13 +159,19 @@ class AppCheckCardSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     return AppPressableSurface(
-      color: glass && backLayer ? c.surfaceCard.withValues(alpha: 0.35) : surfaceColor ?? c.surfaceCard,
+      color: glass && backLayer
+          ? c.surfaceCard.withValues(alpha: 0.35)
+          : surfaceColor ?? c.surfaceCard,
       border: BorderSide(color: glass ? c.borderCheckGlass : c.borderSubtle),
       gradient: glass && !backLayer
           ? LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [c.surfaceCheckGlassTop, c.surfaceCheckGlassTop, c.surfaceCard],
+              colors: [
+                c.surfaceCheckGlassTop,
+                c.surfaceCheckGlassTop,
+                c.surfaceCard,
+              ],
               stops: const [0, 0.18, 0.78],
             )
           : null,
@@ -186,40 +250,85 @@ class _CheckContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final today = DateUtils.isSameDay(check.createdAt, DateTime.now());
-    final date = home && today ? 'Today' : check.dateLabel;
+    final l10n = context.l10n;
+    final createdAt = check.createdAt;
+    final date = home && today
+        ? l10n.sharedToday
+        : createdAt == null || l10n.localeName == 'en'
+        ? check.dateLabel
+        : formatLocalizedDate(
+            l10n,
+            createdAt,
+            pattern: today ? 'h:mm a' : 'd MMM yyyy',
+          );
+    final patient = check.patientName == 'you'
+        ? l10n.sharedYou
+        : check.patientName;
+    final displayMeta = l10n.localeName == 'en'
+        ? check.meta
+        : [
+            if (patient.isNotEmpty) l10n.sharedForPatient(patient),
+            if (check.policyCount > 1)
+              l10n.sharedPoliciesCompared(check.policyCount),
+          ].join(' · ');
     final primary = glass ? c.textCheckGlassPrimary : c.textPrimary;
     final secondary = glass ? c.textCheckGlassSecondary : c.textSecondary;
-    final meta = AppTextStyles.captionRegular.copyWith(color: secondary, letterSpacing: glass ? 0.25 : null);
-    final fixedDivider = glass && _noteFor(check) == null;
+    final meta = AppTextStyles.captionRegular.copyWith(
+      color: secondary,
+      letterSpacing: glass ? 0.25 : null,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Expanded(
-              child: Text(
-                check.treatment,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: (home ? AppTextStyles.headline : AppTextStyles.rowTitle).copyWith(
-                  color: primary,
-                  letterSpacing: glass ? 0.15 : null,
+        LayoutBuilder(
+          builder: (context, constraints) => Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Expanded(
+                child: Text(
+                  check.displayTreatment(l10n),
+                  maxLines: home && l10n.localeName == 'ta' ? 2 : 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      (home ? AppTextStyles.headline : AppTextStyles.rowTitle)
+                          .copyWith(
+                            color: primary,
+                            letterSpacing: glass ? 0.15 : null,
+                          ),
                 ),
               ),
-            ),
-            if (date.isNotEmpty) ...[
-              SizedBox(width: home ? DsSpace.s12 : DsSpace.s8),
-              Text(date, style: meta),
+              if (date.isNotEmpty) ...[
+                SizedBox(width: home ? DsSpace.s12 : DsSpace.s8),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth * .32,
+                  ),
+                  child: Text(
+                    date,
+                    style: meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
-        if (check.meta.isNotEmpty) ...[
+        if (displayMeta.isNotEmpty) ...[
           SizedBox(height: home ? DsSpace.s2 : DsSpace.s4),
-          Text(check.meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: meta),
+          Text(
+            displayMeta,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: meta,
+          ),
         ],
-        SizedBox(height: home ? (compact && _noteFor(check) != null ? 4 : 14) : DsSpace.s4),
+        SizedBox(
+          height: home
+              ? (compact && _noteFor(check, context.l10n) != null ? 4 : 14)
+              : DsSpace.s4,
+        ),
         _CheckStatus(
           check: check,
           onAction: onAction,
@@ -231,26 +340,34 @@ class _CheckContent extends StatelessWidget {
         ),
         if (check.bestPolicyName.isNotEmpty) ...[
           if (home) ...[
-            if (fixedDivider) const SizedBox(height: 10) else const Spacer(),
+            const SizedBox(height: 10),
             Divider(height: 1, thickness: 1, color: c.borderSubtle),
             const SizedBox(height: 10),
           ] else
             const SizedBox(height: DsSpace.s6),
-          _PolicyCaption(name: check.bestPolicyName, extraPolicies: check.policyCount - 1, glass: glass),
-          if (fixedDivider) const Spacer(),
+          _PolicyCaption(
+            name: check.bestPolicyName == "Policy"
+                ? l10n.sharedPolicy
+                : check.bestPolicyName,
+            extraPolicies: check.policyCount - 1,
+            glass: glass,
+          ),
         ],
       ],
     );
   }
 }
 
-String? _noteFor(CheckSummary check) => switch (check.issue) {
-  CheckIssue.review => 'We’ll update this when it’s reviewed.',
-  CheckIssue.invalidPrescription => 'Upload the doctor’s prescription and try again.',
-  null when check.statusKind == CheckStatusKind.checking => 'You can leave. We’ll let you know.',
-  null when check.statusKind == CheckStatusKind.failed => 'Something went wrong on our side.',
-  _ => null,
-};
+String? _noteFor(CheckSummary check, AppLocalizations l10n) =>
+    switch (check.issue) {
+      CheckIssue.review => l10n.sharedReviewLater,
+      CheckIssue.invalidPrescription => l10n.sharedUploadPrescriptionRetry,
+      null when check.statusKind == CheckStatusKind.checking =>
+        l10n.sharedCanLeave,
+      null when check.statusKind == CheckStatusKind.failed =>
+        l10n.sharedFailureOnOurSide,
+      _ => null,
+    };
 
 class _CheckStatus extends StatelessWidget {
   const _CheckStatus({
@@ -276,10 +393,11 @@ class _CheckStatus extends StatelessWidget {
     final c = context.colors;
     final checking = check.statusKind == CheckStatusKind.checking;
     final failed = check.statusKind == CheckStatusKind.failed;
-    final note = _noteFor(check);
+    final note = _noteFor(check, context.l10n);
     final action = switch (check.statusKind) {
-      CheckStatusKind.verification => 'Answer 1 question',
-      CheckStatusKind.failed when check.issue == null => 'Try again',
+      CheckStatusKind.verification => context.l10n.sharedAnswerOne,
+      CheckStatusKind.failed when check.issue == null =>
+        context.l10n.sharedTryAgain,
       _ => null,
     };
     final hasAction = action != null && onAction != null;
@@ -299,7 +417,11 @@ class _CheckStatus extends StatelessWidget {
                   ),
                 )
               else if (check.issue == CheckIssue.review)
-                Icon(AppIcons.hourglassMedium, size: home ? DsSize.iconLg : DsSize.iconMd, color: secondary)
+                Icon(
+                  AppIcons.hourglassMedium,
+                  size: home ? DsSize.iconLg : DsSize.iconMd,
+                  color: secondary,
+                )
               else if (failed)
                 Icon(
                   AppIcons.warningCircle,
@@ -310,23 +432,31 @@ class _CheckStatus extends StatelessWidget {
                 AppStatusDot(
                   kind: check.statusKind,
                   size: home ? DsSize.indicatorDot : DsSpace.s8,
-                  color: check.statusKind == CheckStatusKind.covered ? coveredDot : null,
+                  color: check.statusKind == CheckStatusKind.covered
+                      ? coveredDot
+                      : null,
                 ),
               SizedBox(width: home ? DsSpace.s8 : DsSpace.s6),
               Expanded(
                 child: Text(
-                  failed && check.issue == null ? 'Couldn’t check' : check.statusLabel,
+                  failed && check.issue == null
+                      ? context.l10n.sharedCouldNotCheck
+                      : localizedCheckStatus(context.l10n, check.statusLabel),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: (home ? AppTextStyles.checkStatus : AppTextStyles.compactStatus).copyWith(
-                    color: checking ? secondary : primary,
-                  ),
+                  style:
+                      (home
+                              ? AppTextStyles.checkStatus
+                              : AppTextStyles.compactStatus)
+                          .copyWith(color: checking ? secondary : primary),
                 ),
               ),
               if (hasAction) ...[
                 const SizedBox(width: DsSpace.s8),
                 ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: constraints.maxWidth * .54),
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth * .54,
+                  ),
                   child: AppPressable(
                     onTap: onAction,
                     child: Text.rich(
@@ -335,7 +465,11 @@ class _CheckStatus extends StatelessWidget {
                           if (failed) ...[
                             WidgetSpan(
                               alignment: PlaceholderAlignment.middle,
-                              child: Icon(AppIcons.arrowClockwise, size: DsSize.iconXs, color: c.textLink),
+                              child: Icon(
+                                AppIcons.arrowClockwise,
+                                size: DsSize.iconXs,
+                                color: c.textLink,
+                              ),
                             ),
                             const TextSpan(text: ' '),
                           ],
@@ -371,7 +505,11 @@ class _CheckStatus extends StatelessWidget {
 }
 
 class _PolicyCaption extends StatelessWidget {
-  const _PolicyCaption({required this.name, required this.extraPolicies, required this.glass});
+  const _PolicyCaption({
+    required this.name,
+    required this.extraPolicies,
+    required this.glass,
+  });
 
   final String name;
   final int extraPolicies;
@@ -394,14 +532,21 @@ class _PolicyCaption extends StatelessWidget {
             name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.secondary.copyWith(color: foreground, letterSpacing: glass ? 0.2 : null),
+            style: AppTextStyles.secondary.copyWith(
+              color: foreground,
+              letterSpacing: glass ? 0.2 : null,
+            ),
           ),
         ),
         if (extraPolicies > 0) ...[
           const SizedBox(width: DsSpace.s8),
           DecoratedBox(
             decoration: ShapeDecoration(
-              shape: StadiumBorder(side: BorderSide(color: glass ? c.borderSubtle : c.borderDivider)),
+              shape: StadiumBorder(
+                side: BorderSide(
+                  color: glass ? c.borderSubtle : c.borderDivider,
+                ),
+              ),
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),

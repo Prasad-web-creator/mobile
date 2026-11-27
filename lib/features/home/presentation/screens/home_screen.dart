@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -17,7 +18,8 @@ import 'package:claimsupport/core/design/widgets/app_shells.dart';
 import 'package:claimsupport/core/design/widgets/home_background.dart';
 import 'package:claimsupport/core/routing/app_shell.dart';
 import 'package:claimsupport/core/utils/shared_prefs.dart';
-import 'package:claimsupport/core/widgets/app_widgets.dart' show friendlyErrorMessage;
+import 'package:claimsupport/core/widgets/app_widgets.dart'
+    show friendlyErrorMessage;
 import 'package:claimsupport/features/authentication/presentation/controllers/auth_controller.dart';
 import 'package:claimsupport/features/dashboard/presentation/controllers/dashboard_controller.dart';
 import 'package:claimsupport/features/home/data/check_summary.dart';
@@ -28,7 +30,7 @@ import 'package:claimsupport/features/home/presentation/widgets/home_entrance.da
 
 /// Home (Figma "Home v4": no data 44:16 / 44:92, with data 45:116 / 45:212).
 ///
-/// No checks yet → the "Know your cover before the bill" empty state.
+/// No checks yet → the context.l10n.sharedKnowYourCover empty state.
 /// Otherwise → "Hi, {name}", the Recent checks stack and the Document cards.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -58,23 +60,32 @@ class HomeScreen extends ConsumerWidget {
     final loading = checks.isLoading && currentChecks == null;
     final hasChecks = currentChecks?.isNotEmpty == true;
     final error = checks.error ?? stats.error;
-    final serverMessage = serverErrorMessage(error);
+    final serverMessage = serverErrorMessage(error, l10n: context.l10n);
     final showingSaved = serverMessage != null && currentChecks != null;
     final banner = error == null
         ? null
         : AppInlineBanner(
-            kind: showingSaved ? AppInlineBannerKind.offline : AppInlineBannerKind.error,
-            title: serverMessage == null ? null : 'Can’t connect to Policy Pal',
+            kind: showingSaved
+                ? AppInlineBannerKind.offline
+                : AppInlineBannerKind.error,
+            title: serverMessage == null
+                ? null
+                : context.l10n.sharedCannotConnect,
             message: showingSaved
-                ? '$serverMessage Showing your saved checks.'
-                : serverMessage ?? friendlyErrorMessage(error),
+                ? context.l10n.sharedShowingSavedChecks(serverMessage)
+                : serverMessage ??
+                      friendlyErrorMessage(error, l10n: context.l10n),
             onRetry: () => _refresh(ref),
           );
     final reduced = DsMotion.reduced(context);
-    final cardHeight = AppCheckCard.heightFor(context);
+    final cardHeight = AppCheckCard.stackHeight(
+      context,
+      currentChecks ?? const [],
+    );
     void openHistory() => context.go(AppRootNavigation.historyPath);
     final docs = _DocumentCards(
-      prescriptions: stats.value?.totalPrescriptions ?? cached?.counts?.prescriptions,
+      prescriptions:
+          stats.value?.totalPrescriptions ?? cached?.counts?.prescriptions,
       policies: stats.value?.totalPolicies ?? cached?.counts?.policies,
     );
 
@@ -93,9 +104,11 @@ class HomeScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: DsSpace.s4),
-                  child: AppSectionHeader(title: 'Recent checks'),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: DsSpace.s4),
+                  child: AppSectionHeader(
+                    title: context.l10n.sharedRecentChecks,
+                  ),
                 ),
                 const SizedBox(height: DsSpace.s12),
                 SizedBox(
@@ -109,7 +122,8 @@ class HomeScreen extends ConsumerWidget {
                             checks: currentChecks!,
                             cardHeight: cardHeight,
                             glass: true,
-                            onOpen: (CheckSummary check) => context.push(check.route, extra: check.group),
+                            onOpen: (CheckSummary check) =>
+                                context.push(check.route, extra: check.group),
                             onAction: (check) {
                               if (check.actionRoute case final route?) {
                                 context.push(route, extra: check.group);
@@ -122,15 +136,19 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: DsSpace.s4),
-          HomeReveal(delay: 260, duration: 200, child: CheckStackViewAll(onTap: openHistory)),
+          HomeReveal(
+            delay: 260,
+            duration: 200,
+            child: CheckStackViewAll(onTap: openHistory),
+          ),
           const SizedBox(height: 18),
-          const HomeReveal(
+          HomeReveal(
             delay: 280,
             duration: 320,
             rise: 12,
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: DsSpace.s4),
-              child: AppSectionHeader(title: 'Documents'),
+              padding: const EdgeInsets.symmetric(horizontal: DsSpace.s4),
+              child: AppSectionHeader(title: context.l10n.sharedDocuments),
             ),
           ),
           const SizedBox(height: 14),
@@ -144,15 +162,17 @@ class HomeScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Know your cover before the bill',
-                  style: AppTextStyles.largeTitle.copyWith(color: c.textOnGradient),
+                  context.l10n.sharedKnowYourCover,
+                  style: AppTextStyles.largeTitle.copyWith(
+                    color: c.textOnGradient,
+                  ),
                 ),
                 const SizedBox(height: DsSpace.sectionGap),
                 const CheckSteps(),
                 const SizedBox(height: DsSpace.s24),
                 AppButton(
                   style: AppButtonStyle.secondary,
-                  label: 'Start your first check',
+                  label: context.l10n.sharedFirstCheck,
                   haptic: true,
                   onPressed: () => startCheck(context),
                 ),
@@ -177,8 +197,12 @@ class HomeScreen extends ConsumerWidget {
             // Scaffold's extended body exposes the navigation dock height.
             final dockHeight = MediaQuery.paddingOf(bodyContext).bottom;
             return ListView(
-              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-              padding: EdgeInsets.only(bottom: math.max(navClearance, dockHeight) + DsSpace.sectionGap),
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              padding: EdgeInsets.only(
+                bottom: math.max(navClearance, dockHeight) + DsSpace.sectionGap,
+              ),
               children: [
                 Stack(
                   clipBehavior: Clip.none,
@@ -187,10 +211,19 @@ class HomeScreen extends ConsumerWidget {
                       top: 0,
                       left: 0,
                       right: 0,
-                      child: HomeReveal(delay: 0, duration: 350, child: HomeBackground()),
+                      child: HomeReveal(
+                        delay: 0,
+                        duration: 350,
+                        child: HomeBackground(),
+                      ),
                     ),
                     Padding(
-                      padding: EdgeInsets.fromLTRB(DsSpace.s16, DsSpace.screenTop(context), DsSpace.s16, 0),
+                      padding: EdgeInsets.fromLTRB(
+                        DsSpace.s16,
+                        DsSpace.screenTop(context),
+                        DsSpace.s16,
+                        0,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -199,14 +232,25 @@ class HomeScreen extends ConsumerWidget {
                             duration: 300,
                             rise: 8,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: DsSpace.s4),
-                              child: _Header(firstName: firstName, fullName: fullName),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: DsSpace.s4,
+                              ),
+                              child: _Header(
+                                firstName: firstName,
+                                fullName: fullName,
+                              ),
                             ),
                           ),
                           const _ResumeLinks(),
-                          SizedBox(height: showRecent ? DsSpace.s20 : DsSpace.sectionGap),
+                          SizedBox(
+                            height: showRecent
+                                ? DsSpace.s20
+                                : DsSpace.sectionGap,
+                          ),
                           AnimatedSwitcher(
-                            duration: reduced ? Duration.zero : const Duration(milliseconds: 250),
+                            duration: reduced
+                                ? Duration.zero
+                                : const Duration(milliseconds: 250),
                             layoutBuilder: _crossfadeLayout,
                             child: content,
                           ),
@@ -229,7 +273,8 @@ Widget _crossfadeLayout(Widget? current, List<Widget> previous) => Stack(
   fit: StackFit.passthrough,
   clipBehavior: Clip.none,
   children: [
-    for (final child in previous) IgnorePointer(child: ExcludeSemantics(child: child)),
+    for (final child in previous)
+      IgnorePointer(child: ExcludeSemantics(child: child)),
     ?current,
   ],
 );
@@ -244,7 +289,8 @@ class _HomeCheckPlaceholder extends StatelessWidget {
     final c = context.colors;
     final entrance = HomeEntrance.maybeOf(context);
     Widget card(int layer) {
-      final position = layer * (entrance?.spreadAt(entrance.progress.value) ?? 1);
+      final position =
+          layer * (entrance?.spreadAt(entrance.progress.value) ?? 1);
       return Transform.translate(
         offset: Offset(0, position * 12),
         child: Transform.scale(
@@ -277,7 +323,8 @@ class _HomeCheckPlaceholder extends StatelessWidget {
                                   height: height,
                                   child: DecoratedBox(
                                     decoration: ShapeDecoration(
-                                      color: c.surfaceCardSubtle == c.surfaceCard
+                                      color:
+                                          c.surfaceCardSubtle == c.surfaceCard
                                           ? c.surfacePressed
                                           : c.surfaceCardSubtle,
                                       shape: DsShape.shape(DsShape.radiusXs),
@@ -296,12 +343,16 @@ class _HomeCheckPlaceholder extends StatelessWidget {
       );
     }
 
-    Widget stack() => Stack(clipBehavior: Clip.none, children: [card(2), card(1), card(0)]);
+    Widget stack() =>
+        Stack(clipBehavior: Clip.none, children: [card(2), card(1), card(0)]);
     return RepaintBoundary(
       child: ExcludeSemantics(
         child: entrance == null
             ? stack()
-            : AnimatedBuilder(animation: entrance.progress, builder: (context, _) => stack()),
+            : AnimatedBuilder(
+                animation: entrance.progress,
+                builder: (context, _) => stack(),
+              ),
       ),
     );
   }
@@ -314,14 +365,19 @@ class _Header extends StatelessWidget {
   final String fullName;
 
   String get _initials {
-    final parts = fullName.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = fullName
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     return parts.take(2).map((p) => p.characters.first.toUpperCase()).join();
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final greeting = firstName.isEmpty ? 'Hi' : 'Hi, $firstName';
+    final greeting = firstName.isEmpty
+        ? context.l10n.sharedHi
+        : context.l10n.sharedGreeting(firstName);
     return Row(
       children: [
         Expanded(
@@ -333,7 +389,10 @@ class _Header extends StatelessWidget {
           ),
         ),
         const SizedBox(width: DsSpace.s8),
-        AppGlassAvatar(initials: _initials, onPressed: () => context.push('/profile')),
+        AppGlassAvatar(
+          initials: _initials,
+          onPressed: () => context.push('/profile'),
+        ),
       ],
     );
   }
@@ -392,9 +451,13 @@ class _ResumeLinks extends StatelessWidget {
     final resumeJob = prefs?.getString(SharedPrefs.analysisResumeKey);
     final draft = prefs?.getString(SharedPrefs.analysisDraftKey);
     final links = <(String, String)>[
-      if (draft != null && draft != resumeJob) ('Continue your draft check', '/upload?resume=true'),
+      if (draft != null && draft != resumeJob)
+        (context.l10n.sharedResumeDraft, '/upload?resume=true'),
       if (resumeJob != null)
-        ('Resume your last check', '/check/processing/${Uri.encodeComponent(resumeJob)}'),
+        (
+          context.l10n.sharedResumeCheck,
+          '/check/processing/${Uri.encodeComponent(resumeJob)}',
+        ),
     ];
     if (links.isEmpty) return const SizedBox.shrink();
     return Padding(
@@ -402,7 +465,8 @@ class _ResumeLinks extends StatelessWidget {
       child: Wrap(
         spacing: DsSpace.s8,
         children: [
-          for (final (label, route) in links) AppLink(label: label, onPressed: () => context.push(route)),
+          for (final (label, route) in links)
+            AppLink(label: label, onPressed: () => context.push(route)),
         ],
       ),
     );

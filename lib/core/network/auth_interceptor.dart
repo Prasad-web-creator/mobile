@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -82,14 +83,14 @@ class AuthInterceptor extends Interceptor {
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Session Expired'),
-          content: const Text('Your login session has expired. Please sign in again to continue.'),
+          title: Text(context.l10n.sharedSessionExpired),
+          content: Text(context.l10n.sharedSessionExpiredExplanation),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop();
               },
-              child: const Text('OK'),
+              child: Text(context.l10n.sharedOk),
             ),
           ],
         ),

@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/design/widgets/app_shells.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -16,7 +17,8 @@ class AnalysisScreen extends ConsumerStatefulWidget {
   ConsumerState<AnalysisScreen> createState() => _AnalysisScreenState();
 }
 
-class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTickerProviderStateMixin {
+class _AnalysisScreenState extends ConsumerState<AnalysisScreen>
+    with SingleTickerProviderStateMixin {
   bool _hasError = false;
   String _errorMessage = '';
   int _currentStage = 0;
@@ -30,30 +32,34 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
   // True once the user has submitted at least one clarification answer.
   bool _answersSubmitted = false;
   static const int _reanalysisStage = 8;
+  static const int _stageCount = 11;
 
-  final List<String> _stageLabels = [
-    'Validating Documents',
-    'Extracting PDF Text',
-    'Cleaning & Normalizing',
-    'Extracting Policy Data',
-    'Extracting Prescription Data',
-    'Validating Extracted Data',
-    'Running Business Rules',
-    'Coverage Analysis',
-    'Re-analyzing with your answers...',
-    'Generating Report',
-    'Loading Coverage Summary...',
+  List<String> _stageLabels(BuildContext context) => [
+    context.l10n.analysisValidatingDocuments,
+    context.l10n.analysisExtractingPdf,
+    context.l10n.analysisNormalizing,
+    context.l10n.analysisExtractingPolicy,
+    context.l10n.analysisExtractingPrescription,
+    context.l10n.analysisValidatingExtracted,
+    context.l10n.analysisRunningRules,
+    context.l10n.analysisCoverageAnalysis,
+    context.l10n.analysisReanalyzing,
+    context.l10n.analysisGeneratingReport,
+    context.l10n.analysisLoadingSummary,
   ];
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
-      ..repeat(reverse: true);
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
 
     try {
       final prefs = SharedPrefs.instance;
-      final rxImageBased = prefs.getBool('prescription_is_image_based') ?? false;
+      final rxImageBased =
+          prefs.getBool('prescription_is_image_based') ?? false;
       final policyImageBased = prefs.getBool('policy_is_image_based') ?? false;
       _isImageBased = rxImageBased || policyImageBased;
     } catch (_) {}
@@ -67,11 +73,18 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
       final policyPath = prefs.getString('policy_path');
       final policyId = policyPath != null ? null : prefs.getString('policy_id');
 
-      if (prescriptionPath != null && (policyPath != null || policyId != null)) {
-        final params = AnalysisParams(prescriptionPath: prescriptionPath, policyPath: policyPath, policyId: policyId);
+      if (prescriptionPath != null &&
+          (policyPath != null || policyId != null)) {
+        final params = AnalysisParams(
+          prescriptionPath: prescriptionPath,
+          policyPath: policyPath,
+          policyId: policyId,
+        );
         ref.read(analysisJobProvider.notifier).startAnalysis(params);
       } else {
-        developer.log('[AnalysisScreen] ERROR: Missing prescription or policy path/id');
+        developer.log(
+          '[AnalysisScreen] ERROR: Missing prescription or policy path/id',
+        );
       }
     });
   }
@@ -112,12 +125,16 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
           if (mounted) {
             setState(() {
               if (answers.values.any(_isAnswered)) _answersSubmitted = true;
-              _currentStage = 8; // "Re-analyzing with your answers..."
+              _currentStage = 8; // context.l10n.analysisReanalyzing
             });
           }
           final sessionId = data['sessionId'] as String;
-          developer.log('[AnalysisScreen] Calling submitAnswers for sessionId=$sessionId');
-          ref.read(analysisJobProvider.notifier).submitAnswers(sessionId, answers);
+          developer.log(
+            '[AnalysisScreen] Calling submitAnswers for sessionId=$sessionId',
+          );
+          ref
+              .read(analysisJobProvider.notifier)
+              .submitAnswers(sessionId, answers);
         },
         onCancel: () {
           developer.log('[AnalysisScreen] Clarification cancelled by user');
@@ -136,13 +153,15 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
   void _navigateToSummary(Map<String, dynamic> data) {
     if (_navigatedToSummary || !mounted) return;
     _navigatedToSummary = true;
-    developer.log('[AnalysisScreen] Analysis complete! Navigating to summary. status=${data['status']}');
+    developer.log(
+      '[AnalysisScreen] Analysis complete! Navigating to summary. status=${data['status']}',
+    );
 
     final prefs = SharedPrefs.instance;
     prefs.setString('analysis_result', jsonEncode(data));
 
     setState(() {
-      _currentStage = _stageLabels.length;
+      _currentStage = _stageCount;
     });
 
     Future.delayed(const Duration(milliseconds: 600), () {
@@ -165,7 +184,11 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
     final policyPath = prefs.getString('policy_path');
     final policyId = policyPath != null ? null : prefs.getString('policy_id');
     if (prescriptionPath != null && (policyPath != null || policyId != null)) {
-      final params = AnalysisParams(prescriptionPath: prescriptionPath, policyPath: policyPath, policyId: policyId);
+      final params = AnalysisParams(
+        prescriptionPath: prescriptionPath,
+        policyPath: policyPath,
+        policyId: policyId,
+      );
       ref.read(analysisJobProvider.notifier).startAnalysis(params);
     }
   }
@@ -180,24 +203,37 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
   Widget _buildContent(BuildContext context) {
     final p = context.palette;
     final t = context.text;
-    final isComplete = _currentStage >= _stageLabels.length;
+    final stageLabels = _stageLabels(context);
+    final isComplete = _currentStage >= stageLabels.length;
     // The re-analysis stage is only listed when clarification answers were given.
     final visibleLabels = [
-      for (int i = 0; i < _stageLabels.length; i++)
-        if (i != _reanalysisStage || _answersSubmitted) _stageLabels[i],
+      for (int i = 0; i < stageLabels.length; i++)
+        if (i != _reanalysisStage || _answersSubmitted) stageLabels[i],
     ];
-    final visibleStage = (!_answersSubmitted && _currentStage > _reanalysisStage) ? _currentStage - 1 : _currentStage;
+    final visibleStage =
+        (!_answersSubmitted && _currentStage > _reanalysisStage)
+        ? _currentStage - 1
+        : _currentStage;
     final total = visibleLabels.length;
     final stepNumber = (visibleStage + 1).clamp(1, total);
 
-    final ToneColors heroTone = _hasError ? p.danger : (isComplete ? p.success : p.info);
+    final ToneColors heroTone = _hasError
+        ? p.danger
+        : (isComplete ? p.success : p.info);
     final IconData heroIcon = _hasError
         ? Icons.error_outline_rounded
-        : (isComplete ? Icons.check_circle_rounded : Icons.manage_search_rounded);
+        : (isComplete
+              ? Icons.check_circle_rounded
+              : Icons.manage_search_rounded);
 
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.xxl, AppSpacing.page, AppSpacing.xxl),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.page,
+          AppSpacing.xxl,
+          AppSpacing.page,
+          AppSpacing.xxl,
+        ),
         child: ContentWidth(
           maxWidth: 560,
           child: Column(
@@ -209,7 +245,12 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
                   animation: _pulseController,
                   builder: (context, child) {
                     final working = !_hasError && !isComplete;
-                    return Transform.scale(scale: working ? 1.0 + (_pulseController.value * 0.04) : 1.0, child: child);
+                    return Transform.scale(
+                      scale: working
+                          ? 1.0 + (_pulseController.value * 0.04)
+                          : 1.0,
+                      child: child,
+                    );
                   },
                   child: Container(
                     width: 84,
@@ -227,17 +268,23 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
 
               // Title
               Text(
-                _hasError ? 'Analysis Failed' : (isComplete ? 'Analysis Complete!' : 'Analyzing...'),
+                _hasError
+                    ? context.l10n.analysisFailed
+                    : (isComplete
+                          ? context.l10n.analysisComplete
+                          : context.l10n.analysisAnalyzing),
                 textAlign: TextAlign.center,
-                style: t.headlineSmall?.copyWith(color: _hasError ? p.danger.fg : p.textPrimary),
+                style: t.headlineSmall?.copyWith(
+                  color: _hasError ? p.danger.fg : p.textPrimary,
+                ),
               ),
               const SizedBox(height: AppSpacing.xs),
 
               // Subtitle
               Text(
                 _hasError
-                    ? 'Something went wrong during the analysis.'
-                    : 'Our system is reading your documents and cross-referencing coverage.',
+                    ? context.l10n.analysisUnexpectedError
+                    : context.l10n.analysisReadingCoverage,
                 textAlign: TextAlign.center,
                 style: t.bodyMedium,
               ),
@@ -245,10 +292,10 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
 
               // Image-based PDF notification
               if (!_hasError && _isImageBased && !isComplete) ...[
-                const InfoBanner(
+                InfoBanner(
                   tone: AppTone.info,
                   icon: Icons.timer_outlined,
-                  message: 'Your uploaded PDF is image-based, so it may take some time. Please stay here.',
+                  message: context.l10n.analysisImageBasedPdf,
                 ),
                 const SizedBox(height: AppSpacing.md),
               ],
@@ -262,10 +309,19 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
                     children: [
                       Row(
                         children: [
-                          Expanded(child: Text('Analysis progress', style: t.titleSmall)),
+                          Expanded(
+                            child: Text(
+                              context.l10n.analysisProgress,
+                              style: t.titleSmall,
+                            ),
+                          ),
                           Text(
-                            isComplete ? 'Done' : 'Step $stepNumber of $total',
-                            style: t.labelMedium?.copyWith(color: isComplete ? p.success.fg : p.primary),
+                            isComplete
+                                ? context.l10n.analysisDone
+                                : context.l10n.analysisStep(stepNumber, total),
+                            style: t.labelMedium?.copyWith(
+                              color: isComplete ? p.success.fg : p.primary,
+                            ),
                           ),
                         ],
                       ),
@@ -297,23 +353,37 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
               if (_hasError) ...[
                 InfoBanner(
                   tone: AppTone.danger,
-                  title: 'We couldn\'t complete the analysis',
-                  message: friendlyErrorMessage(_errorMessage),
+                  title: context.l10n.analysisCouldNotFinishAnalysis,
+                  message: friendlyErrorMessage(
+                    _errorMessage,
+                    l10n: context.l10n,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                PrimaryButton(label: 'Retry Analysis', icon: Icons.refresh_rounded, onPressed: _retryAnalysis),
+                PrimaryButton(
+                  label: context.l10n.analysisRetryAnalysis,
+                  icon: Icons.refresh_rounded,
+                  onPressed: _retryAnalysis,
+                ),
                 const SizedBox(height: AppSpacing.xs),
-                SecondaryButton(label: 'Return to Dashboard', onPressed: () => context.go('/dashboard')),
+                SecondaryButton(
+                  label: context.l10n.analysisReturnDashboard,
+                  onPressed: () => context.go('/dashboard'),
+                ),
               ] else if (!isComplete) ...[
                 const SizedBox(height: AppSpacing.xl),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.lock_outline_rounded, size: 16, color: p.textTertiary),
+                    Icon(
+                      Icons.lock_outline_rounded,
+                      size: 16,
+                      color: p.textTertiary,
+                    ),
                     const SizedBox(width: AppSpacing.xs),
                     Flexible(
                       child: Text(
-                        'Please keep this screen open',
+                        context.l10n.analysisKeepOpen,
                         textAlign: TextAlign.center,
                         style: t.labelMedium?.copyWith(color: p.textTertiary),
                       ),
@@ -344,17 +414,17 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
 
     if (prescriptionPath == null || (policyPath == null && policyId == null)) {
       return FlowShell(
-        title: 'Coverage Analysis',
+        title: context.l10n.analysisCoverageAnalysis,
         onClose: () => context.go('/dashboard'),
         body: SafeArea(
           child: EmptyState(
             icon: Icons.upload_file_outlined,
-            title: 'Missing uploaded files or policy selection.',
-            message: 'Please start a new analysis and add your prescription and policy.',
+            title: context.l10n.analysisMissingUploads,
+            message: context.l10n.analysisStartWithDocuments,
             action: FilledButton(
               onPressed: () => context.go('/dashboard'),
               style: FilledButton.styleFrom(minimumSize: const Size(200, 48)),
-              child: const Text('Return to Dashboard'),
+              child: Text(context.l10n.analysisReturnDashboard),
             ),
           ),
         ),
@@ -372,7 +442,8 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
     analysisState.whenOrNull(
       data: (data) {
         final status = (data['status'] as String? ?? '').toLowerCase();
-        final overallStatus = (data['overallStatus'] as String? ?? '').toLowerCase();
+        final overallStatus = (data['overallStatus'] as String? ?? '')
+            .toLowerCase();
         final isComplete =
             status == 'complete' ||
             status == 'completed' ||
@@ -424,7 +495,11 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
       });
     }
 
-    return FlowShell(title: 'Coverage Analysis', onClose: () => context.go('/dashboard'), body: _buildContent(context));
+    return FlowShell(
+      title: context.l10n.analysisCoverageAnalysis,
+      onClose: () => context.go('/dashboard'),
+      body: _buildContent(context),
+    );
   }
 }
 
@@ -435,7 +510,12 @@ class _StageRow extends StatelessWidget {
   final bool isActive;
   final bool isLast;
 
-  const _StageRow({required this.label, required this.isCompleted, required this.isActive, required this.isLast});
+  const _StageRow({
+    required this.label,
+    required this.isCompleted,
+    required this.isActive,
+    required this.isLast,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -449,7 +529,11 @@ class _StageRow extends StatelessWidget {
         child: CircularProgressIndicator(strokeWidth: 2.4, color: p.primary),
       );
     } else {
-      marker = Icon(Icons.radio_button_unchecked_rounded, color: p.borderStrong, size: 22);
+      marker = Icon(
+        Icons.radio_button_unchecked_rounded,
+        color: p.borderStrong,
+        size: 22,
+      );
     }
 
     return IntrinsicHeight(
@@ -475,12 +559,17 @@ class _StageRow extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Padding(
-              padding: EdgeInsets.only(top: 2, bottom: isLast ? 0 : AppSpacing.md),
+              padding: EdgeInsets.only(
+                top: 2,
+                bottom: isLast ? 0 : AppSpacing.md,
+              ),
               child: Text(
                 label,
                 style: context.text.bodyMedium?.copyWith(
                   fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                  color: isCompleted ? p.textSecondary : (isActive ? p.textPrimary : p.textTertiary),
+                  color: isCompleted
+                      ? p.textSecondary
+                      : (isActive ? p.textPrimary : p.textTertiary),
                 ),
               ),
             ),

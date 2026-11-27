@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:claimsupport/core/widgets/app_widgets.dart';
@@ -22,7 +23,8 @@ class CoverageDonutChart extends StatefulWidget {
   State<CoverageDonutChart> createState() => _CoverageDonutChartState();
 }
 
-class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTickerProviderStateMixin {
+class _CoverageDonutChartState extends State<CoverageDonutChart>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _animation;
 
@@ -39,8 +41,14 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
-    _animation = CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic);
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _animation = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    );
     _animController.forward();
   }
 
@@ -66,7 +74,12 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
   }) {
     final total = covered + partiallyCovered + notCovered + needsVerification;
     if (total == 0) {
-      return {'covered': 0, 'partiallyCovered': 0, 'notCovered': 0, 'needsVerification': 0};
+      return {
+        'covered': 0,
+        'partiallyCovered': 0,
+        'notCovered': 0,
+        'needsVerification': 0,
+      };
     }
 
     final double coveredPct = (covered / total) * 100;
@@ -91,7 +104,12 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
     // Sort descending by remainder
     remainders.sort((a, b) => b.value.compareTo(a.value));
 
-    final result = {'covered': cFloor, 'partiallyCovered': pFloor, 'notCovered': nFloor, 'needsVerification': vFloor};
+    final result = {
+      'covered': cFloor,
+      'partiallyCovered': pFloor,
+      'notCovered': nFloor,
+      'needsVerification': vFloor,
+    };
 
     for (int i = 0; i < remainder && i < remainders.length; i++) {
       final key = remainders[i].key;
@@ -117,10 +135,13 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
     try {
       final breakdown = widget.coverageBreakdown!;
       final int coveredCount = _parseInt(breakdown['covered']);
-      final int partiallyCoveredCount = _parseInt(breakdown['partiallyCovered']);
+      final int partiallyCoveredCount = _parseInt(
+        breakdown['partiallyCovered'],
+      );
       final int notCoveredCount = _parseInt(breakdown['notCovered']);
       final int verifyCount = _parseInt(breakdown['needsVerification']);
-      final int totalEvaluated = coveredCount + partiallyCoveredCount + notCoveredCount + verifyCount;
+      final int totalEvaluated =
+          coveredCount + partiallyCoveredCount + notCoveredCount + verifyCount;
 
       final isDark = context.isDark;
       final pal = context.palette;
@@ -133,9 +154,12 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
 
       // 3. Empty State: When zero items are evaluated
       if (totalEvaluated == 0) {
-        return const Padding(
+        return Padding(
           padding: EdgeInsets.only(bottom: AppSpacing.md),
-          child: InfoBanner(tone: AppTone.neutral, message: 'No evaluated claim items available.'),
+          child: InfoBanner(
+            tone: AppTone.neutral,
+            message: context.l10n.analysisNoEvaluatedClaims,
+          ),
         );
       }
 
@@ -154,17 +178,37 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
 
       // Angles in radians
       final double coveredAngle = (coveredCount / totalEvaluated) * 2 * math.pi;
-      final double partialAngle = (partiallyCoveredCount / totalEvaluated) * 2 * math.pi;
-      final double notCoveredAngle = (notCoveredCount / totalEvaluated) * 2 * math.pi;
+      final double partialAngle =
+          (partiallyCoveredCount / totalEvaluated) * 2 * math.pi;
+      final double notCoveredAngle =
+          (notCoveredCount / totalEvaluated) * 2 * math.pi;
       final double verifyAngle = (verifyCount / totalEvaluated) * 2 * math.pi;
 
       return Semantics(
-        label:
-            'Coverage Distribution Donut Chart: '
-            '$coveredPct% Covered ($coveredCount items), '
-            '$partialPct% Partially Covered ($partiallyCoveredCount items), '
-            '$notCoveredPct% Not Covered ($notCoveredCount items)'
-            '${verifyCount > 0 ? ', $verifyPct% Needs Verification ($verifyCount items)' : ''}.',
+        label: [
+          context.l10n.analysisDistribution,
+          context.l10n.analysisChartCategory(
+            context.l10n.analysisCovered,
+            coveredPct,
+            coveredCount,
+          ),
+          context.l10n.analysisChartCategory(
+            context.l10n.analysisPartiallyCovered,
+            partialPct,
+            partiallyCoveredCount,
+          ),
+          context.l10n.analysisChartCategory(
+            context.l10n.analysisCapitalNotCovered,
+            notCoveredPct,
+            notCoveredCount,
+          ),
+          if (verifyCount > 0)
+            context.l10n.analysisChartCategory(
+              context.l10n.analysisCapitalNeedsVerification,
+              verifyPct,
+              verifyCount,
+            ),
+        ].join('. '),
         child: Container(
           margin: const EdgeInsets.only(bottom: AppSpacing.md),
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -178,11 +222,11 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
             children: [
               // Header
               CardTitle(
-                title: 'Coverage Distribution',
+                title: context.l10n.analysisDistribution,
                 icon: Icons.donut_large_rounded,
-                subtitle: 'Tap a category to highlight it',
+                subtitle: context.l10n.analysisHighlightCategory,
                 trailing: StatusBadge(
-                  label: '$totalEvaluated ${totalEvaluated == 1 ? "Item" : "Items"}',
+                  label: context.l10n.analysisItemCountHeadline(totalEvaluated),
                   tone: AppTone.neutral,
                   dense: true,
                 ),
@@ -208,7 +252,8 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
                               painter: _DonutChartPainter(
                                 coveredAngle: coveredAngle * _animation.value,
                                 partialAngle: partialAngle * _animation.value,
-                                notCoveredAngle: notCoveredAngle * _animation.value,
+                                notCoveredAngle:
+                                    notCoveredAngle * _animation.value,
                                 verifyAngle: verifyAngle * _animation.value,
                                 coveredColor: coveredColor,
                                 partialColor: partiallyCoveredColor,
@@ -243,7 +288,7 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
                     children: [
                       _buildLegendItem(
                         context: context,
-                        label: 'Covered',
+                        label: context.l10n.analysisCovered,
                         count: coveredCount,
                         percentage: coveredPct,
                         color: coveredColor,
@@ -253,7 +298,7 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
                       const SizedBox(height: 8),
                       _buildLegendItem(
                         context: context,
-                        label: 'Partially Covered',
+                        label: context.l10n.analysisPartiallyCovered,
                         count: partiallyCoveredCount,
                         percentage: partialPct,
                         color: partiallyCoveredColor,
@@ -263,7 +308,7 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
                       const SizedBox(height: 8),
                       _buildLegendItem(
                         context: context,
-                        label: 'Not Covered',
+                        label: context.l10n.analysisCapitalNotCovered,
                         count: notCoveredCount,
                         percentage: notCoveredPct,
                         color: notCoveredColor,
@@ -274,7 +319,7 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
                         const SizedBox(height: 8),
                         _buildLegendItem(
                           context: context,
-                          label: 'Needs Verification',
+                          label: context.l10n.analysisCapitalNeedsVerification,
                           count: verifyCount,
                           percentage: verifyPct,
                           color: needsVerificationColor,
@@ -330,30 +375,30 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
     int verifyCount = 0,
     required int totalEvaluated,
   }) {
-    String title = 'Coverage';
+    String title = context.l10n.analysisCoverage;
     String value = '100%';
-    String subtitle = '$totalEvaluated ${totalEvaluated == 1 ? "Item" : "Items"}';
+    String subtitle = context.l10n.analysisItemCountHeadline(totalEvaluated);
     Color titleColor = textSecondary;
 
     if (_selectedSegment == 0) {
-      title = 'Covered';
+      title = context.l10n.analysisCovered;
       value = '$coveredPct%';
-      subtitle = '$coveredCount ${coveredCount == 1 ? "Item" : "Items"}';
+      subtitle = context.l10n.analysisItemCountHeadline(coveredCount);
       titleColor = coveredColor;
     } else if (_selectedSegment == 1) {
-      title = 'Partial';
+      title = context.l10n.analysisPartial;
       value = '$partialPct%';
-      subtitle = '$partialCount ${partialCount == 1 ? "Item" : "Items"}';
+      subtitle = context.l10n.analysisItemCountHeadline(partialCount);
       titleColor = partiallyCoveredColor;
     } else if (_selectedSegment == 2) {
-      title = 'Not Covered';
+      title = context.l10n.analysisCapitalNotCovered;
       value = '$notCoveredPct%';
-      subtitle = '$notCoveredCount ${notCoveredCount == 1 ? "Item" : "Items"}';
+      subtitle = context.l10n.analysisItemCountHeadline(notCoveredCount);
       titleColor = notCoveredColor;
     } else if (_selectedSegment == 3) {
-      title = 'Verify';
+      title = context.l10n.analysisVerify;
       value = '$verifyPct%';
-      subtitle = '$verifyCount ${verifyCount == 1 ? "Item" : "Items"}';
+      subtitle = context.l10n.analysisItemCountHeadline(verifyCount);
       titleColor = needsVerificationColor;
     }
 
@@ -368,19 +413,33 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
         children: [
           AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 200),
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: titleColor, letterSpacing: 0.2),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: titleColor,
+              letterSpacing: 0.2,
+            ),
             child: Text(title),
           ),
           const SizedBox(height: 2),
           AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 200),
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -0.5),
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: textColor,
+              letterSpacing: -0.5,
+            ),
             child: Text(value),
           ),
           const SizedBox(height: 2),
           AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 200),
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: textSecondary),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: textSecondary,
+            ),
             child: Text(subtitle),
           ),
         ],
@@ -401,7 +460,7 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
     final bool isSelected = _selectedSegment == index;
 
     return Tooltip(
-      message: '$label: $percentage% ($count items)',
+      message: context.l10n.analysisChartCategory(label, percentage, count),
       child: InkWell(
         onTap: () {
           setState(() {
@@ -413,9 +472,13 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? color.withAlpha(isDark ? 40 : 22) : context.palette.surfaceMuted,
+            color: isSelected
+                ? color.withAlpha(isDark ? 40 : 22)
+                : context.palette.surfaceMuted,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isSelected ? color.withAlpha(120) : context.palette.border),
+            border: Border.all(
+              color: isSelected ? color.withAlpha(120) : context.palette.border,
+            ),
           ),
           child: Row(
             children: [
@@ -437,12 +500,20 @@ class _CoverageDonutChartState extends State<CoverageDonutChart> with SingleTick
               ),
               Text(
                 '$percentage%',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: color),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                ),
               ),
               const SizedBox(width: 6),
               Text(
                 '($count)',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: context.palette.textTertiary),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: context.palette.textTertiary,
+                ),
               ),
             ],
           ),
@@ -523,7 +594,10 @@ class _DonutChartPainter extends CustomPainter {
       final isHighlighted = highlightedIndex == seg.index;
       final currentStroke = isHighlighted ? strokeWidth + 4 : strokeWidth;
       final currentRadius = isHighlighted ? baseRadius + 1 : baseRadius;
-      final currentRect = Rect.fromCircle(center: center, radius: currentRadius);
+      final currentRect = Rect.fromCircle(
+        center: center,
+        radius: currentRadius,
+      );
 
       final paint = Paint()
         ..color = seg.color

@@ -1,3 +1,5 @@
+import 'package:claimsupport/core/localization/localization.dart';
+import 'package:claimsupport/core/localization/locale_provider.dart';
 import 'package:claimsupport/features/analysis_reports/presentation/controllers/analysis_report_controller.dart';
 import 'package:claimsupport/features/home/presentation/controllers/home_checks_provider.dart';
 import 'package:claimsupport/features/policies/presentation/controllers/policy_controller.dart';
@@ -68,17 +70,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (_loading || (_otpSent && _resendSeconds > 0)) return;
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      _showMessage('Please enter your full name.', tone: AppTone.warning);
+      _showMessage(context.l10n.authEnterName, tone: AppTone.warning);
       return;
     }
 
     if (_email.isEmpty) {
-      _showMessage('Please enter your email address.', tone: AppTone.warning);
+      _showMessage(context.l10n.authEnterEmail, tone: AppTone.warning);
       return;
     }
 
     if (!emailPattern.hasMatch(_email)) {
-      _showMessage('Please enter a valid email address.', tone: AppTone.warning);
+      _showMessage(context.l10n.authEnterValidEmail, tone: AppTone.warning);
       return;
     }
 
@@ -86,7 +88,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     try {
       final response = await ApiClient().dio.post(
         '/auth/send-otp',
-        data: {'channel': _channel.apiValue, 'purpose': 'register', 'email': _email},
+        data: {'channel': _channel.apiValue, 'purpose': 'register', 'language': context.l10n.localeName, 'email': _email},
       );
       if (!mounted) return;
       final sent = OtpSendResult.fromResponse(response, fallbackDestination: _email);
@@ -98,11 +100,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       FocusScope.of(context).unfocus();
       _startResendTimer(sent.resendAfterSeconds);
 
-      if (!sent.delivered) _showMessage(sent.message, tone: AppTone.warning);
+      if (!sent.delivered) _showMessage(sent.statusText(context.l10n), tone: AppTone.warning);
     } on DioException catch (e) {
-      _showMessage(otpErrorFrom(e, 'Could not send OTP. Please try again.'), tone: AppTone.danger);
-    } catch (e) {
-      _showMessage('Could not complete the request. Please try again.', tone: AppTone.danger);
+      if (!mounted) return;
+      _showMessage(otpErrorFrom(e, context.l10n.authSendOtpError, context.l10n), tone: AppTone.danger);
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage(context.l10n.authRequestError, tone: AppTone.danger);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -119,7 +123,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     try {
       final response = await ApiClient().dio.post(
         '/auth/register',
-        data: {'name': _nameController.text.trim(), 'email': _email, 'channel': _channel.apiValue, 'otp': otpText},
+        data: {
+          'name': _nameController.text.trim(),
+          'email': _email,
+          'channel': _channel.apiValue,
+          'otp': otpText,
+        },
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -131,6 +140,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         }
         AuthInterceptor.resetSessionExpiredFlag();
         if (!mounted) return;
+        final preferredLanguage = response.data['user']?['preferredLanguage'] as String?;
+        await ref.read(localeProvider.notifier).restoreFromProfile(preferredLanguage);
+        if (!mounted) return;
         ref.read(homeCheckCacheProvider).clear();
         ref.read(historyCacheProvider).clear();
         ref.invalidate(policiesProvider);
@@ -140,9 +152,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         if (mounted) context.go('/dashboard');
       }
     } on DioException catch (e) {
-      if (mounted) setState(() => _codeError = authVerificationError(e));
-    } catch (e) {
-      _showMessage('Could not complete the request. Please try again.', tone: AppTone.danger);
+      if (mounted) setState(() => _codeError = authVerificationError(e, context.l10n));
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage(context.l10n.authRequestError, tone: AppTone.danger);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -170,9 +183,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         child: ValueListenableBuilder(
           valueListenable: _otpController,
           builder: (context, code, _) => AuthPage(
-            title: 'Check your email',
+            title: context.l10n.authCheckEmail,
             onBack: _changeEmail,
-            actionLabel: 'Verify',
+            actionLabel: context.l10n.authVerify,
             onAction: code.text.length == sent.otpLength ? _verifyOtp : null,
             busy: _loading,
             body: [
@@ -195,37 +208,46 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final c = context.colors;
     void login() => context.canPop() ? context.pop() : context.go('/login');
     return AuthPage(
-      title: 'Create account',
+      title: context.l10n.authCreateAccount,
       onBack: login,
-      actionLabel: 'Send code',
+      actionLabel: context.l10n.authSendCode,
       onAction: _sendOtp,
       busy: _loading,
       footer: AuthTextAction(
-        prefix: 'Already have an account? ',
-        label: 'Log in',
+        prefix: context.l10n.authExistingAccount,
+        label: context.l10n.authLogin,
         center: true,
         onTap: _loading ? null : login,
       ),
       body: [
         Text(
-          'Save your policies and prescriptions, and check your cover anytime.',
+          context.l10n.authRegisterDescription,
           style: AppTextStyles.subheadRegular.copyWith(color: c.textSecondary),
         ),
         const SizedBox(height: DsSpace.s20),
-        AuthField(label: 'Full name', controller: _nameController, enabled: !_loading),
+        AuthField(label: context.l10n.authFullName, controller: _nameController, enabled: !_loading),
         const SizedBox(height: DsSpace.s16),
-        AuthField(label: 'Email', controller: _emailController, email: true, enabled: !_loading, onSubmitted: _sendOtp),
+        AuthField(
+          label: context.l10n.authEmail,
+          controller: _emailController,
+          email: true,
+          enabled: !_loading,
+          onSubmitted: _sendOtp,
+        ),
         const SizedBox(height: DsSpace.s16),
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
-              'By continuing, you agree to our ',
+              context.l10n.authLegalPrefix,
               style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary),
             ),
-            _noticeLink('Terms', AccountNotice.terms),
-            Text(' and ', style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary)),
-            _noticeLink('Privacy Policy.', AccountNotice.privacy),
+            _noticeLink(context.l10n.authTermsShort, AccountNotice.terms),
+            Text(
+              context.l10n.authLegalAnd,
+              style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary),
+            ),
+            _noticeLink(context.l10n.authPrivacyShort, AccountNotice.privacy),
           ],
         ),
       ],

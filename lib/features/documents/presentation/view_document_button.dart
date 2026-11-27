@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/design/widgets/app_buttons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -10,7 +11,7 @@ class ViewDocumentButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppButton(
-    label: 'View document',
+    label: context.l10n.sharedViewDocument,
     style: AppButtonStyle.secondary,
     onPressed: () {
       final router = GoRouter.of(context);

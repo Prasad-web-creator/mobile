@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/design/design.dart';
 import 'package:claimsupport/core/design/widgets/app_sections.dart';
 import 'package:dio/dio.dart';
@@ -55,7 +56,7 @@ class SavedListSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-    label: 'Loading',
+    label: context.l10n.sharedLoading,
     child: const Column(
       spacing: DsSpace.s8,
       children: [

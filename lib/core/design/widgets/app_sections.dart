@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:flutter/material.dart';
 
 import 'package:claimsupport/core/design/app_icons.dart';
@@ -54,7 +55,7 @@ class AppSectionHeader extends StatelessWidget {
         ),
       ),
       if (onSeeAll case final onTap?)
-        AppLink(label: 'See all', trailing: AppIcons.caretRight, onPressed: onTap),
+        AppLink(label: context.l10n.sharedSeeAll, trailing: AppIcons.caretRight, onPressed: onTap),
     ],
   );
 }
@@ -210,7 +211,7 @@ class AppInlineBanner extends StatelessWidget {
                 ),
               ],
             ),
-            if (onRetry case final retry?) AppLink(label: 'Retry', onPressed: retry),
+            if (onRetry case final retry?) AppLink(label: context.l10n.sharedRetry, onPressed: retry),
           ],
         ),
       ),
@@ -240,7 +241,7 @@ class AppStepIndicator extends StatelessWidget {
             children: [
               Row(children: [leading!, const Spacer(), ?trailing]),
               Semantics(
-                label: 'Step $label',
+                label: context.l10n.sharedStep(label),
                 excludeSemantics: true,
                 child: Text(label, style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary)),
               ),
@@ -266,7 +267,7 @@ class AppStepIndicator extends StatelessWidget {
       );
     }
     return Semantics(
-      label: 'Step $label',
+      label: context.l10n.sharedStep(label),
       child: ExcludeSemantics(
         child: Column(
           mainAxisSize: MainAxisSize.min,

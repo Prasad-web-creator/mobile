@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -291,7 +292,7 @@ class _BannerLoaderState extends State<_BannerLoader> {
   }
 }
 
-/// Small, calm "Sponsored" tag that marks an ad slot without shouting.
+/// Small, calm context.l10n.sharedSponsored tag that marks an ad slot without shouting.
 class AdSponsoredLabel extends StatelessWidget {
   final Color color;
 
@@ -305,7 +306,7 @@ class AdSponsoredLabel extends StatelessWidget {
         Icon(Icons.campaign_outlined, size: 13, color: color),
         const SizedBox(width: 4),
         Text(
-          'Sponsored',
+          context.l10n.sharedSponsored,
           style: Theme.of(
             context,
           ).textTheme.labelSmall?.copyWith(color: color, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.3),

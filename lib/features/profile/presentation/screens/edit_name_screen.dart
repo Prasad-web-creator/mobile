@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/design/design.dart';
 import 'package:claimsupport/core/design/widgets/app_sections.dart';
 import 'package:claimsupport/features/authentication/data/models/user.dart';
@@ -14,9 +15,11 @@ class EditNameScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final account = ref.watch(authProvider);
     void back() => context.canPop() ? context.pop() : context.go('/profile');
-    if (account.value case final user?) return _EditNameForm(key: ValueKey(user.id), user: user, onBack: back);
+    if (account.value case final user?) {
+      return _EditNameForm(key: ValueKey(user.id), user: user, onBack: back);
+    }
     return AuthPage(
-      title: 'Edit name',
+      title: context.l10n.accountEditName,
       onBack: back,
       actionLabel: '',
       onAction: null,
@@ -26,7 +29,7 @@ class EditNameScreen extends ConsumerWidget {
         else
           AppInlineBanner(
             kind: AppInlineBannerKind.error,
-            message: "Couldn't load your account.",
+            message: context.l10n.accountLoadError,
             onRetry: () => ref.invalidate(authProvider),
           ),
       ],
@@ -80,16 +83,21 @@ class _EditNameFormState extends ConsumerState<_EditNameForm> {
     return ValueListenableBuilder(
       valueListenable: _name,
       builder: (context, value, _) => AuthPage(
-        title: 'Edit name',
+        title: context.l10n.accountEditName,
         onBack: widget.onBack,
-        actionLabel: 'Save',
+        actionLabel: context.l10n.accountSave,
         onAction: value.text.trim().isEmpty || value.text.trim() == widget.user.name.trim() ? null : _save,
         busy: _saving,
         body: [
           const SizedBox(height: DsSpace.s16),
-          AuthField(label: 'Full name', controller: _name, enabled: !_saving, onSubmitted: _save),
+          AuthField(
+            label: context.l10n.authFullName,
+            controller: _name,
+            enabled: !_saving,
+            onSubmitted: _save,
+          ),
           const SizedBox(height: DsSpace.s16),
-          Text('Email', style: AppTextStyles.captionStrong.copyWith(color: c.textPrimary)),
+          Text(context.l10n.authEmail, style: AppTextStyles.captionStrong.copyWith(color: c.textPrimary)),
           const SizedBox(height: DsSpace.s8),
           DecoratedBox(
             decoration: ShapeDecoration(
@@ -106,12 +114,12 @@ class _EditNameFormState extends ConsumerState<_EditNameForm> {
           ),
           const SizedBox(height: DsSpace.s8),
           Text(
-            "You log in with this email, so it can't be changed here.",
+            context.l10n.accountEmailReadOnly,
             style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary),
           ),
           if (_failed) ...[
             const SizedBox(height: DsSpace.s12),
-            const AppInlineBanner(kind: AppInlineBannerKind.error, message: "Couldn't save your name. Try again."),
+            AppInlineBanner(kind: AppInlineBannerKind.error, message: context.l10n.accountSaveNameError),
           ],
         ],
       ),

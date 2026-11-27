@@ -1,14 +1,14 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:claimsupport/core/widgets/app_widgets.dart';
 
 /// How the OTP is delivered. ClaimSupport uses Email OTP exclusively.
 enum OtpChannel {
-  email('email', 'Email OTP', Icons.email_outlined);
+  email('email', Icons.email_outlined);
 
-  const OtpChannel(this.apiValue, this.label, this.icon);
+  const OtpChannel(this.apiValue, this.icon);
   final String apiValue;
-  final String label;
   final IconData icon;
 }
 
@@ -21,21 +21,16 @@ class OtpSendResult {
   /// Whether the delivery request was accepted.
   final bool delivered;
 
-  /// Message from the server, e.g. "OTP sent to su****@gmail.com".
-  final String message;
-
   const OtpSendResult({
     required this.destination,
     required this.otpLength,
     required this.resendAfterSeconds,
     required this.delivered,
-    required this.message,
   });
 
   /// One-line status shown above the OTP field.
-  String statusText([OtpChannel channel = OtpChannel.email]) {
-    return message;
-  }
+  String statusText(AppLocalizations l10n) =>
+      delivered ? l10n.authOtpSent(destination) : l10n.authSendOtpError;
 
   factory OtpSendResult.fromResponse(Response response, {required String fallbackDestination}) {
     final data = response.data is Map ? response.data as Map : const {};
@@ -45,7 +40,6 @@ class OtpSendResult {
       otpLength: (data['otpLength'] as num?)?.toInt() ?? 6,
       resendAfterSeconds: (data['resendAfterSeconds'] as num?)?.toInt() ?? 60,
       delivered: data['delivered'] != false,
-      message: (data['message'] as String?) ?? 'OTP sent to $destination',
     );
   }
 }
@@ -63,35 +57,53 @@ class OtpStatusText extends StatelessWidget {
       return InfoBanner(
         tone: AppTone.info,
         icon: channel.icon,
-        message: sent.statusText(channel),
+        message: sent.statusText(context.l10n),
         padding: const EdgeInsets.all(AppSpacing.sm),
       );
     }
-    return InfoBanner(tone: AppTone.warning, message: sent.message, padding: const EdgeInsets.all(AppSpacing.sm));
+    return InfoBanner(
+      tone: AppTone.warning,
+      message: sent.statusText(context.l10n),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+    );
   }
 }
 
 /// Error text from a backend failure (FastAPI `detail`, or `message`).
-String otpErrorFrom(DioException e, String fallback) {
-  final data = e.response?.data;
-  if (data is Map) {
-    final detail = data['detail'] ?? data['message'];
-    if (detail is String && detail.isNotEmpty) return detail;
-    if (detail != null) return 'Please check the details and try again.';
+String otpErrorFrom(DioException error, String fallback, AppLocalizations l10n) {
+  final status = error.response?.statusCode;
+  final data = error.response?.data;
+  final detail = data is Map ? data['detail'] ?? data['message'] : null;
+  if (status == 429) return l10n.authTooManyRequests;
+  if (detail is String && detail.isNotEmpty) {
+    final localized = switch (detail) {
+      'This email address is already registered. Please login.' => l10n.authEmailRegistered,
+      'No account found with this email address. Please register first.' => l10n.authNoAccount,
+      'Email OTP service is not configured.' ||
+      'Email OTP service is temporarily unavailable.' => l10n.authOtpUnavailable,
+      'This email address cannot receive email. Please check it.' => l10n.authUndeliverable,
+      'This Google account is already linked.' => l10n.authGoogleAlreadyLinked,
+      _ => null,
+    };
+    return localized ?? (l10n.localeName == 'en' ? detail : fallback);
   }
-  if (e.type == DioExceptionType.connectionError || e.type == DioExceptionType.connectionTimeout) {
-    return 'No connection. Please check your internet and try again.';
+  if (detail != null) return l10n.authCheckDetails;
+  if (error.type == DioExceptionType.connectionError ||
+      error.type == DioExceptionType.connectionTimeout ||
+      error.type == DioExceptionType.receiveTimeout ||
+      error.type == DioExceptionType.sendTimeout) {
+    return l10n.authNoConnection;
   }
   return fallback;
 }
 
-String authVerificationError(DioException error) {
+String authVerificationError(DioException error, AppLocalizations l10n) {
   final body = error.response?.data;
   final detail = body is Map ? body['detail'] ?? body['message'] : null;
   if (detail is String && detail.toLowerCase().contains('invalid or expired otp')) {
-    return "That code isn't right. Check it, or get a new one.";
+    return l10n.authInvalidOtp;
   }
-  return otpErrorFrom(error, 'Could not verify the code. Try again.');
+  return otpErrorFrom(error, l10n.authCouldNotVerify, l10n);
 }
 
 final RegExp emailPattern = RegExp(r'^[\w\-.+]+@([\w-]+\.)+[\w-]{2,}$');

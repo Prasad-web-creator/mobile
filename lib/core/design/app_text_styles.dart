@@ -10,6 +10,7 @@ class AppTextStyles {
 
   static const String sans = 'Geist';
   static const String mono = 'GeistMono';
+  static const tamilFallback = <String>['NotoSansTamil'];
 
   static const FontWeight regular = FontWeight.w400;
   static const FontWeight medium = FontWeight.w500;
@@ -19,6 +20,7 @@ class AppTextStyles {
   static TextStyle _style(double size, double lineHeight, FontWeight weight, {double trackingPct = 0}) =>
       TextStyle(
         fontFamily: sans,
+        fontFamilyFallback: tamilFallback,
         fontSize: size,
         height: lineHeight / size,
         fontWeight: weight,

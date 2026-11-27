@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/design/widgets/app_illustration.dart';
 import 'package:claimsupport/core/design/widgets/app_sheet_content.dart';
 import 'package:claimsupport/core/design/widgets/app_shells.dart';
@@ -21,13 +22,13 @@ class PrescriptionListScreen extends ConsumerWidget {
     final state = ref.watch(prescriptionProvider);
     final notifier = ref.read(prescriptionProvider.notifier);
     return SavedDocumentList<Prescription>(
-      title: 'Prescriptions',
+      title: context.l10n.sharedPrescriptions,
       onAdd: () => context.push('/check/new?add=prescription'),
       singular: 'prescription',
       page: state.value ?? notifier.cachedPage,
       isLoading: state.isLoading,
       error: state.error,
-      describe: DocumentSummary.prescription,
+      describe: (record) => DocumentSummary.prescription(record, l10n: context.l10n),
       createdAt: (prescription) => prescription.createdAt,
       idOf: (prescription) => prescription.id,
       onOpen: _showPrescription,
@@ -40,7 +41,7 @@ class PrescriptionListScreen extends ConsumerWidget {
   }
 
   void _showPrescription(BuildContext context, Prescription record, DocumentSummary summary) {
-    final fields = prescriptionDetailFields(record);
+    final fields = prescriptionDetailFields(record, l10n: context.l10n);
     final fileId = documentText(record.gridFsFileId);
     AppSheet.show<void>(
       context: context,
@@ -52,8 +53,8 @@ class PrescriptionListScreen extends ConsumerWidget {
         rows: [
           for (final (label, value) in fields)
             AppSheetKeyValue(label: label, value: value),
-          if (record.items.isNotEmpty) AppSheetFieldList(label: 'Items', values: record.items),
-          if (fields.isEmpty && record.items.isEmpty) const SavedListMessage('No extracted prescription details yet.'),
+          if (record.items.isNotEmpty) AppSheetFieldList(label: context.l10n.sharedItems, values: record.items),
+          if (fields.isEmpty && record.items.isEmpty) SavedListMessage(context.l10n.sharedNoPrescriptionDetails),
         ],
       ),
     );

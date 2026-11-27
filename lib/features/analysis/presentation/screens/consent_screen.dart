@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/design/app_icons.dart';
 import 'package:claimsupport/core/design/widgets/app_buttons.dart';
 import 'package:claimsupport/core/design/widgets/app_shells.dart';
@@ -23,7 +24,10 @@ class _ConsentScreenState extends State<ConsentScreen> {
 
   String _newRequestId() {
     final random = Random.secure();
-    return List.generate(16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+    return List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
   }
 
   Future<void> _accept() async {
@@ -38,20 +42,16 @@ class _ConsentScreenState extends State<ConsentScreen> {
       await prefs.setString(analysisDraftKey, id);
       if (mounted) context.push('/upload');
     } catch (_) {
-      if (mounted) showAppSnackBar(context, 'Could not save consent. Please try again.', tone: AppTone.warning);
+      if (mounted)
+        showAppSnackBar(
+          context,
+          context.l10n.analysisSaveConsentFailed,
+          tone: AppTone.warning,
+        );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
-
-  final List<String> _bulletPoints = [
-    'I confirm that the uploaded documents belong to me or I have permission to use them.',
-    'I understand that the analysis is for informational purposes only.',
-    'I understand that the system does not submit insurance claims.',
-    'I understand that the insurance provider makes the final approval decision.',
-    'I agree that the generated report is only a reference.',
-    'I agree that Policy Pal may store my uploaded documents, read them with OCR, and send extracted text and any details I enter to Google Gemini for coverage analysis.',
-  ];
 
   static const List<IconData> _bulletIcons = [
     Icons.badge_outlined,
@@ -65,6 +65,14 @@ class _ConsentScreenState extends State<ConsentScreen> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final bulletPoints = [
+      context.l10n.analysisConsentOwnership,
+      context.l10n.analysisConsentInformation,
+      context.l10n.analysisConsentClaims,
+      context.l10n.analysisConsentInsurer,
+      context.l10n.analysisConsentReference,
+      context.l10n.analysisConsentOcr,
+    ];
 
     void close() {
       if (context.canPop()) {
@@ -75,7 +83,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
     }
 
     return FlowShell(
-      title: 'Consent & Agreement',
+      title: context.l10n.analysisConsentTitle,
       step: 1,
       stepCount: 3,
       onClose: close,
@@ -83,35 +91,59 @@ class _ConsentScreenState extends State<ConsentScreen> {
         bottom: false,
         child: ContentWidth(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.xs, AppSpacing.page, AppSpacing.xl),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.page,
+              AppSpacing.xs,
+              AppSpacing.page,
+              AppSpacing.xl,
+            ),
             children: [
-              Text('Before we begin', style: context.text.headlineSmall),
+              Text(
+                context.l10n.analysisBeforeBegin,
+                style: context.text.headlineSmall,
+              ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                'Please review and accept the Terms & Conditions before the system analyzes your uploaded documents.',
+                context.l10n.analysisReviewTerms,
                 style: context.text.bodyMedium,
               ),
               const SizedBox(height: AppSpacing.xl),
               AppCard(
-                padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xs),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  AppSpacing.xs,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const CardTitle(title: 'Terms of use', icon: Icons.gavel_rounded),
+                    CardTitle(
+                      title: context.l10n.analysisTermsOfUse,
+                      icon: Icons.gavel_rounded,
+                    ),
                     const SizedBox(height: AppSpacing.sm),
-                    for (int i = 0; i < _bulletPoints.length; i++) ...[
+                    for (int i = 0; i < bulletPoints.length; i++) ...[
                       if (i > 0) Divider(height: 1, color: p.border),
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.sm,
+                        ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(_bulletIcons[i % _bulletIcons.length], size: 20, color: p.textTertiary),
+                            Icon(
+                              _bulletIcons[i % _bulletIcons.length],
+                              size: 20,
+                              color: p.textTertiary,
+                            ),
                             const SizedBox(width: AppSpacing.sm),
                             Expanded(
                               child: Text(
-                                _bulletPoints[i],
-                                style: context.text.bodyMedium?.copyWith(color: p.textPrimary),
+                                bulletPoints[i],
+                                style: context.text.bodyMedium?.copyWith(
+                                  color: p.textPrimary,
+                                ),
                               ),
                             ),
                           ],
@@ -135,10 +167,15 @@ class _ConsentScreenState extends State<ConsentScreen> {
               borderRadius: AppRadius.mdAll,
               onTap: () => setState(() => _agreed = !_agreed),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.xs),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xs,
+                  vertical: AppSpacing.xs,
+                ),
                 decoration: BoxDecoration(
                   borderRadius: AppRadius.mdAll,
-                  border: Border.all(color: _agreed ? p.primary.withAlpha(90) : p.border),
+                  border: Border.all(
+                    color: _agreed ? p.primary.withAlpha(90) : p.border,
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -152,7 +189,10 @@ class _ConsentScreenState extends State<ConsentScreen> {
                     ),
                     const SizedBox(width: AppSpacing.xxs),
                     Expanded(
-                      child: Text('I have read and agree to the Terms & Conditions.', style: context.text.titleSmall),
+                      child: Text(
+                        context.l10n.analysisConsentAgree,
+                        style: context.text.titleSmall,
+                      ),
                     ),
                   ],
                 ),
@@ -163,13 +203,17 @@ class _ConsentScreenState extends State<ConsentScreen> {
           Row(
             children: [
               Expanded(
-                child: AppButton(label: 'Cancel', style: AppButtonStyle.secondary, onPressed: close),
+                child: AppButton(
+                  label: context.l10n.analysisCancel,
+                  style: AppButtonStyle.secondary,
+                  onPressed: close,
+                ),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 flex: 2,
                 child: AppButton(
-                  label: 'Continue',
+                  label: context.l10n.analysisContinue,
                   onPressed: _agreed && !_saving ? _accept : null,
                   icon: AppIcons.caretRight,
                 ),

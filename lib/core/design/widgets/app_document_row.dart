@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:flutter/material.dart';
 
 import 'package:claimsupport/core/design/app_icons.dart';
@@ -56,9 +57,15 @@ class AppDocumentRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final warm = type == DocumentCardType.prescription;
-    final title = this.title.trim().isEmpty ? (warm ? 'Prescription' : 'Policy') : this.title;
+    final title = this.title.trim().isEmpty ? (warm ? context.l10n.sharedPrescription : context.l10n.sharedPolicy) : this.title;
     final issue = state == AppDocumentState.expired || state == AppDocumentState.failed;
-    final label = state.label;
+    final label = switch (state) {
+      AppDocumentState.ready => null,
+      AppDocumentState.expired => context.l10n.sharedExpired,
+      AppDocumentState.reading => context.l10n.sharedReading,
+      AppDocumentState.failed => context.l10n.sharedCouldNotRead,
+      AppDocumentState.unknown => context.l10n.sharedStatusUnavailable,
+    };
     final description = [
       ?category,
       title,

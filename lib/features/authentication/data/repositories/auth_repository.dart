@@ -19,20 +19,18 @@ class AuthRepository {
         stackTrace: st,
       );
     } catch (e, st) {
-      throw AppException(
-        message: 'Failed to fetch user data: $e',
-        originalException: e,
-        stackTrace: st,
-      );
+      throw AppException(message: 'Failed to fetch user data: $e', originalException: e, stackTrace: st);
     }
+  }
+
+  Future<User> updateLanguage(String language) async {
+    final response = await _dio.put('/auth/me', data: {'preferredLanguage': language});
+    return User.fromJson(response.data);
   }
 
   Future<User> updateProfile(String name, String email) async {
     try {
-      final response = await _dio.put('/auth/me', data: {
-        'name': name,
-        'email': email,
-      });
+      final response = await _dio.put('/auth/me', data: {'name': name, 'email': email});
       return User.fromJson(response.data);
     } on DioException catch (e, st) {
       throw AppException(
@@ -43,11 +41,7 @@ class AuthRepository {
         stackTrace: st,
       );
     } catch (e, st) {
-      throw AppException(
-        message: 'Failed to update user profile: $e',
-        originalException: e,
-        stackTrace: st,
-      );
+      throw AppException(message: 'Failed to update user profile: $e', originalException: e, stackTrace: st);
     }
   }
 }

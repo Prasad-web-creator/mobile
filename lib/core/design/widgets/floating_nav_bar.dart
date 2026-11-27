@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -7,7 +8,7 @@ import 'package:claimsupport/core/design/design.dart';
 import 'package:claimsupport/core/design/widgets/app_pressable.dart';
 
 /// Floating bottom bar (Phase F §0.9): a frosted pill with two labelled tabs
-/// (Home, History) and a separate blue "New check" button beside it.
+/// (Home, History) and a separate blue context.l10n.sharedNewCheck button beside it.
 class FloatingNavBar extends StatelessWidget {
   const FloatingNavBar({
     super.key,
@@ -20,7 +21,12 @@ class FloatingNavBar extends StatelessWidget {
       MediaQuery.of(context).viewPadding.bottom + DsSpace.s16;
 
   static double scrollClearance(BuildContext context) =>
-      DsSpace.s8 + DsSize.control2xl + _bottomOffset(context);
+      DsSpace.s8 + _height(context) + _bottomOffset(context);
+
+  static double _height(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context).scale(16) / 16;
+    return DsSize.control2xl + ((scale - 1.3) * 44).clamp(0, double.infinity);
+  }
 
   /// 0 = Home, 1 = History.
   final int currentIndex;
@@ -32,83 +38,105 @@ class FloatingNavBar extends StatelessWidget {
     final c = context.colors;
     final reduced = DsMotion.reduced(context);
     return Padding(
-      padding: EdgeInsets.fromLTRB(DsSpace.s16, DsSpace.s8, DsSpace.s16, _bottomOffset(context)),
-      child: SizedBox(
-        height: DsSize.control2xl,
-        child: Row(
-          children: [
-            Expanded(
-              child: DecoratedBox(
-                decoration: ShapeDecoration(
-                  shape: DsShape.shape(DsShape.radiusFull),
-                  shadows: [DsEffect.checkStackShadow(lift: 1)],
-                ),
-                child: ClipRSuperellipse(
-                  borderRadius: const BorderRadius.all(Radius.circular(DsShape.radiusFull)),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: DsEffect.navBlur, sigmaY: DsEffect.navBlur),
-                    child: Container(
-                      padding: const EdgeInsets.all(DsSpace.s4),
-                      decoration: ShapeDecoration(
-                        color: c.surfaceNavBar,
-                        shape: DsShape.shape(
-                          DsShape.radiusFull,
-                          side: BorderSide(color: c.borderSubtle, width: DsShape.strokeHairline),
-                        ),
+      padding: EdgeInsets.fromLTRB(
+        DsSpace.s16,
+        DsSpace.s8,
+        DsSpace.s16,
+        _bottomOffset(context),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) => SizedBox(
+          height: _height(context),
+          child: Row(
+            children: [
+              Expanded(
+                child: DecoratedBox(
+                  decoration: ShapeDecoration(
+                    shape: DsShape.shape(DsShape.radiusFull),
+                    shadows: [DsEffect.checkStackShadow(lift: 1)],
+                  ),
+                  child: ClipRSuperellipse(
+                    borderRadius: const BorderRadius.all(
+                      Radius.circular(DsShape.radiusFull),
+                    ),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(
+                        sigmaX: DsEffect.navBlur,
+                        sigmaY: DsEffect.navBlur,
                       ),
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: AnimatedAlign(
-                              alignment: currentIndex == 0
-                                  ? AlignmentDirectional.centerStart
-                                  : AlignmentDirectional.centerEnd,
-                              duration: reduced ? Duration.zero : DsMotion.base,
-                              curve: Curves.easeOut,
-                              child: FractionallySizedBox(
-                                widthFactor: 0.5,
-                                heightFactor: 1,
-                                child: DecoratedBox(
-                                  decoration: ShapeDecoration(
-                                    color: c.surfaceSelected,
-                                    shape: DsShape.shape(DsShape.radiusFull),
+                      child: Container(
+                        padding: const EdgeInsets.all(DsSpace.s4),
+                        decoration: ShapeDecoration(
+                          color: c.surfaceNavBar,
+                          shape: DsShape.shape(
+                            DsShape.radiusFull,
+                            side: BorderSide(
+                              color: c.borderSubtle,
+                              width: DsShape.strokeHairline,
+                            ),
+                          ),
+                        ),
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: AnimatedAlign(
+                                alignment: currentIndex == 0
+                                    ? AlignmentDirectional.centerStart
+                                    : AlignmentDirectional.centerEnd,
+                                duration: reduced
+                                    ? Duration.zero
+                                    : DsMotion.base,
+                                curve: Curves.easeOut,
+                                child: FractionallySizedBox(
+                                  widthFactor: 0.5,
+                                  heightFactor: 1,
+                                  child: DecoratedBox(
+                                    decoration: ShapeDecoration(
+                                      color: c.surfaceSelected,
+                                      shape: DsShape.shape(DsShape.radiusFull),
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _NavTab(
-                                  label: 'Home',
-                                  icon: AppIcons.house,
-                                  activeIcon: AppIcons.houseFill,
-                                  selected: currentIndex == 0,
-                                  onTap: () => onTabSelected(0),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _NavTab(
+                                    label: context.l10n.sharedHome,
+                                    icon: AppIcons.house,
+                                    activeIcon: AppIcons.houseFill,
+                                    selected: currentIndex == 0,
+                                    onTap: () => onTabSelected(0),
+                                  ),
                                 ),
-                              ),
-                              Expanded(
-                                child: _NavTab(
-                                  label: 'History',
-                                  icon: AppIcons.history,
-                                  activeIcon: AppIcons.historyFill,
-                                  selected: currentIndex == 1,
-                                  onTap: () => onTabSelected(1),
+                                Expanded(
+                                  child: _NavTab(
+                                    label: context.l10n.sharedHistory,
+                                    icon: AppIcons.history,
+                                    activeIcon: AppIcons.historyFill,
+                                    selected: currentIndex == 1,
+                                    onTap: () => onTabSelected(1),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: DsSpace.s8),
-            _NewCheckButton(onTap: onNewCheck),
-          ],
+              const SizedBox(width: DsSpace.s8),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: constraints.maxWidth * .60,
+                ),
+                child: _NewCheckButton(onTap: onNewCheck),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -140,20 +168,29 @@ class _NavTab extends StatelessWidget {
         onTap: onTap,
         semanticLabel: label,
         child: SizedBox(
-          height: DsSize.tabHeight,
+          height: FloatingNavBar._height(context) - 2 * DsSpace.s4,
           child: ExcludeSemantics(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(selected ? activeIcon : icon, size: DsSize.iconXl, color: color),
+                Icon(
+                  selected ? activeIcon : icon,
+                  size: DsSize.iconXl,
+                  color: color,
+                ),
                 const SizedBox(height: DsSpace.s2),
                 Text(
                   label,
                   maxLines: 1,
-                  style: (selected ? AppTextStyles.microStrong : AppTextStyles.microRegular).copyWith(
-                    color: color,
-                    decoration: TextDecoration.none,
-                  ),
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      (selected
+                              ? AppTextStyles.microStrong
+                              : AppTextStyles.microRegular)
+                          .copyWith(
+                            color: color,
+                            decoration: TextDecoration.none,
+                          ),
                 ),
               ],
             ),
@@ -186,10 +223,10 @@ class _NewCheckButtonState extends State<_NewCheckButton> {
       child: AppPressable(
         onTap: widget.onTap,
         haptic: true,
-        semanticLabel: 'New check',
+        semanticLabel: context.l10n.sharedNewCheck,
         child: AnimatedContainer(
           duration: DsMotion.fast,
-          height: DsSize.control2xl,
+          height: FloatingNavBar._height(context),
           padding: const EdgeInsets.symmetric(horizontal: DsSpace.s20),
           decoration: ShapeDecoration(
             color: _pressed ? c.buttonPrimaryPressed : c.buttonPrimary,
@@ -201,11 +238,15 @@ class _NewCheckButtonState extends State<_NewCheckButton> {
               children: [
                 Icon(AppIcons.scan, size: DsSize.iconLg, color: c.textOnButton),
                 const SizedBox(width: DsSpace.s8),
-                Text(
-                  'New check',
-                  style: AppTextStyles.subheadStrong.copyWith(
-                    color: c.textOnButton,
-                    decoration: TextDecoration.none,
+                Flexible(
+                  child: Text(
+                    context.l10n.sharedNewCheck,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.subheadStrong.copyWith(
+                      color: c.textOnButton,
+                      decoration: TextDecoration.none,
+                    ),
                   ),
                 ),
               ],

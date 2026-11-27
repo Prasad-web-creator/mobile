@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/locale_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:claimsupport/core/providers.dart';
 import 'package:claimsupport/features/authentication/data/models/user.dart';
@@ -14,8 +15,20 @@ class AuthNotifier extends AsyncNotifier<User?> {
 
   Future<User?> _fetchUser() async {
     final repository = ref.read(authRepositoryProvider);
+    final activeRef = ref;
+    final locale = ref.read(localeProvider.notifier);
+    final requestedAtRevision = locale.revision;
     final user = await repository.getMe();
+    if (activeRef.mounted) {
+      await locale.restoreFromProfile(user.preferredLanguage, requestedAtRevision: requestedAtRevision);
+    }
     return user;
+  }
+
+  Future<void> updateLanguage(String language) async {
+    final activeRef = ref;
+    final updatedUser = await ref.read(authRepositoryProvider).updateLanguage(language);
+    if (activeRef.mounted) state = AsyncData(updatedUser);
   }
 
   Future<void> updateProfile(String name, String email) async {

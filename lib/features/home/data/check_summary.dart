@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:claimsupport/features/analysis_reports/data/models/analysis_report_group.dart';
 
 import 'package:claimsupport/core/design/app_check_status.dart';
+import 'package:claimsupport/core/localization/localization.dart';
 
 export 'package:claimsupport/core/design/app_check_status.dart';
 
@@ -42,6 +43,22 @@ class CheckSummary {
   final String statusLabel;
   final CheckStatusKind statusKind;
 
+  String displayTreatment(AppLocalizations l10n) {
+    final original = group?.diagnosis.trim();
+    if (l10n.localeName == 'ta' &&
+        original != null &&
+        cleanTreatment(original) != 'Prescription') {
+      return original;
+    }
+    final localized = group?.localizedDiagnosis(l10n.localeName);
+    if (l10n.localeName == 'en' && localized != null) return localized;
+    return switch (treatment) {
+      'Prescription' => l10n.sharedPrescription,
+      'Coverage check' => l10n.sharedCoverageCheck,
+      _ => treatment,
+    };
+  }
+
   /// Where tapping the card goes (existing details screens).
   final String route;
 
@@ -50,15 +67,21 @@ class CheckSummary {
       final prescription = group?.prescriptionId ?? '';
       return Uri(
         path: '/check/new',
-        queryParameters: prescription.isEmpty ? null : {'prescription': prescription},
+        queryParameters: prescription.isEmpty
+            ? null
+            : {'prescription': prescription},
       ).toString();
     }
     if (statusKind != CheckStatusKind.verification) return null;
     if (route.startsWith('/check/processing/')) return route;
-    if (group?.status == 'waiting_for_user' || policyResults.any((row) => row.isWaitingForUser)) {
+    if (group?.status == 'waiting_for_user' ||
+        policyResults.any((row) => row.isWaitingForUser)) {
       return group?.isDurableJob == true
           ? '/check/processing/${Uri.encodeComponent(id)}'
-          : Uri(path: '/analysis-multi', queryParameters: {'session': id}).toString();
+          : Uri(
+              path: '/analysis-multi',
+              queryParameters: {'session': id},
+            ).toString();
     }
     return route;
   }
@@ -76,21 +99,31 @@ class CheckSummary {
 
   List<PolicyReportRow> get policyResults => group?.policyReports ?? const [];
 
-  static (CheckStatusKind, String) resultForPolicy(PolicyReportRow policy, {String? overallStatus}) {
+  static (CheckStatusKind, String) resultForPolicy(
+    PolicyReportRow policy, {
+    String? overallStatus,
+  }) {
     if (policy.isRunning) return (CheckStatusKind.checking, 'Checking…');
-    if (policy.isWaitingForUser) return (CheckStatusKind.other, 'Needs your input');
+    if (policy.isWaitingForUser)
+      return (CheckStatusKind.other, 'Needs your input');
     if (policy.status == 'failed') {
       return (
         CheckStatusKind.failed,
-        policy.failedAtStage.contains('extract') ? "Couldn't read" : 'Check failed',
+        policy.failedAtStage.contains('extract')
+            ? "Couldn't read"
+            : 'Check failed',
       );
     }
     final raw = (overallStatus ?? policy.overallStatus).trim();
     if (policy.status == 'manual_review_required' ||
         raw.toLowerCase().replaceAll('_', ' ') == 'manual review required') {
-      return (CheckStatusKind.verification, CheckStatusKind.verification.coverageLabel!);
+      return (
+        CheckStatusKind.verification,
+        CheckStatusKind.verification.coverageLabel!,
+      );
     }
-    if (policy.status == 'invalid') return (CheckStatusKind.other, raw.isEmpty ? 'Invalid policy' : raw);
+    if (policy.status == 'invalid')
+      return (CheckStatusKind.other, raw.isEmpty ? 'Invalid policy' : raw);
     final kind = raw.isEmpty
         ? switch (policy.outcome) {
             'covered' => CheckStatusKind.covered,
@@ -99,17 +132,26 @@ class CheckSummary {
             _ => CheckStatusKind.other,
           }
         : statusKindFor(raw);
-    return (kind, kind.coverageLabel ?? (raw.isEmpty ? 'Result not available' : raw));
+    return (
+      kind,
+      kind.coverageLabel ?? (raw.isEmpty ? 'Result not available' : raw),
+    );
   }
 
-  factory CheckSummary.fromGroup(AnalysisReportGroup g, {DateTime? now, String? accountName}) {
+  factory CheckSummary.fromGroup(
+    AnalysisReportGroup g, {
+    DateTime? now,
+    String? accountName,
+  }) {
     final rows = g.policyReports;
     PolicyReportRow? best;
     int bestRank = 5;
     for (final row in rows) {
       final rank = _rank(row);
       if (rank < bestRank ||
-          (rank == bestRank && g.bestPolicyId.isNotEmpty && row.policyId == g.bestPolicyId)) {
+          (rank == bestRank &&
+              g.bestPolicyId.isNotEmpty &&
+              row.policyId == g.bestPolicyId)) {
         best = row;
         bestRank = rank;
       }
@@ -122,9 +164,15 @@ class CheckSummary {
         'Checking\u2026',
         null,
       ),
-      'waiting for user' || 'needs verification' => (CheckStatusKind.verification, 'Needs info', null),
-      'failed' || 'check failed' => (CheckStatusKind.failed, "Couldn't check", null),
-      'cancelled' || 'canceled' => (CheckStatusKind.other, 'Check cancelled', null),
+      'waiting for user' || 'needs verification' => (
+        CheckStatusKind.verification,
+        'Needs info',
+        null,
+      ),
+      'failed' ||
+      'check failed' => (CheckStatusKind.failed, "Couldn't check", null),
+      'cancelled' ||
+      'canceled' => (CheckStatusKind.other, 'Check cancelled', null),
       _
           when state == 'manual review required' ||
               raw == 'manual review required' ||
@@ -135,12 +183,27 @@ class CheckSummary {
               raw == 'invalid prescription' ||
               raw == 'invalid policy and prescription' ||
               (state == 'invalid' && raw.isEmpty) =>
-        (CheckStatusKind.failed, 'Not a prescription', CheckIssue.invalidPrescription),
-      _ when best == null => (CheckStatusKind.other, 'Result not available', null),
+        (
+          CheckStatusKind.failed,
+          'Not a prescription',
+          CheckIssue.invalidPrescription,
+        ),
+      _ when best == null => (
+        CheckStatusKind.other,
+        'Result not available',
+        null,
+      ),
       _ => switch (resultForPolicy(best)) {
-        (CheckStatusKind.verification, _) ||
-        (_, 'Needs your input') => (CheckStatusKind.verification, 'Needs info', null),
-        (CheckStatusKind.failed, _) => (CheckStatusKind.failed, "Couldn't check", null),
+        (CheckStatusKind.verification, _) || (_, 'Needs your input') => (
+          CheckStatusKind.verification,
+          'Needs info',
+          null,
+        ),
+        (CheckStatusKind.failed, _) => (
+          CheckStatusKind.failed,
+          "Couldn't check",
+          null,
+        ),
         (final kind, final label) => (kind, label, null),
       },
     };
@@ -148,7 +211,8 @@ class CheckSummary {
     final fullName = cleanPatientName(g.patientName);
     final patient = fullName.isEmpty
         ? ''
-        : fullName.toLowerCase() == cleanPatientName(accountName ?? '').toLowerCase()
+        : fullName.toLowerCase() ==
+              cleanPatientName(accountName ?? '').toLowerCase()
         ? 'you'
         : fullName.split(' ').first;
     final count = g.policyCount > rows.length ? g.policyCount : rows.length;
@@ -176,23 +240,31 @@ class CheckSummary {
     );
   }
 
-  static String checkMeta(String patient, int count) =>
-      [if (patient.isNotEmpty) 'For $patient', if (count > 1) '$count policies compared'].join(' \u00b7 ');
+  static String checkMeta(String patient, int count) => [
+    if (patient.isNotEmpty) 'For $patient',
+    if (count > 1) '$count policies compared',
+  ].join(' \u00b7 ');
 
-  static String _normalized(String value) => value.trim().toLowerCase().replaceAll('_', ' ');
+  static String _normalized(String value) =>
+      value.trim().toLowerCase().replaceAll('_', ' ');
 
   static int _rank(PolicyReportRow row) => switch (resultForPolicy(row).$1) {
     CheckStatusKind.covered => 0,
     CheckStatusKind.partial => 1,
     CheckStatusKind.notCovered => 2,
-    CheckStatusKind.verification when _normalized(row.overallStatus) == 'needs verification' => 3,
+    CheckStatusKind.verification
+        when _normalized(row.overallStatus) == 'needs verification' =>
+      3,
     _ => 4,
   };
 
   static String displayDate(DateTime date, DateTime now) {
     if (date.year == now.year && date.month == now.month && date.day == now.day)
       return DateFormat('h:mm a', 'en_US').format(date).toLowerCase();
-    return DateFormat(date.year == now.year ? 'd MMM' : 'd MMM yyyy', 'en_US').format(date);
+    return DateFormat(
+      date.year == now.year ? 'd MMM' : 'd MMM yyyy',
+      'en_US',
+    ).format(date);
   }
 
   /// Maps the backend's status text to a dot colour. Unknown values are logged
@@ -220,33 +292,53 @@ class CheckSummary {
     }
   }
 
-  static final _fileExtension = RegExp(r'\.(pdf|jpe?g|png|docx?|webp|heic|txt)$', caseSensitive: false);
+  static final _fileExtension = RegExp(
+    r'\.(pdf|jpe?g|png|docx?|webp|heic|txt)$',
+    caseSensitive: false,
+  );
 
   /// Diagnosis without codes, e.g. "Acute Appendicitis (ICD-10: K35.80)" →
   /// "Acute Appendicitis". Missing or file name → "Prescription".
   static String cleanTreatment(String diagnosis) {
     final cleaned = diagnosis
         .replaceAll(
-          RegExp(r'[(\[]\s*(?:ICD[^)\]]*|[A-Z]\d{2}(?:\.[A-Z0-9]{1,4})?)\s*[)\]]', caseSensitive: false),
+          RegExp(
+            r'[(\[]\s*(?:ICD[^)\]]*|[A-Z]\d{2}(?:\.[A-Z0-9]{1,4})?)\s*[)\]]',
+            caseSensitive: false,
+          ),
           '',
         )
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
-    return _missing(cleaned) || _fileExtension.hasMatch(cleaned) ? 'Prescription' : cleaned;
+    return _missing(cleaned) || _fileExtension.hasMatch(cleaned)
+        ? 'Prescription'
+        : cleaned;
   }
 
   /// "Mr. Rajesh Venkatraman" → "Rajesh Venkatraman".
   static String cleanPatientName(String name) {
     final cleaned = name
         .trim()
-        .replaceFirst(RegExp(r'^(mr|mrs|ms|miss|master|dr|shri|smt|kum)\.?\s+', caseSensitive: false), '')
+        .replaceFirst(
+          RegExp(
+            r'^(mr|mrs|ms|miss|master|dr|shri|smt|kum)\.?\s+',
+            caseSensitive: false,
+          ),
+          '',
+        )
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
     return _missing(cleaned) ? '' : cleaned;
   }
 
-  static bool _missing(String value) =>
-      const {'', 'unknown', 'n/a', 'null', 'none', 'not specified'}.contains(value.toLowerCase());
+  static bool _missing(String value) => const {
+    '',
+    'unknown',
+    'n/a',
+    'null',
+    'none',
+    'not specified',
+  }.contains(value.toLowerCase());
 
   /// Relative dates for saved documents. Checks use [displayDate].
   static String relativeDate(DateTime date, DateTime now) {
@@ -255,7 +347,9 @@ class CheckSummary {
     return switch (today.difference(day).inDays) {
       0 => 'Today',
       1 => 'Yesterday',
-      _ => DateFormat(date.year == now.year ? 'd MMM' : 'd MMM yyyy').format(date),
+      _ => DateFormat(
+        date.year == now.year ? 'd MMM' : 'd MMM yyyy',
+      ).format(date),
     };
   }
 }

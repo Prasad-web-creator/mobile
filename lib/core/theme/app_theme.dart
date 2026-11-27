@@ -4,6 +4,7 @@ import 'package:claimsupport/core/theme/app_palette.dart';
 import 'package:claimsupport/core/theme/app_tokens.dart';
 import 'package:claimsupport/core/design/app_colors.dart';
 import 'package:claimsupport/core/design/app_illustration_colors.dart';
+import 'package:claimsupport/core/design/app_text_styles.dart';
 
 export 'package:claimsupport/core/theme/app_palette.dart';
 export 'package:claimsupport/core/theme/app_tokens.dart';
@@ -97,7 +98,7 @@ class AppTheme {
       useMaterial3: true,
       brightness: b,
       colorScheme: scheme,
-      textTheme: text,
+      textTheme: text.apply(fontFamilyFallback: AppTextStyles.tamilFallback),
       primaryColor: p.primary,
       scaffoldBackgroundColor: p.background,
       canvasColor: p.background,

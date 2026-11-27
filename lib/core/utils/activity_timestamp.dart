@@ -1,4 +1,6 @@
 import 'package:intl/intl.dart';
+import 'package:claimsupport/core/localization/localization.dart';
+import 'package:claimsupport/core/localization/translation_mapper.dart';
 
 final _activityDate = DateFormat('d MMM yyyy', 'en_US');
 final _activityTime = DateFormat('hh : mm a', 'en_US');
@@ -12,15 +14,15 @@ DateTime? parseActivityTimestamp(Object? raw) {
   return DateTime.tryParse('${text}Z');
 }
 
-String formatActivityDate(DateTime date, {DateTime? now}) {
+String formatActivityDate(DateTime date, {DateTime? now, AppLocalizations? l10n}) {
   final local = date.toLocal();
   final today = (now ?? DateTime.now()).toLocal();
   return local.year == today.year && local.month == today.month && local.day == today.day
-      ? 'Today'
-      : _activityDate.format(local);
+      ? (l10n?.sharedToday ?? 'Today')
+      : l10n == null ? _activityDate.format(local) : formatLocalizedDate(l10n, local);
 }
 
-String formatActivityTimestamp(DateTime timestamp, {DateTime? now}) {
+String formatActivityTimestamp(DateTime timestamp, {DateTime? now, AppLocalizations? l10n}) {
   final local = timestamp.toLocal();
-  return '${formatActivityDate(local, now: now)}   ${_activityTime.format(local)}';
+  return '${formatActivityDate(local, now: now, l10n: l10n)}   ${l10n == null ? _activityTime.format(local) : formatLocalizedDate(l10n, local, pattern: 'hh : mm a')}';
 }

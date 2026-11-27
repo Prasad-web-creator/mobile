@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/design/app_icons.dart';
 import 'package:claimsupport/core/design/widgets/app_buttons.dart';
 import 'package:claimsupport/core/design/widgets/app_shells.dart';
@@ -8,7 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:claimsupport/core/localization/translation_mapper.dart';
 import 'package:claimsupport/core/network/api_client.dart';
 import 'package:claimsupport/features/analysis/data/repositories/analysis_repository.dart';
 import 'package:claimsupport/core/config/app_config_provider.dart';
@@ -44,7 +45,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
     if (savedId != null) {
       _prescriptionRecordId = savedId;
       _uploadedPath = savedId;
-      _selectedFileName = 'Saved prescription';
+      _selectedFileName = '';
     }
     _manualTextController.addListener(() {
       if (mounted) setState(() {});
@@ -77,7 +78,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
     try {
       final parsed = DateTime.tryParse(str);
       if (parsed != null) {
-        return DateFormat('dd-MM-yyyy').format(parsed);
+        return formatLocalizedDate(context.l10n, parsed, pattern: 'dd-MM-yyyy');
       }
 
       final slashParts = str.split('/');
@@ -110,7 +111,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
     final file = result?.files.single;
     if (file != null && file.path != null) {
       if (!_config.acceptsFileSize(file.size)) {
-        showAppSnackBar(context, _config.uploadLimitMessage, tone: AppTone.warning);
+        showAppSnackBar(context, context.l10n.sharedFileLimit(_config.maxFileSizeMb), tone: AppTone.warning);
         return;
       }
       setState(() => _isUploading = true);
@@ -151,13 +152,13 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
         if (mounted) {
           String msg;
           if (e.response?.statusCode == 413) {
-            msg = _apiMessage(e, _config.uploadLimitMessage);
+            msg = _apiMessage(e, context.l10n.sharedFileLimit(_config.maxFileSizeMb));
           } else if (e.type == DioExceptionType.connectionError ||
               e.type == DioExceptionType.connectionTimeout ||
               e.type == DioExceptionType.receiveTimeout) {
-            msg = friendlyErrorMessage(e);
+            msg = friendlyErrorMessage(e, l10n: context.l10n);
           } else {
-            msg = "Our servers are experiencing issues processing your upload. Please try again later.";
+            msg = context.l10n.sharedUploadServerError;
           }
           showAppSnackBar(context, msg, tone: AppTone.danger);
         }
@@ -166,7 +167,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
         if (mounted) {
           showAppSnackBar(
             context,
-            'An unexpected error occurred during upload. Please try again later.',
+            context.l10n.sharedUploadUnexpected,
             tone: AppTone.danger,
           );
         }
@@ -183,7 +184,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
   String _apiMessage(DioException error, String fallback) {
     final data = error.response?.data;
     final message = data is Map ? data['message'] ?? data['detail'] : null;
-    return message is String ? message : fallback;
+    return message is String && context.l10n.localeName == 'en' ? message : fallback;
   }
 
   Future<void> _rollbackUpload(String? fileId) async {
@@ -203,7 +204,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
     if (hasUploadedFile && hasManualText) {
       showAppSnackBar(
         context,
-        'Please choose only one prescription input method: either upload a prescription PDF or enter your prescription manually.',
+        context.l10n.sharedChooseOnePrescriptionMethod,
         tone: AppTone.warning,
       );
       return;
@@ -212,7 +213,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
     if (!hasUploadedFile && !hasManualText) {
       showAppSnackBar(
         context,
-        'Please upload a prescription PDF or enter your prescription manually.',
+        context.l10n.sharedProvidePrescription,
         tone: AppTone.warning,
       );
       return;
@@ -263,7 +264,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
           if (mounted) {
             showAppSnackBar(
               context,
-              _apiMessage(error, 'Could not save the prescription. Please try again.'),
+              _apiMessage(error, context.l10n.sharedCouldNotSavePrescription),
               tone: AppTone.warning,
             );
           }
@@ -326,9 +327,9 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
               decoration: BoxDecoration(color: p.primarySoft, shape: BoxShape.circle),
               child: Icon(Icons.policy_outlined, color: p.primary),
             ),
-            title: const Text("Existing Policy Found", textAlign: TextAlign.center),
-            content: const Text(
-              "We found existing policies in your account. Would you like to analyze this prescription using one of your saved policies?",
+            title: Text(context.l10n.sharedExistingPolicyFound, textAlign: TextAlign.center),
+            content: Text(
+              context.l10n.sharedUseSavedPolicy,
               textAlign: TextAlign.center,
             ),
             actionsPadding: const EdgeInsets.fromLTRB(AppSpacing.xl, 0, AppSpacing.xl, AppSpacing.lg),
@@ -342,7 +343,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                       _showPolicySelectionDialog(policiesList);
                     },
                     style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-                    child: const Text("Continue Existing Policy"),
+                    child: Text(context.l10n.sharedContinueExistingPolicy),
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   OutlinedButton(
@@ -351,7 +352,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                       context.push('/upload-policy');
                     },
                     style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
-                    child: const Text("Upload New Policy"),
+                    child: Text(context.l10n.sharedUploadNewPolicy),
                   ),
                 ],
               ),
@@ -362,7 +363,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
     } catch (err) {
       debugPrint('Could not proceed from prescription upload.');
       if (mounted) {
-        showAppSnackBar(context, friendlyErrorMessage(err), tone: AppTone.danger);
+        showAppSnackBar(context, friendlyErrorMessage(err, l10n: context.l10n), tone: AppTone.danger);
       }
     } finally {
       if (mounted && _isExtracting) {
@@ -393,11 +394,11 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text("Select Policies"),
+                  Text(context.l10n.sharedSelectPolicies),
                   const SizedBox(height: 4),
                   Text(
                     localSelectedPolicyIds.isEmpty
-                        ? "Choose up to ${config.maxPolicies} policies"
+                        ? context.l10n.sharedPickUpToPolicies(config.maxPolicies)
                         : "${localSelectedPolicyIds.length} selected",
                     style: dialogCtx.text.bodySmall?.copyWith(
                       color: localSelectedPolicyIds.isEmpty ? pal.textTertiary : pal.primary,
@@ -416,21 +417,21 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                     final p = policies[index];
                     final isSelected = localSelectedPolicyIds.contains(p['id']);
 
-                    final String provider = p['providerName'] ?? 'Insurance Policy';
-                    final String policyType = p['policyType'] ?? '';
+                    final String provider = p['providerName'] ?? context.l10n.sharedInsurancePolicy;
+                    final policyType = localizedPolicyType(context.l10n, p['policyType']?.toString() ?? '');
                     final String? holderName = p['policyHolderName'];
                     final String? formattedStart = _formatDisplayDate(p['startDate']);
                     final String? formattedEnd = _formatDisplayDate(p['endDate'] ?? p['expiryDate']);
-                    final String policyNo = p['displayId'] ?? p['policyNumber'] ?? 'Unknown';
+                    final String policyNo = p['displayId'] ?? p['policyNumber'] ?? context.l10n.sharedUnknown;
                     final String? fileName = p['originalFileName'];
 
                     ({String label, String value})? validity;
                     if (formattedStart != null && formattedEnd != null) {
-                      validity = (label: 'Validity', value: '$formattedStart to $formattedEnd');
+                      validity = (label: context.l10n.sharedValidity, value: context.l10n.sharedDateRange(formattedStart, formattedEnd));
                     } else if (formattedStart != null) {
-                      validity = (label: 'Start Date', value: formattedStart);
+                      validity = (label: context.l10n.sharedStartDateTitle, value: formattedStart);
                     } else if (formattedEnd != null) {
-                      validity = (label: 'Expiry', value: formattedEnd);
+                      validity = (label: context.l10n.sharedExpiry, value: formattedEnd);
                     }
 
                     return Material(
@@ -486,11 +487,11 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                                     Divider(height: 1, color: pal.border),
                                     const SizedBox(height: AppSpacing.xxs),
                                     if (holderName != null && holderName.isNotEmpty)
-                                      _PolicyMetaLine(label: 'Holder', value: holderName),
-                                    _PolicyMetaLine(label: 'Policy No', value: policyNo),
+                                      _PolicyMetaLine(label: context.l10n.sharedHolder, value: holderName),
+                                    _PolicyMetaLine(label: context.l10n.sharedPolicyNo, value: policyNo),
                                     if (validity != null) _PolicyMetaLine(label: validity.label, value: validity.value),
                                     if (fileName != null && fileName.isNotEmpty)
-                                      _PolicyMetaLine(label: 'File', value: fileName, ellipsize: true),
+                                      _PolicyMetaLine(label: context.l10n.sharedFile, value: fileName, ellipsize: true),
                                   ],
                                 ),
                               ),
@@ -523,8 +524,8 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                       style: FilledButton.styleFrom(minimumSize: const Size(0, 50)),
                       child: Text(
                         localSelectedPolicyIds.length > 1
-                            ? "Analyze With ${localSelectedPolicyIds.length} Policies"
-                            : "Analyze With Selected Policy",
+                            ? context.l10n.sharedAnalyzeWithPolicies(localSelectedPolicyIds.length)
+                            : context.l10n.sharedAnalyzeWithSelectedPolicy,
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -532,7 +533,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                     OutlinedButton(
                       onPressed: () => Navigator.of(dialogContext).pop(),
                       style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
-                      child: const Text("Cancel"),
+                      child: Text(context.l10n.sharedCancel),
                     ),
                   ],
                 ),
@@ -555,7 +556,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
     final bool bothMethods = _selectedFileName != null && hasManual;
 
     return FlowShell(
-      title: 'Add Prescription',
+      title: context.l10n.sharedAddPrescriptionTitle,
       step: 2,
       stepCount: 3,
       onClose: () => context.go('/dashboard'),
@@ -568,30 +569,30 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Add your prescription', style: context.text.headlineSmall),
+                Text(context.l10n.sharedAddYourPrescription, style: context.text.headlineSmall),
                 const SizedBox(height: AppSpacing.xs),
-                Text("Upload your doctor's prescription, diagnosis, or medical bills.", style: context.text.bodyMedium),
+                Text(context.l10n.sharedUploadDoctorDocument, style: context.text.bodyMedium),
                 const SizedBox(height: AppSpacing.xl),
 
                 // Option 1: upload a document
-                _OptionLabel(index: 1, title: 'Upload a document'),
+                _OptionLabel(index: 1, title: context.l10n.sharedUploadDocument),
                 const SizedBox(height: AppSpacing.sm),
                 if (_selectedFileName == null || _isUploading)
                   _UploadDropZone(
                     title: _isUploading
-                        ? 'Uploading ${_selectedFileName ?? 'document'}…'
-                        : 'Tap to upload medical documents',
+                        ? context.l10n.sharedUploadNamed(_selectedFileName?.isEmpty == true ? context.l10n.sharedSavedPrescription : (_selectedFileName ?? context.l10n.sharedDocument))
+                        : context.l10n.sharedUploadMedicalDocuments,
                     subtitle: _isUploading
-                        ? 'Please keep the app open'
-                        : 'PDF, JPG, PNG · ${config.maxFileSizeMb} MB max',
+                        ? context.l10n.sharedKeepAppOpen
+                        : context.l10n.sharedPdfImageLimit(config.maxFileSizeMb),
                     icon: Icons.find_in_page_outlined,
                     loading: _isUploading,
                     onTap: _isUploading ? null : _pickAndUploadFile,
                   )
                 else
                   _SelectedFileCard(
-                    fileName: _selectedFileName!,
-                    status: 'File uploaded successfully',
+                    fileName: _selectedFileName!.isEmpty ? context.l10n.sharedSavedPrescription : _selectedFileName!,
+                    status: context.l10n.sharedUploadSucceeded,
                     onRemove: _clearUploadedFile,
                     onReplace: _pickAndUploadFile,
                   ),
@@ -602,7 +603,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                     Expanded(child: Divider(color: p.border)),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                      child: Text('OR', style: context.text.labelSmall),
+                      child: Text(context.l10n.sharedOr, style: context.text.labelSmall),
                     ),
                     Expanded(child: Divider(color: p.border)),
                   ],
@@ -610,7 +611,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                 const SizedBox(height: AppSpacing.xl),
 
                 // Option 2: describe it manually
-                _OptionLabel(index: 2, title: 'Enter your prescription manually'),
+                _OptionLabel(index: 2, title: context.l10n.sharedManualPrescription),
                 const SizedBox(height: AppSpacing.sm),
                 AppCard(
                   borderColor: bothMethods ? p.warning.border : (hasManual ? p.primary.withAlpha(160) : null),
@@ -621,7 +622,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                         children: [
                           const IconTile(icon: Icons.edit_note_rounded, size: 32),
                           const SizedBox(width: AppSpacing.sm),
-                          Expanded(child: Text('Prescription / Diagnosis Details', style: context.text.titleSmall)),
+                          Expanded(child: Text(context.l10n.sharedPrescriptionDetails, style: context.text.titleSmall)),
                           if (hasManual)
                             TextButton.icon(
                               onPressed: () {
@@ -634,7 +635,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
                               ),
                               icon: const Icon(Icons.close_rounded, size: 16),
-                              label: const Text('Clear'),
+                              label: Text(context.l10n.sharedClear),
                             ),
                         ],
                       ),
@@ -647,7 +648,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                         style: context.text.bodyLarge?.copyWith(fontSize: 14),
                         decoration: InputDecoration(
                           fillColor: p.surfaceMuted,
-                          hintText: "Describe your diagnosis, symptoms, doctor's findings, or prescribed treatment...",
+                          hintText: context.l10n.sharedDescribeSymptoms,
                           hintMaxLines: 3,
                         ),
                       ),
@@ -668,7 +669,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                               const SizedBox(width: AppSpacing.xs),
                               Expanded(
                                 child: Text(
-                                  'Please choose only one prescription input method: either upload a prescription PDF or enter your prescription manually.',
+                                  context.l10n.sharedChooseOnePrescriptionMethod,
                                   textAlign: TextAlign.start,
                                   style: context.text.bodySmall?.copyWith(color: p.textPrimary, height: 1.45),
                                 ),
@@ -687,10 +688,10 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
       ),
       bottomAction: AppButton(
         label: _isExtracting
-            ? 'Reading prescription?'
+            ? context.l10n.sharedReadingPrescription
             : hasManual
-            ? 'Process Manual Prescription'
-            : 'Process Prescription',
+            ? context.l10n.sharedProcessManualPrescription
+            : context.l10n.sharedProcessPrescription,
         onPressed: canSubmit ? _processNext : null,
         busy: _isExtracting,
         icon: AppIcons.caretRight,
@@ -874,12 +875,12 @@ class _SelectedFileCard extends StatelessWidget {
           if (onReplace != null)
             IconButton(
               onPressed: onReplace,
-              tooltip: 'Replace file',
+              tooltip: context.l10n.sharedReplaceFile,
               icon: Icon(Icons.swap_horiz_rounded, color: p.textSecondary),
             ),
           IconButton(
             onPressed: onRemove,
-            tooltip: 'Remove file',
+            tooltip: context.l10n.sharedRemoveFile,
             icon: Icon(Icons.delete_outline_rounded, color: p.danger.fg),
           ),
         ],

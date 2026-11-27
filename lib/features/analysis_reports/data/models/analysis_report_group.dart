@@ -224,6 +224,11 @@ class AnalysisReportGroup {
   bool get isMultiPolicy => groupType == 'multi' && policyCount > 1;
 
   String get diagnosis => prescription['diagnosis']?.toString() ?? '';
+  String? localizedDiagnosis(String language) {
+    final diagnoses = prescription['localizedDiagnoses'];
+    final value = diagnoses is Map ? diagnoses[language] : null;
+    return value is String && value.trim().isNotEmpty ? value.trim() : null;
+  }
   String get patientName => prescription['patientName']?.toString() ?? '';
   String get visitDate => prescription['visitDate']?.toString() ?? '';
 

@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/localization/localization.dart';
 import 'package:claimsupport/core/design/app_icons.dart';
 import 'package:claimsupport/core/design/design.dart';
 import 'package:claimsupport/core/design/widgets/app_buttons.dart';
@@ -194,7 +195,7 @@ class AuthField extends StatelessWidget {
           onSubmitted: onSubmitted == null ? null : (_) => onSubmitted!(),
           style: AppTextStyles.bodyStrong.copyWith(color: colors.textPrimary),
           decoration: InputDecoration(
-            hintText: email ? 'you@example.com' : 'Your name',
+            hintText: email ? 'you@example.com' : context.l10n.authYourName,
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
             enabledBorder: border(colors.borderStrong),
             focusedBorder: border(colors.buttonPrimary, 2),
@@ -284,11 +285,11 @@ class AuthCodeForm extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Enter the $length-digit code we sent to',
+          context.l10n.authCodeEnter(length),
           style: AppTextStyles.subheadRegular.copyWith(color: c.textSecondary),
         ),
         SelectableText(email, style: AppTextStyles.subheadStrong.copyWith(color: c.textPrimary)),
-        AuthTextAction(label: 'Change email', onTap: busy ? null : onChangeEmail),
+        AuthTextAction(label: context.l10n.authChangeEmail, onTap: busy ? null : onChangeEmail),
         const SizedBox(height: DsSpace.s20),
         Stack(
           children: [
@@ -336,7 +337,7 @@ class AuthCodeForm extends StatelessWidget {
                 opacity: 0,
                 alwaysIncludeSemantics: true,
                 child: Semantics(
-                  label: 'Verification code',
+                  label: context.l10n.authVerificationCode,
                   child: TextField(
                     controller: controller,
                     readOnly: busy,
@@ -364,12 +365,12 @@ class AuthCodeForm extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: DsSpace.s4),
             child: Text(
-              'Resend code in $minutes:$seconds',
+              context.l10n.authCodeResendTimer('$minutes:$seconds'),
               style: AppTextStyles.label.copyWith(color: c.textSecondary),
             ),
           )
         else
-          AuthTextAction(label: 'Resend code', onTap: busy ? null : onResend),
+          AuthTextAction(label: context.l10n.authResendCode, onTap: busy ? null : onResend),
       ],
     );
   }

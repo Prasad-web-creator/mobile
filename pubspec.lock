@@ -310,6 +310,11 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.1"
+  flutter_localizations:
+    dependency: "direct main"
+    description: flutter
+    source: sdk
+    version: "0.0.0"
   flutter_plugin_android_lifecycle:
     dependency: transitive
     description:
@@ -1058,6 +1063,14 @@ packages:
     description:
       name: syncfusion_flutter_signaturepad
       sha256: f127af6fcb7de2dae74a0856f005747d27869fb176c8b92346136fe2254d73dc
+      url: "https://pub.dev"
+    source: hosted
+    version: "33.2.15"
+  syncfusion_localizations:
+    dependency: "direct main"
+    description:
+      name: syncfusion_localizations
+      sha256: "489624cd1481198d1460edb988b8959532ee346e0aed220b8df9288fbd463409"
       url: "https://pub.dev"
     source: hosted
     version: "33.2.15"
