@@ -1,11 +1,11 @@
+import 'package:claimsupport/core/models/retained_page_notifier.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:claimsupport/core/providers.dart';
 import 'package:claimsupport/features/prescriptions/data/models/prescription.dart';
 import 'package:claimsupport/core/models/pagination_response.dart';
 
-class PrescriptionNotifier extends AsyncNotifier<PaginationResponse<Prescription>> {
-  int _currentPage = 1;
+class PrescriptionNotifier extends RetainedPageNotifier<Prescription> {
   String _currentSearch = '';
 
   static const int _limit = 10;
@@ -15,24 +15,16 @@ class PrescriptionNotifier extends AsyncNotifier<PaginationResponse<Prescription
     ref.onDispose(() {
       _debounceTimer?.cancel();
     });
-    return _fetchPrescriptions();
+    return super.build();
   }
 
-  Future<PaginationResponse<Prescription>> _fetchPrescriptions() async {
+  @override
+  Future<PaginationResponse<Prescription>> fetchPage(int page) {
     final repository = ref.read(prescriptionRepositoryProvider);
-    return await repository.getPrescriptions(page: _currentPage, limit: _limit, search: _currentSearch);
+    return repository.getPrescriptions(page: page, limit: _limit, search: _currentSearch);
   }
 
-  Future<void> fetchPrescriptions({bool isRefresh = false}) async {
-    if (isRefresh) {
-      _currentPage = 1;
-      state = const AsyncLoading();
-      state = await AsyncValue.guard(() => _fetchPrescriptions());
-    } else {
-      state = const AsyncLoading();
-      state = await AsyncValue.guard(() => _fetchPrescriptions());
-    }
-  }
+  Future<void> fetchPrescriptions({bool isRefresh = false}) => refreshPage(firstPage: isRefresh);
 
   Timer? _debounceTimer;
 
@@ -40,56 +32,28 @@ class PrescriptionNotifier extends AsyncNotifier<PaginationResponse<Prescription
     if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 500), () {
       _currentSearch = query;
-      _currentPage = 1;
-      fetchPrescriptions();
+      fetchPrescriptions(isRefresh: true);
     });
   }
 
-  Future<void> loadNextPage() async {
-    final currentState = state.value;
-    if (currentState != null && currentState.hasNextPage) {
-      _currentPage++;
-      try {
-        final newResponse = await _fetchPrescriptions();
-        state = AsyncData(PaginationResponse(
-          docs: [...currentState.docs, ...newResponse.docs],
-          totalDocs: newResponse.totalDocs,
-          limit: newResponse.limit,
-          totalPages: newResponse.totalPages,
-          page: newResponse.page,
-          hasPrevPage: newResponse.hasPrevPage,
-          hasNextPage: newResponse.hasNextPage,
-        ));
-      } catch (err, stack) {
-        state = AsyncError(err, stack);
+  Future<void> deletePrescription(String id) async {
+    final repository = ref.read(prescriptionRepositoryProvider);
+    await repository.deletePrescription(id);
+    if (ref.mounted) removeLocally((item) => item.id == id);
+  }
+
+  Future<int> deletePrescriptions(List<String> ids) async {
+    if (ids.isEmpty) return 0;
+    final repository = ref.read(prescriptionRepositoryProvider);
+    final deleted = await repository.deleteBatchPrescriptions(ids);
+    if (ref.mounted) {
+      final targets = ids.toSet();
+      final updated = removeLocally((item) => targets.contains(item.id));
+      if (updated != null && updated.docs.length < updated.totalDocs) {
+        unawaited(silentRefreshFirstPage(keepLoadedPages: true));
       }
     }
-  }
-
-  Future<void> createPrescription(Map<String, dynamic> data) async {
-    final repository = ref.read(prescriptionRepositoryProvider);
-    await repository.createPrescription(data);
-    await fetchPrescriptions(isRefresh: true);
-  }
-  Future<void> deletePrescription(String id) async {
-    try {
-      final repository = ref.read(prescriptionRepositoryProvider);
-      await repository.deletePrescription(id);
-      await fetchPrescriptions(isRefresh: true);
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  Future<void> deletePrescriptions(List<String> ids) async {
-    if (ids.isEmpty) return;
-    try {
-      final repository = ref.read(prescriptionRepositoryProvider);
-      await repository.deleteBatchPrescriptions(ids);
-      await fetchPrescriptions(isRefresh: true);
-    } catch (e) {
-      rethrow;
-    }
+    return deleted;
   }
 }
 

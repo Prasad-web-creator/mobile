@@ -4,6 +4,35 @@ import 'package:intl/intl.dart';
 import 'package:claimsupport/core/widgets/app_widgets.dart';
 import 'dart:developer' as developer;
 
+// ─── Date picking ───────────────────────────────────────────────────────────
+
+/// A YYYY-MM-DD hint the server may send with a date question
+/// (`minDate`, `maxDate`, `initialDate`).
+DateTime? _questionDateHint(Map<String, dynamic> question, String key) {
+  final value = question[key];
+  if (value == null) return null;
+  final parsed = DateTime.tryParse(value.toString());
+  return parsed == null ? null : DateTime(parsed.year, parsed.month, parsed.day);
+}
+
+/// Every date picker in the dialog opens the same way: on the date picked
+/// before, else the server's suggestion (e.g. the date read from the policy),
+/// else today, kept inside the server's allowed range so the picker always opens.
+Future<DateTime?> _pickQuestionDate(
+  BuildContext context,
+  Map<String, dynamic> question, {
+  DateTime? current,
+}) {
+  final now = DateTime.now();
+  final firstDate = _questionDateHint(question, 'minDate') ?? DateTime(1970);
+  final maxHint = _questionDateHint(question, 'maxDate') ?? DateTime(now.year + 10, 12, 31);
+  final lastDate = maxHint.isBefore(firstDate) ? firstDate : maxHint;
+  var initialDate = current ?? _questionDateHint(question, 'initialDate') ?? DateTime(now.year, now.month, now.day);
+  if (initialDate.isBefore(firstDate)) initialDate = firstDate;
+  if (initialDate.isAfter(lastDate)) initialDate = lastDate;
+  return showDatePicker(context: context, initialDate: initialDate, firstDate: firstDate, lastDate: lastDate);
+}
+
 // ─── Individual Question Widgets ────────────────────────────────────────────
 // Each question is its own StatefulWidget so that setState() only
 // rebuilds the ONE question card that changed, not the entire dialog.
@@ -66,21 +95,14 @@ class _SingleChoiceQuestionState extends State<_SingleChoiceQuestion> {
   }
 
   Future<void> _pickDateForOption(String optStr) async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _pickedDate ?? now,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2035),
-    );
-    if (picked != null) {
+    final picked = await _pickQuestionDate(context, widget.question, current: _pickedDate);
+    if (picked != null && mounted) {
       final formatted = DateFormat('dd-MMM-yyyy').format(picked);
       setState(() {
         _pickedDate = picked;
         _customInputController.text = formatted;
       });
       widget.onChanged(formatted);
-      developer.log('[Clarification] Picked date: $formatted for question ${widget.question['id']}');
     }
   }
 
@@ -100,7 +122,6 @@ class _SingleChoiceQuestionState extends State<_SingleChoiceQuestion> {
     } else {
       widget.onChanged(optStr);
     }
-    developer.log('[Clarification] Single choice selected: $optStr for question ${widget.question['id']}');
   }
 
   @override
@@ -307,7 +328,6 @@ class _MultiChoiceQuestionState extends State<_MultiChoiceQuestion> {
                 }
               });
               widget.onChanged(List<String>.from(_selected));
-              developer.log('[Clarification] Multi-choice updated: $_selected for question ${widget.question['id']}');
             },
           ),
         );
@@ -357,7 +377,6 @@ class _BooleanQuestionState extends State<_BooleanQuestion> {
         onChanged: (val) {
           setState(() => _value = val);
           widget.onChanged(val);
-          developer.log('[Clarification] Boolean changed: $val for question ${widget.question['id']}');
         },
       ),
     );
@@ -402,21 +421,17 @@ class _TextInputWidgetState extends State<_TextInputWidget> {
         qText.contains('date');
   }
 
+  DateTime? _pickedDate;
+
   Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: now,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2035),
-    );
-    if (picked != null) {
+    final picked = await _pickQuestionDate(context, widget.question, current: _pickedDate);
+    if (picked != null && mounted) {
       final formatted = DateFormat('dd-MMM-yyyy').format(picked);
       setState(() {
+        _pickedDate = picked;
         _controller.text = formatted;
       });
       widget.onChanged(formatted);
-      developer.log('[Clarification] TextInput picked date: $formatted for question ${widget.question['id']}');
     }
   }
 
@@ -474,38 +489,15 @@ class _DateQuestionWidgetState extends State<_DateQuestionWidget> {
     super.dispose();
   }
 
-  /// A YYYY-MM-DD hint the server may send with a date question.
-  DateTime? _hint(String key) {
-    final value = widget.question[key];
-    if (value == null) return null;
-    final parsed = DateTime.tryParse(value.toString());
-    return parsed == null ? null : DateTime(parsed.year, parsed.month, parsed.day);
-  }
-
   Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final DateTime firstDate = _hint('minDate') ?? DateTime(2000);
-    final DateTime maxHint = _hint('maxDate') ?? DateTime(2035);
-    final DateTime lastDate = maxHint.isBefore(firstDate) ? firstDate : maxHint;
-    // Open on the date picked before, else the server's suggestion, else today,
-    // kept inside the allowed range so the picker never fails to open.
-    DateTime initialDate = _selectedDate ?? _hint('initialDate') ?? now;
-    if (initialDate.isBefore(firstDate)) initialDate = firstDate;
-    if (initialDate.isAfter(lastDate)) initialDate = lastDate;
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: firstDate,
-      lastDate: lastDate,
-    );
-    if (picked != null) {
+    final picked = await _pickQuestionDate(context, widget.question, current: _selectedDate);
+    if (picked != null && mounted) {
       final formatted = DateFormat('dd-MMM-yyyy').format(picked);
       setState(() {
         _selectedDate = picked;
         _controller.text = formatted;
       });
       widget.onChanged(formatted);
-      developer.log('[Clarification] DateQuestionWidget picked date: $formatted for question ${widget.question['id']}');
     }
   }
 
@@ -620,7 +612,6 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
     setState(() {
       _answers[questionId] = value;
     });
-    developer.log('[Clarification] Answer stored: $questionId = $value');
   }
 
   /// Splits backend question text into lead-in context and the final question
@@ -636,7 +627,6 @@ class _ClarificationDialogState extends State<ClarificationDialog> {
   }
 
   void _handleSubmit() {
-    developer.log('[Clarification] Submit pressed. Payload: $_answers');
     widget.onSubmit(Map<String, dynamic>.from(_answers));
   }
 

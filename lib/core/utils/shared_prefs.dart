@@ -2,7 +2,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
 class SharedPrefs {
+  static const analysisDraftKey = 'analysis_consent_job_id';
+  static const analysisResumeKey = 'analysis_resume_job_id';
   static SharedPreferences? _instance;
+  static SharedPreferences? get maybeInstance => _instance;
 
   static Future<SharedPreferences> init() async {
     try {

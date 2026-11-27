@@ -150,6 +150,7 @@ class PolicyAnalysisResult {
 }
 
 class MultiAnalysisSession {
+  final bool canCancel;
   final String sessionId;
   final String prescriptionId;
   final String status;
@@ -164,6 +165,7 @@ class MultiAnalysisSession {
   final AnalysisProgress progress;
 
   const MultiAnalysisSession({
+    this.canCancel = false,
     required this.sessionId,
     required this.prescriptionId,
     required this.status,
@@ -177,6 +179,7 @@ class MultiAnalysisSession {
 
   factory MultiAnalysisSession.fromJson(Map<String, dynamic> json) {
     return MultiAnalysisSession(
+      canCancel: json['canCancel'] == true,
       sessionId: json['sessionId']?.toString() ?? '',
       prescriptionId: json['prescriptionId']?.toString() ?? '',
       status: json['status']?.toString() ?? 'queued',
@@ -216,6 +219,7 @@ class MultiAnalysisSession {
   MultiAnalysisSession withPolicies(Map<String, PolicyAnalysisResult> overrides) {
     if (overrides.isEmpty) return this;
     return MultiAnalysisSession(
+      canCancel: canCancel,
       sessionId: sessionId,
       prescriptionId: prescriptionId,
       status: status,
@@ -271,7 +275,7 @@ class MultiAnalysisSession {
   }
 
   /// True while the backend still has work in flight for this session.
-  bool get isWorking => policyAnalyses.any((p) => p.isRunning) || policyAnalyses.isEmpty;
+  bool get isWorking => status != 'failed' && (policyAnalyses.any((p) => p.isRunning) || policyAnalyses.isEmpty);
 
   /// True when everything that can proceed has, and the user must answer first.
   bool get isBlockedOnUser =>

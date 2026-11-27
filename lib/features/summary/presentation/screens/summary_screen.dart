@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/design/widgets/app_shells.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:claimsupport/core/widgets/app_widgets.dart';
@@ -20,7 +21,8 @@ const String _needsVerification = 'Needs Verification';
 
 class SummaryScreen extends ConsumerStatefulWidget {
   final String? reportId;
-  const SummaryScreen({super.key, this.reportId});
+  final Map<String, dynamic>? reportSnapshot;
+  const SummaryScreen({super.key, this.reportId, this.reportSnapshot});
 
   @override
   ConsumerState<SummaryScreen> createState() => _SummaryScreenState();
@@ -36,60 +38,73 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
   }
 
   Future<Map<String, dynamic>> _loadData() async {
+    if (widget.reportSnapshot case final snapshot?) return snapshot;
     if (widget.reportId != null) {
-      try {
-        final response = await ApiClient().dio.get('/analysis/${widget.reportId}');
-        return response.data as Map<String, dynamic>;
-      } catch (e) {
-        debugPrint("Error fetching report: $e");
-        return {};
-      }
+      final response = await ApiClient().dio.get('/analysis/${widget.reportId}');
+      return response.data as Map<String, dynamic>;
     }
 
     final prefs = SharedPrefs.instance;
     final resultStr = prefs.getString('analysis_result');
     if (resultStr != null) {
-      final map = jsonDecode(resultStr) as Map<String, dynamic>;
-      final refComp = map['referenceComparison'];
-      final hasNoRef = refComp == null || (refComp is Map && refComp.isEmpty);
-      final reportId = map['_id'] ?? map['id'];
-      if (hasNoRef && reportId != null && reportId.toString().isNotEmpty) {
-        try {
-          final response = await ApiClient().dio.get('/analysis/$reportId');
-          if (response.data is Map<String, dynamic>) {
-            final freshData = response.data as Map<String, dynamic>;
-            prefs.setString('analysis_result', jsonEncode(freshData));
-            return freshData;
-          }
-        } catch (e) {
-          debugPrint("Fallback fetch for reference comparison failed: $e");
-        }
-      }
-      return map;
+      return jsonDecode(resultStr) as Map<String, dynamic>;
     }
     return {};
   }
 
   @override
   Widget build(BuildContext context) {
+    void goBack() {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/dashboard');
+      }
+    }
+
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
       child: FutureBuilder<Map<String, dynamic>>(
         future: _dataFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Scaffold(
+            return PushedShell(
               key: const ValueKey('loading'),
-              backgroundColor: context.palette.background,
+              title: 'Coverage Summary',
+              onBack: goBack,
               body: const LoadingState(message: 'Loading coverage report…'),
             );
           }
 
+          if (snapshot.hasError) {
+            return PushedShell(
+              key: const ValueKey('report-error'),
+              title: 'Coverage Summary',
+              onBack: goBack,
+              body: Center(
+                child: ErrorState(
+                  title: 'Couldn’t load the report',
+                  message: friendlyErrorMessage(snapshot.error),
+                  onRetry: () => setState(() => _dataFuture = _loadData()),
+                ),
+              ),
+            );
+          }
           final data = snapshot.data ?? {};
-          final dominanceScore = data['dominanceScore'] ?? 0;
+          final coverage = _CoveragePercent.from(data);
           final coverageBreakdown = data['coverageBreakdown'] as Map<String, dynamic>? ?? {};
           final overallStatus = data['overallStatus'] ?? 'Unknown';
           final comparison = asList(data['comparison']);
+          final manualItems = comparison.where((item) {
+            if (item is! Map) return false;
+            final status = item['coverageStatus'] ?? item['status'];
+            return status.toString().trim().toLowerCase() == 'manual review';
+          }).length;
+          final manualReviewCount = int.tryParse(coverageBreakdown['manualReview'].toString()) ?? manualItems;
+          final allItemsNeedManualReview = manualReviewCount > 0 && manualReviewCount == comparison.length;
+          final reviewMessage = manualReviewCount == 1
+              ? '1 item needs manual review before coverage can be determined.'
+              : '$manualReviewCount items need manual review before coverage can be determined.';
           final policyJson = data['policyJson'] as Map<String, dynamic>? ?? {};
           final prescriptionJson = data['prescriptionJson'] as Map<String, dynamic>? ?? {};
           final processingTime = data['processingTimeMs'] ?? 0;
@@ -247,28 +262,9 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
           final verificationItems = _verificationItems(comparison);
           final majorTerms = asList(data['majorTerms']);
 
-          void goBack() {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/dashboard');
-            }
-          }
-
-          return Scaffold(
-            backgroundColor: p.background,
-            appBar: AppBar(
-              leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), tooltip: 'Back', onPressed: goBack),
-              title: const Text('Coverage Summary'),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  tooltip: 'Close',
-                  onPressed: () => context.go('/dashboard'),
-                ),
-                const SizedBox(width: AppSpacing.xxs),
-              ],
-            ),
+          return PushedShell(
+            title: 'Coverage Summary',
+            onBack: goBack,
             body: SafeArea(
               top: false,
               child: SingleChildScrollView(
@@ -340,19 +336,14 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                                     'assessed against your policy.'
                               : null,
                           children: [
-                            const SizedBox(height: AppSpacing.md),
-                            Divider(height: 1, color: p.border),
-                            const SizedBox(height: AppSpacing.md),
-                            _DominanceScore(score: dominanceScore, tone: overallStyle.tone),
+                            if (coverage != null) ...[
+                              const SizedBox(height: AppSpacing.md),
+                              Divider(height: 1, color: p.border),
+                              const SizedBox(height: AppSpacing.md),
+                              _CoveragePercentBar(coverage: coverage, tone: overallStyle.tone),
+                            ],
                           ],
                         ),
-
-                        // ─── 1b. What the bill may cost and who pays ───
-                        if (data['financialSummary'] is Map &&
-                            (data['financialSummary'] as Map).isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.md),
-                          _buildCostEstimateCard(Map<String, dynamic>.from(data['financialSummary'] as Map)),
-                        ],
 
                         // ─── 2. Items whose coverage depends on a detail not yet known ───
                         if (verificationItems.isNotEmpty) ...[
@@ -366,11 +357,13 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                           title: 'Coverage Breakdown',
                           subtitle: 'How the prescribed items were classified',
                         ),
-                        CoverageDonutChart(
-                          coverageBreakdown: coverageBreakdown,
-                          isPolicyValid: isPolicyValid,
-                          isPrescriptionValid: isPrescriptionValid,
-                        ),
+                        if (manualReviewCount > 0) InfoBanner(tone: AppTone.warning, message: reviewMessage),
+                        if (!allItemsNeedManualReview)
+                          CoverageDonutChart(
+                            coverageBreakdown: coverageBreakdown,
+                            isPolicyValid: isPolicyValid,
+                            isPrescriptionValid: isPrescriptionValid,
+                          ),
 
                         // ─── 4. Decision for every item ───
                         if (comparison.isNotEmpty) ...[
@@ -530,7 +523,8 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                                     builder: (_) {
                                       // The extractor stores it as estimatedCost; older reports used estimatedTreatmentCost.
                                       final est =
-                                          prescriptionJson['estimatedCost'] ?? prescriptionJson['estimatedTreatmentCost'];
+                                          prescriptionJson['estimatedCost'] ??
+                                          prescriptionJson['estimatedTreatmentCost'];
                                       return _infoRow(
                                             'Est. Cost',
                                             est != null && est.toString() != '0' ? _money(est) : null,
@@ -855,73 +849,6 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                     );
                   },
                 ),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // ─── Cost estimate: bill total, insurer share, patient share, room-rent check ───
-  Widget _buildCostEstimateCard(Map<String, dynamic> fs) {
-    num? amount(dynamic v) => v is num ? v : num.tryParse((v ?? '').toString());
-    final total = amount(fs['estimatedTotalCost']);
-    final insurer = amount(fs['estimatedPayableAmount']);
-    final patient = amount(fs['estimatedPatientPayable']);
-    final roomRent = (fs['roomRentCheck'] ?? '').toString().trim();
-    final notes = (fs['notes'] ?? '').toString().trim();
-    if (total == null && insurer == null && patient == null && roomRent.isEmpty) return const SizedBox.shrink();
-
-    return Builder(
-      builder: (context) {
-        final p = context.palette;
-        Widget figure(String label, num? value, AppTone tone) => Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: context.text.bodySmall),
-              const SizedBox(height: 2),
-              Text(
-                value == null ? '—' : _money(value),
-                style: context.text.titleMedium?.copyWith(color: p.tone(tone).fg, fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-        );
-        return AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const CardTitle(
-                title: 'Cost Estimate',
-                icon: Icons.account_balance_wallet_outlined,
-                tone: AppTone.brand,
-                subtitle: "From your prescription's cost estimate",
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Divider(height: 1, color: p.border),
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  figure('Estimated bill', total, AppTone.neutral),
-                  figure('Insurer pays', insurer, AppTone.success),
-                  figure('You pay', patient, (patient ?? 0) > 0 ? AppTone.warning : AppTone.success),
-                ],
-              ),
-              if (roomRent.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.sm),
-                _DetailPanel(
-                  icon: Icons.bed_outlined,
-                  label: 'Room Rent Check',
-                  tone: AppTone.neutral,
-                  child: Text(roomRent, style: context.text.bodySmall?.copyWith(color: p.textPrimary, height: 1.45)),
-                ),
-              ],
-              if (notes.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xs),
-                Text(notes, style: context.text.bodySmall),
               ],
             ],
           ),
@@ -1309,19 +1236,54 @@ class _VerdictCard extends StatelessWidget {
   }
 }
 
-/// Dominance Score: the share of evaluated items that have the overall result.
-class _DominanceScore extends StatelessWidget {
-  final dynamic score;
+/// How much of the claim the analysis expects to be covered.
+///
+/// Uses the money figures when the prescription gives a cost estimate and the
+/// analysis estimated the insurer's share; otherwise the share of assessed
+/// items that are covered (fully or partly). Items still under manual review
+/// or needing verification are left out, and nothing is shown if none remain.
+class _CoveragePercent {
+  const _CoveragePercent(this.percent, this.basis);
+
+  final double percent;
+  final String basis;
+
+  static _CoveragePercent? from(Map<String, dynamic> data) {
+    num? amount(dynamic v) => v is num ? v : num.tryParse((v ?? '').toString().replaceAll(',', ''));
+    final fs = data['financialSummary'];
+    if (fs is Map) {
+      final total = amount(fs['estimatedTotalCost']);
+      final insurer = amount(fs['estimatedPayableAmount']);
+      if (total != null && total > 0 && insurer != null && insurer >= 0) {
+        return _CoveragePercent((insurer / total * 100).clamp(0, 100).toDouble(), 'Share of the estimated bill the insurer may pay');
+      }
+    }
+    var assessed = 0;
+    var covered = 0;
+    for (final item in asList(data['comparison'])) {
+      if (item is! Map) continue;
+      final status = (item['coverageStatus'] ?? item['status'] ?? '').toString().trim().toLowerCase();
+      if (status.contains('manual') || status.contains('verif') || status.isEmpty) continue;
+      assessed++;
+      if (status == 'covered' || status == 'partially covered') covered++;
+    }
+    if (assessed == 0) return null;
+    return _CoveragePercent(covered / assessed * 100, 'Share of assessed items that are covered');
+  }
+}
+
+class _CoveragePercentBar extends StatelessWidget {
+  final _CoveragePercent coverage;
   final AppTone tone;
 
-  const _DominanceScore({required this.score, required this.tone});
+  const _CoveragePercentBar({required this.coverage, required this.tone});
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final t = p.tone(tone);
-    final value = score is num ? score as num : num.tryParse(score.toString()) ?? 0;
-    final text = value == value.roundToDouble() ? value.toInt().toString() : value.toStringAsFixed(2);
+    final value = coverage.percent;
+    final text = value == value.roundToDouble() ? value.toInt().toString() : value.toStringAsFixed(1);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1332,8 +1294,8 @@ class _DominanceScore extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Dominance Score', style: context.text.titleSmall),
-                  Text('Share of evaluated items with this result', style: context.text.bodySmall),
+                  Text('Coverage', style: context.text.titleSmall),
+                  Text(coverage.basis, style: context.text.bodySmall),
                 ],
               ),
             ),
@@ -1455,7 +1417,9 @@ class _PointList extends StatelessWidget {
                     ),
                   ),
                 ),
-                Expanded(child: Text(points[i], textAlign: TextAlign.start, style: style)),
+                Expanded(
+                  child: Text(points[i], textAlign: TextAlign.start, style: style),
+                ),
               ],
             ),
           ),

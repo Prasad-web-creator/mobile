@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 enum Environment {
   dev,
@@ -10,8 +9,8 @@ class EnvConfig {
   // Backend hosted on Render (service: claim-support-backend-python). Keep it in one
   // place: if the service is renamed or recreated its onrender.com URL changes.
   static const _prodApiBaseUrl = 'https://claim-support-backend-python.onrender.com/api';
-  // Dev machine's Wi-Fi IPv4 (run `ipconfig`); changes when the router assigns a new address.
-  static const _devApiBaseUrl = 'http://192.168.0.113:8000/api';
+  // Physical Android devices access the local backend via adb reverse tcp:8000 tcp:8000.
+  static const _devApiBaseUrl = 'http://127.0.0.1:8000/api';
 
   static Environment _environment = kReleaseMode ? Environment.prod : Environment.dev;
   static String _apiBaseUrl = kReleaseMode
@@ -26,25 +25,14 @@ class EnvConfig {
 
   static void initialize(Environment env) {
     _environment = env;
-    String? envFileUrl;
-    try {
-      envFileUrl = dotenv.env['API_BASE_URL'];
-    } catch (_) {}
+    const definedUrl = String.fromEnvironment('API_BASE_URL');
 
     switch (env) {
       case Environment.prod:
-        _apiBaseUrl = const String.fromEnvironment(
-          'API_BASE_URL',
-          defaultValue: _prodApiBaseUrl,
-        );
+        _apiBaseUrl = definedUrl.isNotEmpty ? definedUrl : _prodApiBaseUrl;
         break;
       case Environment.dev:
-        _apiBaseUrl = (envFileUrl != null && envFileUrl.isNotEmpty)
-            ? envFileUrl
-            : const String.fromEnvironment(
-                'API_BASE_URL',
-                defaultValue: _devApiBaseUrl,
-              );
+        _apiBaseUrl = definedUrl.isNotEmpty ? definedUrl : _devApiBaseUrl;
         break;
     }
     debugPrint('[EnvConfig] Initialized in $env mode with Base URL: $_apiBaseUrl');

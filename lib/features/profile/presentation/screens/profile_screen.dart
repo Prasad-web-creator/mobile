@@ -1,472 +1,455 @@
+import 'package:claimsupport/core/config/app_config_provider.dart';
+import 'package:claimsupport/core/design/app_icons.dart';
+import 'package:claimsupport/core/design/design.dart';
+import 'package:claimsupport/core/design/widgets/app_buttons.dart';
+import 'package:claimsupport/core/design/widgets/app_design_surface.dart';
+import 'package:claimsupport/core/design/widgets/app_pressable.dart';
+import 'package:claimsupport/core/design/widgets/app_sections.dart';
+import 'package:claimsupport/core/design/widgets/app_sheet_content.dart';
+import 'package:claimsupport/core/design/widgets/app_shells.dart';
+import 'package:claimsupport/core/network/api_client.dart';
+import 'package:claimsupport/core/network/auth_interceptor.dart';
+import 'package:claimsupport/core/theme/theme_provider.dart';
+import 'package:claimsupport/core/utils/auth_storage.dart';
+import 'package:claimsupport/core/utils/device_app_info.dart';
+import 'package:claimsupport/features/analysis_reports/presentation/controllers/analysis_report_controller.dart';
+import 'package:claimsupport/features/authentication/data/models/user.dart';
+import 'package:claimsupport/features/authentication/presentation/controllers/auth_controller.dart';
+import 'package:claimsupport/features/authentication/presentation/widgets/account_notice.dart';
+import 'package:claimsupport/features/checks/presentation/check_completion_monitor.dart';
+import 'package:claimsupport/features/dashboard/presentation/controllers/dashboard_controller.dart';
+import 'package:claimsupport/features/documents/presentation/saved_list_feedback.dart';
+import 'package:claimsupport/features/home/presentation/controllers/home_checks_provider.dart';
+import 'package:claimsupport/features/policies/presentation/controllers/policy_controller.dart';
+import 'package:claimsupport/features/prescriptions/presentation/controllers/prescription_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:claimsupport/core/config/app_config_provider.dart';
-import 'package:claimsupport/core/network/api_client.dart';
-import 'package:claimsupport/core/theme/theme_provider.dart';
-import 'package:claimsupport/features/authentication/data/models/user.dart';
-import 'package:claimsupport/features/authentication/presentation/controllers/auth_controller.dart';
-import 'package:claimsupport/features/dashboard/presentation/controllers/dashboard_controller.dart';
-import 'package:claimsupport/features/policies/presentation/controllers/policy_controller.dart';
-import 'package:claimsupport/features/prescriptions/presentation/controllers/prescription_controller.dart';
-import 'package:claimsupport/features/analysis_reports/presentation/controllers/analysis_report_controller.dart';
-import 'package:claimsupport/core/utils/auth_storage.dart';
-import 'package:claimsupport/core/utils/device_app_info.dart';
-import 'package:claimsupport/core/network/auth_interceptor.dart';
-import 'package:claimsupport/core/widgets/app_widgets.dart';
+
+final _appVersionProvider = FutureProvider((ref) => DeviceAppInfo.getAppVersion());
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
-  void _showAccountInfo(BuildContext context, User user) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) {
-        final p = ctx.palette;
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.page,
-            AppSpacing.sm,
-            AppSpacing.page,
-            MediaQuery.of(ctx).padding.bottom + AppSpacing.xl,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Account Information', style: ctx.text.titleLarge),
-              const SizedBox(height: AppSpacing.xxs),
-              Text('Your Policy Pal identity and verified contact details', style: ctx.text.bodySmall),
-              const SizedBox(height: AppSpacing.lg),
-              AppCard(
-                child: Column(
-                  children: [
-                    KeyValueRow(label: 'Full Name', value: user.name),
-                    Divider(height: 1, color: p.border),
-                    KeyValueRow(label: 'Email Address', value: user.email),
-                    Divider(height: 1, color: p.border),
-                    KeyValueRow(
-                      label: 'Mobile Number',
-                      value: user.phone != null && user.phone!.isNotEmpty ? user.phone! : 'Not provided',
-                    ),
-                    Divider(height: 1, color: p.border),
-                    KeyValueRow(
-                      label: 'Account Status',
-                      value: user.emailVerified ? 'Active & Verified' : 'Standard Member',
-                      valueColor: user.emailVerified ? p.success.fg : null,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _showHelpSupport(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.page,
-            AppSpacing.sm,
-            AppSpacing.page,
-            MediaQuery.of(ctx).padding.bottom + AppSpacing.xl,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Help & Support', style: ctx.text.titleLarge),
-              const SizedBox(height: AppSpacing.xxs),
-              Text('Policy Pal assistance and claim advisory guidance', style: ctx.text.bodySmall),
-              const SizedBox(height: AppSpacing.lg),
-              // Support email comes from the backend's SUPPORT_EMAIL env var.
-              Consumer(
-                builder: (ctx, ref, _) => ref.watch(supportEmailProvider).when(
-                      loading: () => const AppCard(
-                        child: SizedBox(
-                          height: 96,
-                          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                        ),
-                      ),
-                      error: (_, _) => _supportUnavailable(ctx, ref),
-                      data: (email) => email == null ? _supportUnavailable(ctx, ref) : _supportContact(ctx, email),
-                    ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              const InfoBanner(
-                tone: AppTone.info,
-                title: 'Need help understanding a clause?',
-                message:
-                    'Our coverage evaluator highlights waiting periods, pre-existing disease terms, and financial sub-limits directly from your uploaded policy PDF.',
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _supportContact(BuildContext ctx, String email) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              IconTile(icon: Icons.support_agent_rounded, tone: AppTone.brand, size: 38),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Contact Us', style: ctx.text.titleSmall),
-                    Text(email, style: ctx.text.bodySmall),
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.copy_rounded, size: 20),
-                tooltip: 'Copy support email',
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: email));
-                  showAppSnackBar(ctx, 'Support email copied to clipboard!', tone: AppTone.success);
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 42)),
-            onPressed: () async {
-              final uri = Uri(scheme: 'mailto', path: email, query: 'subject=Policy%20Pal%20Assistance');
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri);
-              } else if (ctx.mounted) {
-                showAppSnackBar(ctx, 'Contact: $email', tone: AppTone.info);
-              }
-            },
-            icon: const Icon(Icons.email_outlined, size: 18),
-            label: const Text('Send Email'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _supportUnavailable(BuildContext ctx, WidgetRef ref) {
-    return AppCard(
-      child: Row(
-        children: [
-          IconTile(icon: Icons.support_agent_rounded, tone: AppTone.brand, size: 38),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text('Support contact could not be loaded.', style: ctx.text.bodySmall),
-          ),
-          TextButton(
-            onPressed: () => ref.invalidate(supportEmailProvider),
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAboutApp(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.page,
-            AppSpacing.sm,
-            AppSpacing.page,
-            MediaQuery.of(ctx).padding.bottom + AppSpacing.xl,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(color: ctx.palette.primary, borderRadius: AppRadius.mdAll),
-                  child: const Icon(Icons.health_and_safety_rounded, color: Colors.white, size: 30),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text('Policy Pal', textAlign: TextAlign.center, style: ctx.text.headlineSmall),
-              const SizedBox(height: 2),
-              FutureBuilder<String>(
-                future: DeviceAppInfo.getAppVersion(),
-                builder: (_, snap) => Text(
-                  snap.hasData ? 'Version ${snap.data}' : '',
-                  textAlign: TextAlign.center,
-                  style: ctx.text.bodySmall,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              AppCard(
-                child: Text(
-                  'Policy Pal is a system-powered health insurance claim analysis platform. '
-                  'It compares medical prescriptions and treatment plans against insurance policy clauses to evaluate coverage, identify exclusions, and check continuity.',
-                  textAlign: TextAlign.start,
-                  style: ctx.text.bodyMedium?.copyWith(height: 1.5),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              const InfoBanner(
-                tone: AppTone.neutral,
-                message:
-                    'Disclaimer: Policy Pal provides decision support and informational analysis. It does not replace formal insurance adjudication.',
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _logout(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Log out of Policy Pal?',
-      message: 'You will need to sign in with your email OTP to access your analysis reports again.',
-      confirmLabel: 'Log Out',
-      destructive: true,
-      icon: Icons.logout_rounded,
-    );
-
-    if (!confirmed) return;
-
-    AuthInterceptor.isManualLogout = true;
+  Future<void> _refresh(WidgetRef ref) async {
     try {
-      await ApiClient().dio.post('/auth/logout');
+      await ref.refresh(authProvider.future).then<void>((_) {});
     } catch (_) {
-      // Proceed with local logout regardless of server state
-    }
-
-    await AuthStorage.clearTokens();
-    ref.invalidate(authProvider);
-    ref.invalidate(dashboardStatsProvider);
-    ref.invalidate(policiesProvider);
-    ref.invalidate(prescriptionProvider);
-    ref.invalidate(analysisReportProvider);
-
-    if (context.mounted) {
-      context.go('/login');
+      // The provider exposes the failure and any previous account data.
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authProvider);
-    final themeMode = ref.watch(themeProvider);
-    final isDark = themeMode == ThemeMode.dark;
-    final p = context.palette;
-
-    return Scaffold(
-      appBar: const TabAppBar(title: 'Profile', subtitle: 'Your account, preferences and support'),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(authProvider);
-            await Future.delayed(const Duration(milliseconds: 150));
-          },
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-            padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.xs, AppSpacing.page, AppSpacing.xxl),
-            child: ContentWidth(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Identity Header Card
-                  AppCard(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    child: authState.when(
-                      data: (user) {
-                        final name = user?.name ?? 'Alex Morgan';
-                        final email = user?.email ?? 'No email provided';
-                        final phone = user?.phone;
-
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            _Avatar(name: name),
-                            const SizedBox(width: AppSpacing.md),
-                            Expanded(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Row(
-                                    children: [
-                                      if (user?.emailVerified ?? false) ...[
-                                        Semantics(
-                                          label: 'Verified email',
-                                          child: Icon(Icons.verified_rounded, size: 16, color: p.success.fg),
-                                        ),
-                                        const SizedBox(width: 4),
-                                      ],
-                                      Flexible(
-                                        child: Text(
-                                          email,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: context.text.bodyMedium?.copyWith(color: p.textSecondary),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (phone != null && phone.isNotEmpty) ...[
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      phone,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: context.text.bodySmall?.copyWith(color: p.textTertiary),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                      loading: () => const SizedBox(height: 60, child: LoadingState()),
-                      error: (e, _) => ErrorState(
-                        compact: true,
-                        title: 'Couldn\'t load your profile',
-                        message: friendlyErrorMessage(e),
-                        onRetry: () => ref.invalidate(authProvider),
-                      ),
-                    ),
+    final account = ref.watch(authProvider);
+    final mode = ref.watch(themeProvider);
+    final version = ref.watch(_appVersionProvider).value;
+    final user = account.value;
+    final c = context.colors;
+    final overlay = Theme.of(context).brightness == Brightness.dark
+        ? SystemUiOverlayStyle.light
+        : SystemUiOverlayStyle.dark;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlay.copyWith(statusBarColor: Colors.transparent),
+      child: Scaffold(
+        backgroundColor: c.backgroundPage,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(DsSpace.s16, DsSpace.s24, DsSpace.s16, DsSpace.s16),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: AppIconButton(
+                    icon: AppIcons.caretLeft,
+                    label: MaterialLocalizations.of(context).backButtonTooltip,
+                    onPressed: () => context.canPop() ? context.pop() : context.go('/dashboard'),
                   ),
-
-                  const SizedBox(height: AppSpacing.section),
-                  const _GroupLabel('Account Settings'),
-                  _MenuGroup(
+                ),
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => _refresh(ref),
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(DsSpace.s20, 0, DsSpace.s20, DsSpace.s24),
                     children: [
-                      _MenuTile(
-                        icon: Icons.badge_outlined,
-                        title: 'Account Information',
-                        subtitle: 'Personal details and verification status',
-                        onTap: () {
-                          final user = authState.value;
-                          if (user != null) {
-                            _showAccountInfo(context, user);
-                          } else {
-                            context.push('/settings');
-                          }
-                        },
+                      if (account.hasError && !account.isLoading)
+                        SavedListError(
+                          error: account.error,
+                          offlineMessage: user == null
+                              ? "You're offline."
+                              : "You're offline. Showing saved account details.",
+                          message: "Couldn't load your account.",
+                          onRetry: () => _refresh(ref),
+                        ),
+                      if (user != null) ...[
+                        _Identity(user: user),
+                        const SizedBox(height: DsSpace.s16),
+                        AppPressableSurface(
+                          radius: DsShape.radiusFull,
+                          color: c.surfaceCard,
+                          border: BorderSide(color: c.borderSubtle),
+                          onTap: () => context.push('/profile/edit-name'),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: DsSize.controlLg),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              spacing: DsSpace.s8,
+                              children: [
+                                Icon(AppIcons.pencil, size: DsSize.iconSm, color: c.textPrimary),
+                                Text(
+                                  'Edit name',
+                                  style: AppTextStyles.label.copyWith(
+                                    color: c.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ] else if (account.isLoading)
+                        const AppSkeleton(kind: AppSkeletonKind.row)
+                      else if (!account.hasError)
+                        const SavedListMessage('Account details are unavailable.'),
+                      const SizedBox(height: 28),
+                      const _ProfileLabel('Preferences'),
+                      const SizedBox(height: DsSpace.s8),
+                      _ProfileGroup(
+                        children: [
+                          _ProfileRow(
+                            icon: AppIcons.appearance,
+                            label: 'Appearance',
+                            detail: _appearanceLabel(mode),
+                            onTap: () => _appearance(context),
+                          ),
+                          const _NotificationRow(),
+                        ],
                       ),
-                      _MenuTile(
-                        icon: Icons.edit_note_rounded,
-                        title: 'Edit Profile',
-                        subtitle: 'Update your display name and email',
-                        onTap: () => context.push('/settings'),
+                      const SizedBox(height: 28),
+                      const _ProfileLabel('Help'),
+                      const SizedBox(height: DsSpace.s8),
+                      _ProfileGroup(
+                        children: [
+                          _ProfileRow(icon: AppIcons.help, label: 'Help and support', onTap: () => _help(context)),
+                          _ProfileRow(
+                            icon: AppIcons.fileText,
+                            label: 'Terms of use',
+                            onTap: () => AccountNotice.terms.show(context),
+                          ),
+                          _ProfileRow(
+                            icon: AppIcons.lock,
+                            label: 'Privacy policy',
+                            onTap: () => AccountNotice.privacy.show(context),
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: DsSpace.s20),
+                      _ProfileGroup(
+                        children: [
+                          _ProfileRow(
+                            icon: AppIcons.signOut,
+                            label: 'Log out',
+                            showChevron: false,
+                            onTap: () => _logout(context, ref),
+                          ),
+                        ],
+                      ),
+                      if (version != null) ...[
+                        const SizedBox(height: DsSpace.s24),
+                        Text(
+                          'Policy Pal · Version $version',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary),
+                        ),
+                      ],
                     ],
                   ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-                  const SizedBox(height: AppSpacing.section),
-                  const _GroupLabel('Preferences & Support'),
-                  _MenuGroup(
+  void _appearance(BuildContext context) => AppSheet.show<void>(
+    context: context,
+    title: 'Appearance',
+    showClose: true,
+    bodyBuilder: (_) => Consumer(
+      builder: (context, ref, _) {
+        final selected = ref.watch(themeProvider);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final mode in ThemeMode.values) ...[
+              if (mode != ThemeMode.system) const _ProfileDivider(),
+              _AppearanceRow(
+                label: _appearanceLabel(mode),
+                hint: mode == ThemeMode.system ? "Match your phone's setting" : null,
+                selected: mode == selected,
+                onTap: () => ref.read(themeProvider.notifier).selectTheme(mode),
+              ),
+            ],
+          ],
+        );
+      },
+    ),
+  );
+
+  static String _appearanceLabel(ThemeMode mode) => switch (mode) {
+    ThemeMode.system => 'System',
+    ThemeMode.light => 'Light',
+    ThemeMode.dark => 'Dark',
+  };
+
+  void _help(BuildContext context) {
+    AppSheet.show<void>(
+      context: context,
+      title: 'Help and support',
+      showClose: true,
+      bodyBuilder: (_) => Consumer(
+        builder: (context, ref, _) {
+          final state = ref.watch(supportEmailProvider);
+          final email = state.value;
+          return AppSheetList(
+            rows: [
+              if (state.isLoading) const AppSkeleton(kind: AppSkeletonKind.row),
+              if (!state.isLoading && email == null)
+                SavedListError(
+                  error: state.error,
+                  offlineMessage: "You're offline.",
+                  message: 'Support contact is unavailable.',
+                  onRetry: () => ref.invalidate(supportEmailProvider),
+                ),
+              if (email != null) ...[
+                AppSheetKeyValue(label: 'Support email', value: email),
+                AppButton(
+                  label: 'Send email',
+                  onPressed: () async {
+                    final opened = await launchUrl(
+                      Uri(scheme: 'mailto', path: email, query: 'subject=Policy%20Pal%20Assistance'),
+                    );
+                    if (!opened) await Clipboard.setData(ClipboardData(text: email));
+                  },
+                ),
+                AppLink(
+                  label: 'Copy email',
+                  onPressed: () => Clipboard.setData(ClipboardData(text: email)),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _logout(BuildContext context, WidgetRef ref) async {
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AppDesignSurface(
+        child: Builder(
+          builder: (context) {
+            final c = context.colors;
+            return Dialog(
+              backgroundColor: c.surfaceCardRaised,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: DsSpace.s24),
+              shape: DsShape.shape(28),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(DsSpace.s20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
-                        child: Row(
-                          children: [
-                            IconTile(
-                              icon: isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
-                              size: 36,
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Dark Mode', style: context.text.titleSmall),
-                                  Text(
-                                    isDark ? 'Dark theme enabled' : 'Light theme enabled',
-                                    style: context.text.bodySmall,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Switch(
-                              value: isDark,
-                              onChanged: (_) {
-                                ref.read(themeProvider.notifier).toggleTheme();
-                              },
-                            ),
-                          ],
+                      Text('Log out?', style: AppTextStyles.headline.copyWith(color: c.textPrimary)),
+                      const SizedBox(height: DsSpace.s8),
+                      Text(
+                        'Your documents and checks stay saved. Log in with your email to see them again.',
+                        style: AppTextStyles.label.copyWith(color: c.textSecondary),
+                      ),
+                      const SizedBox(height: DsSpace.s20),
+                      AppButton(
+                        label: 'Log out',
+                        style: AppButtonStyle.secondary,
+                        onPressed: () => Navigator.of(context).pop(true),
+                      ),
+                      const SizedBox(height: DsSpace.s6),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: Text(
+                          'Cancel',
+                          style: AppTextStyles.label.copyWith(color: c.textPrimary, fontWeight: FontWeight.w600),
                         ),
                       ),
-                      _MenuTile(
-                        icon: Icons.help_outline_rounded,
-                        title: 'Help & Support',
-                        subtitle: 'FAQs, claim guidelines, and customer support',
-                        onTap: () => _showHelpSupport(context),
-                      ),
-                      _MenuTile(
-                        icon: Icons.info_outline_rounded,
-                        title: 'About Policy Pal',
-                        subtitle: 'App version, engine info, and terms',
-                        onTap: () => _showAboutApp(context),
-                      ),
                     ],
                   ),
-
-                  const SizedBox(height: AppSpacing.xxl),
-
-                  // Logout Action
-                  OutlinedButton.icon(
-                    onPressed: () => _logout(context, ref),
-                    icon: const Icon(Icons.logout_rounded, size: 20),
-                    label: const Text('Log Out'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: p.danger.fg,
-                      backgroundColor: p.danger.bg,
-                      side: BorderSide(color: p.danger.border),
-                      minimumSize: const Size(double.infinity, 50),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
+            );
+          },
+        ),
+      ),
+    );
+    if (approved != true || !context.mounted) return;
+
+    AuthInterceptor.isManualLogout = true;
+    final logout = ApiClient().dio.post('/auth/logout').timeout(const Duration(seconds: 3));
+    try {
+      await logout;
+    } catch (_) {
+      // An unreachable backend does not prevent local sign-out.
+    }
+    await AuthStorage.clearTokens();
+    if (!context.mounted) return;
+
+    ref.read(homeCheckCacheProvider).clear();
+    ref.read(historyCacheProvider).clear();
+    ref.invalidate(authProvider);
+    ref.invalidate(dashboardStatsProvider);
+    ref.invalidate(homeChecksProvider);
+    ref.invalidate(policiesProvider);
+    ref.invalidate(prescriptionProvider);
+    ref.invalidate(analysisReportProvider);
+    context.go('/login');
+  }
+}
+
+class _Identity extends StatelessWidget {
+  const _Identity({required this.user});
+
+  final User user;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final name = user.name.trim();
+    final words = name.split(RegExp(r'\s+')).where((part) => part.isNotEmpty);
+    final initialSource = words.isEmpty ? [user.email.trim()] : words;
+    final initials = initialSource
+        .where((word) => word.isNotEmpty)
+        .take(2)
+        .map((word) => word.characters.first)
+        .join()
+        .toUpperCase();
+    return Row(
+      spacing: DsSpace.s16,
+      children: [
+        Container(
+          width: 72,
+          height: 72,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: c.surfaceSelected, shape: BoxShape.circle),
+          child: Text(initials.isEmpty ? '?' : initials, style: AppTextStyles.title.copyWith(color: c.iconActive)),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            spacing: DsSpace.s4,
+            children: [
+              Text(name.isEmpty ? 'Account' : name, style: AppTextStyles.title.copyWith(color: c.textPrimary)),
+              if (user.email.isNotEmpty)
+                Text(user.email, style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileLabel extends StatelessWidget {
+  const _ProfileLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsetsDirectional.only(start: DsSpace.s4),
+    child: Semantics(
+      header: true,
+      child: Text(
+        label,
+        style: AppTextStyles.label.copyWith(color: context.colors.textPrimary, fontWeight: FontWeight.w600),
+      ),
+    ),
+  );
+}
+
+class _ProfileGroup extends StatelessWidget {
+  const _ProfileGroup({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => AppPressableSurface(
+    color: context.colors.surfaceCard,
+    border: BorderSide(color: context.colors.borderSubtle),
+    radius: DsShape.radiusLg,
+    child: Column(
+      children: [
+        for (final (index, child) in children.indexed) ...[if (index != 0) const _ProfileDivider(), child],
+      ],
+    ),
+  );
+}
+
+class _ProfileDivider extends StatelessWidget {
+  const _ProfileDivider();
+
+  @override
+  Widget build(BuildContext context) => Divider(height: 1, thickness: 1, color: context.colors.borderSubtle);
+}
+
+class _ProfileRow extends StatelessWidget {
+  const _ProfileRow({
+    required this.icon,
+    required this.label,
+    this.onTap,
+    this.detail,
+    this.trailing,
+    this.showChevron = true,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final String? detail;
+  final Widget? trailing;
+  final bool showChevron;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return AppPressableSurface(
+      color: c.surfaceCard,
+      radius: 0,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: DsSpace.s16, vertical: DsSpace.s4),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 50),
+          child: Row(
+            spacing: DsSpace.s12,
+            children: [
+              Icon(icon, size: DsSize.iconMd, color: c.iconDefault),
+              Expanded(
+                child: Text(label, style: AppTextStyles.subheadRegular.copyWith(color: c.textPrimary)),
+              ),
+              if (detail != null) Text(detail!, style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary)),
+              if (trailing != null)
+                trailing!
+              else if (showChevron)
+                Icon(AppIcons.caretRight, size: DsSize.iconXs, color: c.iconDefault),
+            ],
           ),
         ),
       ),
@@ -474,110 +457,103 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
-class _Avatar extends StatelessWidget {
-  final String name;
+class _AppearanceRow extends StatelessWidget {
+  const _AppearanceRow({required this.label, required this.selected, required this.onTap, this.hint});
 
-  const _Avatar({required this.name});
-
-  String get _initials {
-    final parts = name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
-    if (parts.isEmpty) return 'U';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
-  }
+  final String label;
+  final String? hint;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
-    final initials = _initials;
-    return Container(
-      width: 60,
-      height: 60,
-      decoration: BoxDecoration(color: p.primarySoft, shape: BoxShape.circle),
-      alignment: Alignment.center,
-      child: Text(
-        initials,
-        style: context.text.titleLarge?.copyWith(
-          color: p.primary,
-          fontWeight: FontWeight.w700,
+    final c = context.colors;
+    return Semantics(
+      selected: selected,
+      child: AppPressable(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: DsSpace.s12),
+          child: Row(
+            spacing: DsSpace.s12,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  spacing: DsSpace.s4,
+                  children: [
+                    Text(label, style: AppTextStyles.subheadRegular.copyWith(color: c.textPrimary)),
+                    if (hint != null) Text(hint!, style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary)),
+                  ],
+                ),
+              ),
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: selected ? c.buttonPrimary : c.borderStrong, width: selected ? 7 : 1.4),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _GroupLabel extends StatelessWidget {
-  final String text;
-
-  const _GroupLabel(this.text);
+class _NotificationRow extends ConsumerStatefulWidget {
+  const _NotificationRow();
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: AppSpacing.xxs, bottom: AppSpacing.xs),
-      child: Text(text.toUpperCase(), style: context.text.labelSmall),
-    );
-  }
+  ConsumerState<_NotificationRow> createState() => _NotificationRowState();
 }
 
-class _MenuGroup extends StatelessWidget {
-  final List<Widget> children;
+class _NotificationRowState extends ConsumerState<_NotificationRow> {
+  bool _saving = false;
 
-  const _MenuGroup({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final rows = <Widget>[];
-    for (var i = 0; i < children.length; i++) {
-      if (i > 0) rows.add(Divider(height: 1, indent: 60, color: p.border));
-      rows.add(children[i]);
+  Future<void> _setEnabled(bool enabled) async {
+    if (_saving) return;
+    final service = ref.read(checkNotificationsProvider);
+    setState(() => _saving = true);
+    try {
+      await service.setEnabled(enabled);
+      if (enabled && await service.requestPermission() == false && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Allow notifications in your phone settings to receive alerts.')));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Couldn't save your notification setting.")));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-    return AppCard(
-      padding: EdgeInsets.zero,
-      child: ClipRRect(
-        borderRadius: AppRadius.lgAll,
-        child: Column(children: rows),
-      ),
-    );
   }
-}
-
-class _MenuTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final VoidCallback onTap;
-
-  const _MenuTile({required this.icon, required this.title, required this.onTap, this.subtitle});
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 12),
-          child: Row(
-            children: [
-              IconTile(icon: icon, size: 36),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: context.text.titleSmall),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(subtitle!, style: context.text.bodySmall),
-                    ],
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded, color: p.textTertiary),
-            ],
+    final c = context.colors;
+    final service = ref.watch(checkNotificationsProvider);
+    return ValueListenableBuilder(
+      valueListenable: service.enabled,
+      builder: (context, enabled, _) => _ProfileRow(
+        icon: AppIcons.bell,
+        label: 'Notifications',
+        trailing: Semantics(
+          label: 'Notifications',
+          child: Switch(
+            value: enabled,
+            activeThumbColor: c.textOnButton,
+            activeTrackColor: c.buttonPrimary,
+            inactiveThumbColor: c.textOnButton,
+            inactiveTrackColor: c.borderStrong,
+            trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+            onChanged: _saving ? null : _setEnabled,
           ),
         ),
       ),

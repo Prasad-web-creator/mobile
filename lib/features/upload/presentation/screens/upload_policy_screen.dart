@@ -1,20 +1,27 @@
+import 'package:claimsupport/core/design/app_icons.dart';
+import 'package:claimsupport/core/design/widgets/app_buttons.dart';
+import 'package:claimsupport/core/design/widgets/app_shells.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:claimsupport/core/config/app_config_provider.dart';
 import 'package:claimsupport/core/network/api_client.dart';
+import 'package:claimsupport/features/analysis/data/repositories/analysis_repository.dart';
 import 'package:claimsupport/core/utils/shared_prefs.dart';
 import 'package:claimsupport/core/utils/device_app_info.dart';
 import 'package:claimsupport/core/widgets/app_widgets.dart';
 
-class UploadPolicyScreen extends StatefulWidget {
+class UploadPolicyScreen extends ConsumerStatefulWidget {
   const UploadPolicyScreen({super.key});
 
   @override
-  State<UploadPolicyScreen> createState() => _UploadPolicyScreenState();
+  ConsumerState<UploadPolicyScreen> createState() => _UploadPolicyScreenState();
 }
 
 /// One policy the user has uploaded in this session, with its own continuity answers.
@@ -24,9 +31,12 @@ class UploadPolicyScreen extends StatefulWidget {
 /// of the uploaded policy document instead. The current policy period itself is
 /// read from the document.
 ///
-/// The questions are asked in order, each only when the previous answer needs it:
+/// The policy is read right after upload. A question is shown only for an answer
+/// the document does not give (or when the user chooses to edit), in order:
 /// new or renewed → start date (new) / first start date (renewed) →
 /// (renewed) renewed every year without a break.
+enum _ReadState { reading, read, notPolicy, failed }
+
 class _UploadedPolicy {
   _UploadedPolicy({required this.fileName, required this.fileId, required this.policyId});
 
@@ -39,30 +49,89 @@ class _UploadedPolicy {
   bool? isRenewal;
   bool? renewedWithoutBreak;
 
-  /// Auto-extraction state tracking
-  bool isExtracting = false;
-  bool isRenewalAutoExtracted = false;
-  bool startDateAutoExtracted = false;
-  bool noBreakAutoExtracted = false;
+  _ReadState readState = _ReadState.reading;
+
+  /// Schedule details read from the document (insurer, number, period, sum insured…).
+  Map<String, dynamic> details = const {};
+
+  /// The current period's start in the document, used when the user says "New".
+  DateTime? documentStartDate;
+
+  /// Which answers came from the document (and so are not asked).
+  bool renewalFromDocument = false;
+  bool dateFromDocument = false;
+  bool breakFromDocument = false;
+
+  /// The user chose to review and change the answers read from the document.
+  bool editing = false;
+
+  bool get isReading => readState == _ReadState.reading;
 
   /// Clear the answers that no longer apply after an earlier answer changed.
   void clearAfterRenewalAnswer() {
-    if (isRenewal != true && !noBreakAutoExtracted) renewedWithoutBreak = null;
+    if (isRenewal != true) {
+      renewedWithoutBreak = null;
+      breakFromDocument = false;
+    }
   }
 
   /// Set new / renewed. The date means something different for each (the
   /// policy's start date vs the very first start date), so a date picked for
-  /// the other answer is cleared and asked again.
+  /// the other answer is cleared — unless the document states the new policy's start.
   void setRenewal(bool value) {
-    if (isRenewal != null && isRenewal != value && !startDateAutoExtracted) inceptionDate = null;
+    if (isRenewal != null && isRenewal != value) {
+      inceptionDate = null;
+      dateFromDocument = false;
+    }
     isRenewal = value;
+    if (value == false && inceptionDate == null && documentStartDate != null) {
+      inceptionDate = documentStartDate;
+      dateFromDocument = true;
+    }
     clearAfterRenewalAnswer();
   }
+
+  /// Apply the reading of the document returned by `/policies/{id}/extract-details`.
+  void applyReading(Map<String, dynamic> data) {
+    final isPolicy = data['isPolicy'];
+    if (isPolicy == false) {
+      readState = _ReadState.notPolicy;
+      return;
+    }
+    final found = (data['extractedFields'] as Map?) ?? const {};
+    final raw = data['details'];
+    details = raw is Map ? Map<String, dynamic>.from(raw) : const {};
+    final hints = (data['hints'] as Map?) ?? const {};
+    documentStartDate = DateTime.tryParse('${hints['policyStartDate'] ?? ''}');
+
+    if (found['isRenewal'] == true && data['isRenewal'] is bool) {
+      isRenewal = data['isRenewal'] as bool;
+      renewalFromDocument = true;
+    }
+    final start = DateTime.tryParse('${data['startDate'] ?? ''}');
+    if (found['startDate'] == true && start != null) {
+      inceptionDate = start;
+      dateFromDocument = true;
+    } else if (isRenewal == false && documentStartDate != null) {
+      inceptionDate = documentStartDate;
+      dateFromDocument = true;
+    }
+    if (found['renewedWithoutBreak'] == true && data['renewedWithoutBreak'] is bool) {
+      renewedWithoutBreak = data['renewedWithoutBreak'] as bool;
+      breakFromDocument = true;
+    }
+    final anything = renewalFromDocument || details.values.any((v) => v != null);
+    readState = (isPolicy == true || anything) ? _ReadState.read : _ReadState.failed;
+  }
+
+  bool get askRenewal => editing || !renewalFromDocument;
+  bool get askDate => editing || !dateFromDocument;
+  bool get askBreak => editing || !breakFromDocument;
 }
 
-class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
-  /// Matches the server's MAX_POLICIES_PER_ANALYSIS limit.
-  static const int _maxPolicies = 5;
+class _UploadPolicyScreenState extends ConsumerState<UploadPolicyScreen> {
+  AppRuntimeConfig get _config => ref.read(appConfigProvider).value ?? AppRuntimeConfig.defaults;
+  int get _maxPolicies => _config.maxPolicies;
 
   final List<_UploadedPolicy> _policies = [];
   bool _isUploading = false;
@@ -74,7 +143,11 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
     final current = policy.inceptionDate;
     final firstDate = DateTime(1970);
     final helpText = policy.isRenewal == true ? 'Date this policy was first taken' : 'Policy start date';
-    final initialDate = (current != null && !current.isAfter(today) && !current.isBefore(firstDate)) ? current : today;
+    // Open on the document's date when there is no answer yet.
+    final candidate = current ?? policy.documentStartDate;
+    final initialDate = (candidate != null && !candidate.isAfter(today) && !candidate.isBefore(firstDate))
+        ? candidate
+        : today;
 
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -88,43 +161,51 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
 
     if (picked == null) return;
 
-    setState(() => policy.inceptionDate = picked);
+    setState(() {
+      policy.inceptionDate = picked;
+      policy.dateFromDocument = false;
+    });
   }
 
-  /// What is still missing for [policy], or null when its continuity answers are complete.
-  String? _missingAnswer(_UploadedPolicy policy) {
-    if (policy.isRenewal == null) return 'Please answer whether ${policy.fileName} is a new or a renewed policy.';
-    if (policy.inceptionDate == null) {
-      return policy.isRenewal == true
-          ? 'Please select when ${policy.fileName} was first taken.'
-          : 'Please select the policy start date for ${policy.fileName}.';
+  /// Read the uploaded policy now, so the user is asked only for what the
+  /// document does not state. The reading is stored for the analysis to reuse.
+  Future<void> _readPolicy(_UploadedPolicy policy) async {
+    try {
+      final response = await ApiClient().dio.post(
+        '/policies/${policy.policyId}/extract-details',
+        // OCR of a scanned policy can take a while.
+        options: analysisUploadOptions().copyWith(receiveTimeout: const Duration(minutes: 4)),
+      );
+      final data = response.data;
+      if (!mounted || !_policies.contains(policy)) return;
+      setState(() {
+        if (data is Map) {
+          policy.applyReading(Map<String, dynamic>.from(data));
+        } else {
+          policy.readState = _ReadState.failed;
+        }
+      });
+    } catch (e) {
+      debugPrint('Policy reading failed: $e');
+      if (mounted && _policies.contains(policy)) setState(() => policy.readState = _ReadState.failed);
     }
-    if (policy.isRenewal == false) return null;
-    if (policy.renewedWithoutBreak == null) {
-      return 'Please answer whether ${policy.fileName} was renewed every year without a break.';
-    }
-    return null;
   }
 
   /// Store the continuity answers on the policy record before the analysis reads them.
   Future<void> _syncContinuity(_UploadedPolicy policy) async {
-    try {
-      // Answers that do not apply are sent as null so an earlier answer is cleared.
-      // Break dates are no longer asked: after a break, the analysis counts cover
-      // from the uploaded policy document's start date.
-      await ApiClient().dio.put(
-        '/policies/${policy.policyId}',
-        data: {
-          'inceptionDate': policy.inceptionDate!.toIso8601String(),
-          'isRenewal': policy.isRenewal,
-          'continuousRenewal': policy.isRenewal == true ? policy.renewedWithoutBreak : null,
-          'breakStartDate': null,
-          'coverRestartDate': null,
-        },
-      );
-    } catch (e) {
-      debugPrint("Failed to save policy continuity details: $e");
-    }
+    // Answers that do not apply are sent as null so an earlier answer is cleared.
+    // Break dates are no longer asked: after a break, the analysis counts cover
+    // from the uploaded policy document's start date.
+    await ApiClient().dio.put(
+      '/policies/${policy.policyId}',
+      data: {
+        'inceptionDate': policy.inceptionDate?.toIso8601String(),
+        'isRenewal': policy.isRenewal,
+        'continuousRenewal': policy.isRenewal == true ? policy.renewedWithoutBreak : null,
+        'breakStartDate': null,
+        'coverRestartDate': null,
+      },
+    );
   }
 
   /// Upload one or more policy documents. Each file becomes its own policy
@@ -132,7 +213,7 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
   Future<void> _pickAndUploadFiles() async {
     final remaining = _maxPolicies - _policies.length;
     if (remaining <= 0) {
-      _toast('You can compare up to $_maxPolicies policies at once.');
+      _toast(_config.policyLimitMessage);
       return;
     }
 
@@ -143,7 +224,11 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
     );
 
     final picked = result?.files.where((f) => f.path != null).toList() ?? [];
-    if (picked.isEmpty) return;
+    if (!mounted || picked.isEmpty) return;
+    if (picked.any((file) => !_config.acceptsFileSize(file.size))) {
+      _toast(_config.uploadLimitMessage);
+      return;
+    }
 
     // The system file picker cannot cap how many files are ticked, so an
     // over-limit selection is rejected as a whole (never silently trimmed)
@@ -180,9 +265,9 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
   Future<void> _uploadOne(PlatformFile file) async {
     String? fileId;
     try {
-      final formData = FormData.fromMap({'file': await MultipartFile.fromFile(file.path!)});
+      final formData = FormData.fromMap({'file': await MultipartFile.fromFile(file.path!), 'documentType': 'policy'});
 
-      final response = await ApiClient().dio.post('/upload', data: formData);
+      final response = await ApiClient().dio.post('/upload', data: formData, options: analysisUploadOptions());
       if (response.statusCode != 200) {
         _toast('Could not upload ${file.name}.', tone: AppTone.danger);
         return;
@@ -198,6 +283,7 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
       final agreementData = await DeviceAppInfo.buildAgreementData();
       final policyResponse = await ApiClient().dio.post(
         '/policies',
+        options: analysisUploadOptions(),
         data: {
           'insuranceCompany': '',
           'policyNumber': '',
@@ -213,74 +299,31 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
       await SharedPrefs.instance.setBool('policy_is_image_based', isImageBased);
 
       if (!mounted) return;
-      final newPolicy = _UploadedPolicy(fileName: file.name, fileId: fileId!, policyId: newPolicyId);
+      final newPolicy = _UploadedPolicy(fileName: file.name, fileId: fileId, policyId: newPolicyId);
       setState(() {
         _policies.add(newPolicy);
       });
-
-      // Extract details automatically from the uploaded document
-      _extractPolicyDetails(newPolicy);
+      unawaited(_readPolicy(newPolicy));
     } on DioException catch (e) {
       await _rollbackUpload(fileId);
+      if (e.response?.statusCode == 413) {
+        final data = e.response?.data;
+        final message = data is Map ? data['message'] : null;
+        _toast(message is String ? message : _config.uploadLimitMessage);
+        return;
+      }
       final offline =
           e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout;
       _toast(
-        offline
-            ? 'Unable to connect to the server. Please check your internet connection and try again.'
-            : 'Our servers could not process ${file.name}. Please try again later.',
+        offline ? friendlyErrorMessage(e) : 'Our servers could not process ${file.name}. Please try again later.',
         tone: AppTone.danger,
       );
     } catch (e) {
       debugPrint("Failed to save policy record: $e");
       await _rollbackUpload(fileId);
       _toast('Could not add ${file.name}. Please try again.', tone: AppTone.danger);
-    }
-  }
-
-  Future<void> _extractPolicyDetails(_UploadedPolicy policy) async {
-    setState(() => policy.isExtracting = true);
-    try {
-      final response = await ApiClient().dio.post('/policies/${policy.policyId}/extract-details');
-      if (response.statusCode == 200 && response.data != null) {
-        final data = response.data;
-        final extractedFields = data['extractedFields'] as Map<String, dynamic>? ?? {};
-
-        DateTime? parsedDate;
-        if (data['startDate'] != null) {
-          try {
-            parsedDate = DateTime.parse(data['startDate'].toString());
-          } catch (_) {
-            try {
-              parsedDate = DateFormat('dd-MM-yyyy').parse(data['startDate'].toString());
-            } catch (_) {}
-          }
-        }
-
-        if (mounted && _policies.contains(policy)) {
-          setState(() {
-            if (extractedFields['isRenewal'] == true && data['isRenewal'] != null) {
-              policy.isRenewal = data['isRenewal'] == true;
-              policy.isRenewalAutoExtracted = true;
-            }
-            if (extractedFields['startDate'] == true && parsedDate != null) {
-              policy.inceptionDate = parsedDate;
-              policy.startDateAutoExtracted = true;
-            }
-            if (extractedFields['renewedWithoutBreak'] == true && data['renewedWithoutBreak'] != null) {
-              policy.renewedWithoutBreak = data['renewedWithoutBreak'] == true;
-              policy.noBreakAutoExtracted = true;
-            }
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint("Policy detail extraction failed: $e");
-    } finally {
-      if (mounted && _policies.contains(policy)) {
-        setState(() => policy.isExtracting = false);
-      }
     }
   }
 
@@ -313,54 +356,44 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
       _toast('Please upload at least one policy document.');
       return;
     }
-
-    if (_policies.any((p) => p.isExtracting)) {
-      showAppSnackBar(context, 'Please wait while we finish reading your policy details.', tone: AppTone.info);
+    if (_policies.length > _maxPolicies) {
+      _toast(_config.policyLimitMessage);
       return;
     }
 
-    for (final policy in _policies) {
-      final missing = _missingAnswer(policy);
-      if (missing != null) {
-        showAppSnackBar(context, missing, tone: AppTone.warning);
-        return;
-      }
+    if (_policies.any((p) => p.isReading)) {
+      _toast('Still reading your policy. This takes a few seconds.', tone: AppTone.info);
+      return;
     }
 
     // Make sure the answers are stored before the analysis reads them.
-    for (final policy in _policies) {
-      await _syncContinuity(policy);
+    try {
+      for (final policy in _policies) {
+        if (policy.isRenewal != null) await _syncContinuity(policy);
+      }
+    } catch (_) {
+      _toast('Could not save the confirmed policy details. Please try again.', tone: AppTone.danger);
+      return;
     }
 
     final prefs = SharedPrefs.instance;
     await prefs.remove('policy_path');
 
-    // One policy keeps the original single-analysis flow; several go to the
-    // comparison screen, exactly as selecting saved policies does.
-    if (_policies.length == 1) {
-      await prefs.setString('policy_id', _policies.first.policyId);
-      await prefs.remove('policy_ids');
-      if (mounted) context.push('/analysis');
-    } else {
-      await prefs.setString('policy_ids', jsonEncode(_policies.map((p) => p.policyId).toList()));
-      await prefs.remove('policy_id');
-      if (mounted) context.push('/analysis-multi');
-    }
+    await prefs.setString('policy_ids', jsonEncode(_policies.map((p) => p.policyId).toList()));
+    await prefs.remove('policy_id');
+    if (mounted) context.push('/analysis-multi');
   }
 
   @override
   Widget build(BuildContext context) {
+    final config = ref.watch(appConfigProvider).value ?? AppRuntimeConfig.defaults;
     final p = context.palette;
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          tooltip: 'Back',
-          onPressed: () => context.pop(),
-        ),
-        title: const Text('Upload Policy'),
-      ),
+    return FlowShell(
+      title: 'Upload Policy',
+      step: 3,
+      stepCount: 3,
+      onClose: () => context.go('/dashboard'),
       body: SafeArea(
         bottom: false,
         child: ContentWidth(
@@ -369,8 +402,6 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const _StepHeader(current: 3, total: 3, label: 'Policy'),
-                const SizedBox(height: AppSpacing.xl),
                 Text('Add your insurance policy', style: context.text.headlineSmall),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
@@ -384,7 +415,7 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
                 if (_policies.isNotEmpty) ...[
                   SectionHeader(
                     title: _policies.length == 1 ? "1 policy added" : "${_policies.length} policies added",
-                    subtitle: 'Answer the questions below for each policy',
+                    subtitle: 'We read the details from each policy',
                     trailing: Text(
                       '${_policies.length}/$_maxPolicies',
                       style: context.text.labelMedium?.copyWith(color: p.textTertiary),
@@ -447,7 +478,7 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
                               Text(
                                 'Select up to ${_maxPolicies - _policies.length} '
                                 '${_maxPolicies - _policies.length == 1 ? 'file' : 'files'} · '
-                                'max $_maxPolicies policies · 10MB each',
+                                'max $_maxPolicies policies · ${config.maxFileSizeMb} MB each',
                                 textAlign: TextAlign.center,
                                 style: context.text.bodySmall,
                               ),
@@ -470,26 +501,10 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: BottomActionBar(
-        children: [
-          FilledButton(
-            onPressed: _analyzeDocuments, // Finalize and go to analysis loading/results
-            style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 52)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Flexible(
-                  child: Text(
-                    _policies.length > 1 ? 'Compare ${_policies.length} Policies' : 'Analyze Coverage',
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                const Icon(Icons.insights_rounded, size: 20),
-              ],
-            ),
-          ),
-        ],
+      bottomAction: AppButton(
+        label: _policies.length > 1 ? 'Compare ${_policies.length} Policies' : 'Analyze Coverage',
+        onPressed: _analyzeDocuments,
+        icon: AppIcons.scan,
       ),
     );
   }
@@ -531,97 +546,68 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
               ),
             ],
           ),
-          if (policy.isExtracting) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Row(
-              children: [
-                SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: p.primary)),
-                const SizedBox(width: AppSpacing.xs),
-                Text(
-                  'Reading document details...',
-                  style: context.text.bodySmall?.copyWith(color: p.primary, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-          ],
           const SizedBox(height: AppSpacing.md),
           Divider(height: 1, color: p.border),
-
-          // While the document is being read, nothing can be entered by hand: details found
-          // in the PDF are filled in and locked, and only what is missing is asked afterwards.
-          if (policy.isExtracting)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.md),
-              child: Text(
-                "Please wait while we read your policy. Any details we can't find in the "
-                'document will be asked here for you to fill in.',
-                style: context.text.bodySmall,
-              ),
-            )
-          else ...[
-            // 1. New or renewed decides which date is asked next.
-            _questionBlock(
-              label: 'Is this a new policy or a renewed policy? *',
-              child: policy.isRenewalAutoExtracted
-                  ? _readOnlyField(
-                      value: policy.isRenewal == true ? 'Renewed' : 'New (first year)',
-                      icon: policy.isRenewal == true ? Icons.autorenew_rounded : Icons.fiber_new_rounded,
-                    )
-                  : _twoChoice(
-                      value: policy.isRenewal,
-                      firstLabel: 'New (first year)',
-                      firstValue: false,
-                      secondLabel: 'Renewed',
-                      secondValue: true,
-                      onChanged: (v) => setState(() => policy.setRenewal(v)),
-                    ),
+          if (policy.isReading) ...[
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2)),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(child: Text('Reading your policy details…', style: context.text.bodyMedium)),
+              ],
             ),
+          ] else ...[
+            ..._readingSummary(policy),
+            // 1. New or renewed decides which date is asked next.
+            if (policy.askRenewal)
+              _questionBlock(
+                label: 'Is this a new policy or a renewed policy?',
+                child: _twoChoice(
+                  value: policy.isRenewal,
+                  firstLabel: 'New (first year)',
+                  firstValue: false,
+                  secondLabel: 'Renewed',
+                  secondValue: true,
+                  onChanged: (v) => setState(() {
+                    policy.renewalFromDocument = false;
+                    policy.setRenewal(v);
+                  }),
+                ),
+              ),
 
             // 2. The date: the policy's start date (new), or the very first start date (renewed).
             //    Waiting periods are counted from this date, not from the current renewal.
-            if (policy.isRenewal != null)
+            if (policy.isRenewal != null && policy.askDate)
               _questionBlock(
-                label: policy.isRenewal == true ? 'When was this policy first taken? *' : 'Policy Start Date *',
+                label: policy.isRenewal == true ? 'When was this policy first taken?' : 'Policy start date',
                 helper: policy.isRenewal == true
                     ? 'The very first start date of this policy, before any renewals.'
                     : 'The date this policy started, as shown on your policy document.',
-                child: policy.startDateAutoExtracted && policy.inceptionDate != null
-                    ? _readOnlyField(
-                        value: DateFormat('dd-MM-yyyy').format(policy.inceptionDate!),
-                        icon: Icons.calendar_month_rounded,
-                      )
-                    : _dateField(
-                        value: policy.inceptionDate,
-                        placeholder: policy.isRenewal == true
-                            ? 'Select first start date *'
-                            : 'Select policy start date *',
-                        onTap: () => _pickDate(policy),
-                      ),
+                child: _dateField(
+                  value: policy.inceptionDate,
+                  placeholder: policy.isRenewal == true ? 'Select first start date' : 'Select policy start date',
+                  onTap: () => _pickDate(policy),
+                ),
               ),
 
             // 3. Renewed only: renewed every year without a break?
-            if (policy.isRenewal == true)
+            if (policy.isRenewal == true && policy.askBreak)
               _questionBlock(
-                label: 'Has this policy been renewed every year without a break? *',
+                label: 'Has this policy been renewed every year without a break?',
                 helper: 'Answer Yes if you moved from another insurance company without any gap (portability).',
-                child: policy.noBreakAutoExtracted && policy.renewedWithoutBreak != null
-                    ? _readOnlyField(
-                        value: policy.renewedWithoutBreak == true ? 'Yes' : 'No',
-                        icon: policy.renewedWithoutBreak == true
-                            ? Icons.verified_user_outlined
-                            : Icons.warning_amber_rounded,
-                      )
-                    : _twoChoice(
-                        value: policy.renewedWithoutBreak,
-                        firstLabel: 'Yes',
-                        firstValue: true,
-                        secondLabel: 'No',
-                        secondValue: false,
-                        onChanged: (v) => setState(() {
-                          policy.renewedWithoutBreak = v;
-                          policy.clearAfterRenewalAnswer();
-                        }),
-                      ),
+                child: _twoChoice(
+                  value: policy.renewedWithoutBreak,
+                  firstLabel: 'Yes',
+                  firstValue: true,
+                  secondLabel: 'No',
+                  secondValue: false,
+                  onChanged: (v) => setState(() {
+                    policy.renewedWithoutBreak = v;
+                    policy.breakFromDocument = false;
+                    policy.clearAfterRenewalAnswer();
+                  }),
+                ),
               ),
             if (policy.isRenewal == true && policy.renewedWithoutBreak == false) ...[
               const SizedBox(height: AppSpacing.md),
@@ -631,6 +617,111 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
         ],
       ),
     );
+  }
+
+  /// What was read from the document, and a note on what still needs an answer.
+  List<Widget> _readingSummary(_UploadedPolicy policy) {
+    final p = context.palette;
+    String? date(Object? value) {
+      final parsed = value is DateTime ? value : DateTime.tryParse('${value ?? ''}');
+      return parsed == null ? null : DateFormat('dd-MM-yyyy').format(parsed);
+    }
+
+    String? text(Object? value) {
+      final s = value?.toString().trim() ?? '';
+      return s.isEmpty ? null : s;
+    }
+
+    switch (policy.readState) {
+      case _ReadState.notPolicy:
+        return [
+          const SizedBox(height: AppSpacing.md),
+          const InfoBanner(
+            tone: AppTone.warning,
+            padding: EdgeInsets.all(AppSpacing.sm),
+            message: 'This file does not look like an insurance policy. Check the file, or answer the questions below.',
+          ),
+        ];
+      case _ReadState.failed:
+        return [
+          const SizedBox(height: AppSpacing.md),
+          const InfoBanner(
+            tone: AppTone.warning,
+            padding: EdgeInsets.all(AppSpacing.sm),
+            message: 'We could not read the details from this policy. Please answer the questions below.',
+          ),
+        ];
+      case _ReadState.reading:
+        return const [];
+      case _ReadState.read:
+        break;
+    }
+
+    final d = policy.details;
+    final amount = d['coverageAmount'];
+    final start = date(d['policyStartDate']);
+    final end = date(d['policyEndDate']);
+    final rows = <(String, String?)>[
+      ('Insurer', text(d['insuranceCompany'])),
+      ('Plan', text(d['policyName'])),
+      ('Policy number', text(d['policyNumber'])),
+      ('Policy holder', text(d['policyHolder'])),
+      ('Policy period', start == null && end == null ? null : '${start ?? '—'} to ${end ?? '—'}'),
+      (
+        'Sum insured',
+        amount is num && amount > 0
+            ? NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0).format(amount)
+            : null,
+      ),
+      if (!policy.editing && policy.renewalFromDocument)
+        ('Policy type', policy.isRenewal == true ? 'Renewed' : 'New (first year)'),
+      if (!policy.editing && policy.dateFromDocument && policy.inceptionDate != null)
+        (policy.isRenewal == true ? 'First taken on' : 'Start date', date(policy.inceptionDate)),
+      if (!policy.editing && policy.breakFromDocument && policy.isRenewal == true)
+        ('Renewed without a break', policy.renewedWithoutBreak == true ? 'Yes' : 'No'),
+    ].where((row) => row.$2 != null).toList();
+
+    final missing =
+        policy.askRenewal ||
+        (policy.isRenewal != null && policy.askDate) ||
+        (policy.isRenewal == true && policy.askBreak);
+    final canEdit = policy.renewalFromDocument || policy.dateFromDocument || policy.breakFromDocument;
+
+    return [
+      const SizedBox(height: AppSpacing.md),
+      Row(
+        children: [
+          Icon(Icons.check_circle_rounded, size: 18, color: p.success.fg),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(child: Text('Details from your policy', style: context.text.titleSmall)),
+          if (canEdit)
+            TextButton(
+              onPressed: () => setState(() => policy.editing = !policy.editing),
+              child: Text(policy.editing ? 'Done' : 'Edit'),
+            ),
+        ],
+      ),
+      for (final row in rows)
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.xxs),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 140, child: Text(row.$1, style: context.text.bodySmall)),
+              Expanded(
+                child: Text(row.$2!, style: context.text.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ),
+      if (missing && !policy.editing) ...[
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Your policy does not state the following, so please answer:',
+          style: context.text.bodySmall?.copyWith(color: p.textSecondary),
+        ),
+      ],
+    ];
   }
 
   /// One question: label, optional helper text, then its input — same spacing everywhere.
@@ -662,38 +753,6 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
       message:
           'You have a coverage gap in your policy continuity. So the coverage analysis will check '
           'your prescription against this policy from the start date of the uploaded policy document.',
-    );
-  }
-
-  Widget _readOnlyField({required String value, required IconData icon}) {
-    final p = context.palette;
-    return Container(
-      constraints: const BoxConstraints(minHeight: 48),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: p.surfaceMuted,
-        borderRadius: AppRadius.mdAll,
-        border: Border.all(color: p.border),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: p.primary),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              value,
-              style: context.text.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: p.textPrimary),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          const StatusBadge(
-            label: 'Auto-extracted from PDF',
-            tone: AppTone.verify,
-            icon: Icons.lock_outline_rounded,
-            dense: true,
-          ),
-        ],
-      ),
     );
   }
 
@@ -797,58 +856,6 @@ class _UploadPolicyScreenState extends State<UploadPolicyScreen> {
 }
 
 /// Visual-only progress indicator for the Consent → Prescription → Policy flow.
-class _StepHeader extends StatelessWidget {
-  final int current;
-  final int total;
-  final String label;
-
-  const _StepHeader({required this.current, required this.total, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              'STEP $current OF $total',
-              style: context.text.labelSmall?.copyWith(color: p.primary, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            Flexible(
-              child: Text(
-                '· $label',
-                overflow: TextOverflow.ellipsis,
-                style: context.text.labelSmall?.copyWith(color: p.textTertiary),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Row(
-          children: [
-            for (int i = 1; i <= total; i++) ...[
-              if (i > 1) const SizedBox(width: 6),
-              Expanded(
-                child: Container(
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: i <= current ? p.primary : p.border,
-                    borderRadius: AppRadius.pillAll,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-// Custom Painter for Dashed Border
 class DashedBorderPainter extends CustomPainter {
   final Color color;
   final double strokeWidth;

@@ -1,74 +1,72 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:claimsupport/core/theme/app_theme.dart';
 import 'package:claimsupport/core/theme/theme_provider.dart';
 import 'package:claimsupport/core/routing/app_router.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:claimsupport/core/config/env_config.dart';
+import 'package:claimsupport/core/design/widgets/app_shells.dart';
+import 'package:claimsupport/core/design/widgets/android_navigation_background.dart';
+import 'package:claimsupport/core/design/widgets/startup_artwork.dart';
+import 'package:claimsupport/core/design/design.dart';
+import 'package:claimsupport/core/design/app_icons.dart';
 import 'package:claimsupport/core/utils/shared_prefs.dart';
 import 'package:claimsupport/core/utils/auth_storage.dart';
 import 'package:claimsupport/core/services/admob_service.dart';
+import 'package:claimsupport/core/services/error_reporting.dart';
+import 'package:claimsupport/features/home/data/home_check_cache.dart';
+import 'package:claimsupport/features/home/presentation/controllers/home_checks_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(RootShell.systemNavigationStyle);
 
   // Prevent release mode black screen on unhandled Flutter widget build errors
-  ErrorWidget.builder = (FlutterErrorDetails details) {
-    debugPrint('Flutter Error: ${details.exception}');
-    return Material(
-      color: const Color(0xFFF5F7FA),
-      child: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: const BoxDecoration(color: Color(0xFFFEF2F2), shape: BoxShape.circle),
-                  child: const Icon(Icons.error_outline_rounded, color: Color(0xFFB91C1C), size: 32),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Something went wrong',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'This section could not be displayed. Please go back and try again.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 14, height: 1.5, color: Color(0xFF475569)),
-                ),
-                if (!kReleaseMode) ...[
-                  const SizedBox(height: 12),
+  ErrorWidget.builder = (details) => Builder(
+    builder: (context) {
+      final c = context.colors;
+      return Material(
+        color: c.backgroundPage,
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(DsSpace.s24),
+              child: Column(
+                children: [
+                  Icon(AppIcons.warning, color: c.statusNotCovered, size: DsSize.iconXl),
+                  const SizedBox(height: DsSpace.s16),
                   Text(
-                    details.exceptionAsString(),
+                    'Something went wrong',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    style: AppTextStyles.headline.copyWith(color: c.textPrimary),
                   ),
+                  const SizedBox(height: DsSpace.s8),
+                  Text(
+                    'This section could not be displayed. Please go back and try again.',
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.label.copyWith(color: c.textSecondary),
+                  ),
+                  if (!kReleaseMode) ...[
+                    const SizedBox(height: DsSpace.s12),
+                    Text(
+                      details.exceptionAsString(),
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.captionRegular.copyWith(color: c.textSecondary),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
-      ),
-    );
-  };
+      );
+    },
+  );
 
   try {
-    if (!kReleaseMode) {
-      try {
-        await dotenv.load(fileName: ".env");
-      } catch (e) {
-        debugPrint('No .env file found. Using default dev config.');
-      }
-    }
-
     EnvConfig.initialize(kReleaseMode ? Environment.prod : Environment.dev);
   } catch (e) {
     debugPrint('EnvConfig init error: $e');
@@ -80,17 +78,32 @@ Future<void> main() async {
     debugPrint('SharedPrefs init error: $e');
   }
 
-  // Draw the first frame (the branded splash) as early as possible: Android keeps
-  // its plain launch screen up until then. Slower setup runs in the background;
-  // token reads wait for the migration (see AuthStorage.getToken).
+  // Token reads wait for the one-time migration (see AuthStorage.getToken).
   AuthStorage.startMigration();
-  runApp(const ProviderScope(child: ClaimSupportApp()));
+  try {
+    await configureErrorReporting();
+  } catch (_) {
+    debugPrint('Error reporting could not be initialized.');
+  }
+  // Android keeps its native splash visible until the destination's first frame.
+  final cachedHome = HomeCheckCache.restore();
+  await AppRouter.prepareStartup();
+  final homeCache = await cachedHome;
+  WidgetsBinding.instance.deferFirstFrame();
+  runApp(
+    ProviderScope(
+      overrides: [restoredHomeCacheProvider.overrideWithValue(homeCache)],
+      child: const ClaimSupportApp(precacheArtwork: true),
+    ),
+  );
 
   AdMobService.init().catchError((Object e) => debugPrint('AdMobService init error: $e'));
 }
 
 class ClaimSupportApp extends ConsumerWidget {
-  const ClaimSupportApp({super.key});
+  const ClaimSupportApp({super.key, this.precacheArtwork = false});
+
+  final bool precacheArtwork;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -101,7 +114,11 @@ class ClaimSupportApp extends ConsumerWidget {
       themeMode: themeMode,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      routerConfig: AppRouter.router,
+      routerConfig: AppRouter.config,
+      builder: (context, child) => MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.3,
+        child: AndroidNavigationBackground(child: precacheArtwork ? StartupArtwork(child: child!) : child!),
+      ),
       debugShowCheckedModeBanner: false,
     );
   }

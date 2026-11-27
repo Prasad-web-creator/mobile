@@ -7,6 +7,7 @@ import 'dart:developer' as developer;
 import 'package:claimsupport/features/analysis/data/models/multi_analysis_session.dart';
 import 'package:claimsupport/features/analysis/data/repositories/analysis_repository.dart';
 import 'package:claimsupport/features/analysis/presentation/controllers/analysis_controller.dart';
+import 'package:claimsupport/core/utils/shared_prefs.dart';
 
 class MultiAnalysisParams {
   final String prescriptionPath;
@@ -33,6 +34,7 @@ class MultiAnalysisNotifier extends Notifier<AsyncValue<MultiAnalysisSession>> {
   MultiAnalysisParams? _params;
   bool _disposed = false;
   bool _polling = false;
+  String? _jobId;
 
   /// Policies whose answer/retry request has been sent but not yet confirmed
   /// by the server, with the "restarted" row to show meanwhile. A poll that
@@ -66,20 +68,19 @@ class MultiAnalysisNotifier extends Notifier<AsyncValue<MultiAnalysisSession>> {
     _params = params;
     _cancelToken = CancelToken();
 
-    developer.log(
-      '[MultiAnalysis] start prescription=${params.prescriptionPath} '
-      'policies=${params.policyIds.length}',
-    );
     state = const AsyncValue.loading();
     try {
       final repository = ref.read(analysisRepositoryProvider);
-      // Returns once the session is created; the analysis itself runs on the
-      // server and is followed through polling below.
-      final result = await repository.startMultiAnalysis(
+      _jobId = SharedPrefs.instance.getString(analysisDraftKey);
+      final jobId = _jobId;
+      final result = jobId == null ? await repository.startMultiAnalysis(
         params.prescriptionPath,
         params.policyIds,
         cancelToken: _cancelToken!,
+      ) : await repository.startJob(
+        jobId, params.prescriptionPath, params.policyIds, _cancelToken!,
       );
+      if (jobId != null) await SharedPrefs.instance.setString(analysisResumeKey, jobId);
       if (_disposed) return;
 
       final session = MultiAnalysisSession.fromJson(result);
@@ -88,7 +89,7 @@ class MultiAnalysisNotifier extends Notifier<AsyncValue<MultiAnalysisSession>> {
       state = AsyncValue.data(session);
       unawaited(_followProgress(session.sessionId));
     } catch (e, st) {
-      developer.log('[MultiAnalysis] start error: $e');
+      developer.log('[MultiAnalysis] Analysis request failed.');
       if (!_disposed) state = AsyncValue.error(e, st);
     }
   }
@@ -112,7 +113,7 @@ class MultiAnalysisNotifier extends Notifier<AsyncValue<MultiAnalysisSession>> {
 
         try {
           final repository = ref.read(analysisRepositoryProvider);
-          final result = await repository.fetchMultiAnalysis(sessionId);
+          final result = await _fetch(repository, sessionId);
           if (_disposed) break;
 
           consecutiveFailures = 0;
@@ -127,12 +128,9 @@ class MultiAnalysisNotifier extends Notifier<AsyncValue<MultiAnalysisSession>> {
           }
         } catch (e, st) {
           consecutiveFailures++;
-          developer.log('[MultiAnalysis] poll failed ($consecutiveFailures): $e');
+          developer.log('[MultiAnalysis] Poll failed ($consecutiveFailures).');
           if (consecutiveFailures >= _maxConsecutivePollFailures) {
-            // Only give up the screen entirely if there is nothing to show.
-            if (state.asData?.value == null && !_disposed) {
-              state = AsyncValue.error(e, st);
-            }
+            if (!_disposed) state = AsyncValue.error(e, st);
             break;
           }
         }
@@ -152,7 +150,9 @@ class MultiAnalysisNotifier extends Notifier<AsyncValue<MultiAnalysisSession>> {
       policyId,
       'reanalyzing',
       (repository, sessionId, token) =>
-          repository.submitPolicyAnswers(sessionId, policyId, answers, cancelToken: token),
+          _jobId == null
+              ? repository.submitPolicyAnswers(sessionId, policyId, answers, cancelToken: token)
+              : repository.updateJob(sessionId, 'answer', policyId, token, answers: answers),
       'answer',
     );
   }
@@ -163,7 +163,9 @@ class MultiAnalysisNotifier extends Notifier<AsyncValue<MultiAnalysisSession>> {
       policyId,
       'queued',
       (repository, sessionId, token) =>
-          repository.retryPolicy(sessionId, policyId, cancelToken: token),
+          _jobId == null
+              ? repository.retryPolicy(sessionId, policyId, cancelToken: token)
+              : repository.updateJob(sessionId, 'retry', policyId, token),
       'retry',
     );
   }
@@ -195,13 +197,13 @@ class MultiAnalysisNotifier extends Notifier<AsyncValue<MultiAnalysisSession>> {
       _inFlight.remove(policyId);
       _publish(MultiAnalysisSession.fromJson(result));
     } catch (e) {
-      developer.log('[MultiAnalysis] $action error: $e');
+      developer.log('[MultiAnalysis] $action request failed.');
       _inFlight.remove(policyId);
       // Show the server's real state for this policy rather than a guess.
       try {
         final repository = ref.read(analysisRepositoryProvider);
         _publish(MultiAnalysisSession.fromJson(
-          await repository.fetchMultiAnalysis(current.sessionId),
+          await _fetch(repository, current.sessionId),
         ));
       } catch (_) {}
     }
@@ -212,7 +214,7 @@ class MultiAnalysisNotifier extends Notifier<AsyncValue<MultiAnalysisSession>> {
   Future<void> refreshSession(String sessionId) async {
     try {
       final repository = ref.read(analysisRepositoryProvider);
-      final result = await repository.fetchMultiAnalysis(sessionId);
+      final result = await _fetch(repository, sessionId);
       if (_disposed) return;
       _publish(MultiAnalysisSession.fromJson(result));
       if (state.asData?.value.isWorking ?? false) unawaited(_followProgress(sessionId));
@@ -221,10 +223,24 @@ class MultiAnalysisNotifier extends Notifier<AsyncValue<MultiAnalysisSession>> {
     }
   }
 
-  void cancelAnalysis() {
-    developer.log('[MultiAnalysis] cancelled by user');
-    _cancelToken?.cancel('User cancelled the analysis');
-    state = const AsyncValue.loading();
+  Future<void> resumeJob(String jobId) async {
+    _jobId = jobId;
+    await refreshSession(jobId);
+  }
+
+  Future<void> resumeSession(String sessionId) async {
+    _jobId = null;
+    await refreshSession(sessionId);
+  }
+
+  Future<Map<String, dynamic>> _fetch(AnalysisRepository repository, String sessionId) =>
+      _jobId == null ? repository.fetchMultiAnalysis(sessionId) : repository.fetchJob(sessionId);
+
+  Future<void> cancelAnalysis() async {
+    final jobId = _jobId;
+    if (jobId == null) return;
+    final result = await ref.read(analysisRepositoryProvider).cancelJob(jobId);
+    _publish(MultiAnalysisSession.fromJson(result));
   }
 }
 

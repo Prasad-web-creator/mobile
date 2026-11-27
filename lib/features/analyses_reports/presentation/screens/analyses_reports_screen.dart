@@ -1,15 +1,24 @@
+import 'package:claimsupport/features/analysis_reports/data/models/analysis_report_group.dart';
+import 'package:claimsupport/core/design/design.dart';
+import 'package:claimsupport/core/design/widgets/app_choices.dart';
+import 'package:claimsupport/core/design/widgets/app_illustration.dart';
+import 'package:claimsupport/core/design/widgets/app_sections.dart';
+import 'package:claimsupport/core/design/widgets/app_shells.dart';
+import 'package:claimsupport/core/design/widgets/floating_nav_bar.dart';
+import 'package:claimsupport/core/models/pagination_response.dart';
+import 'package:claimsupport/features/analysis_reports/presentation/controllers/analysis_report_controller.dart';
+import 'package:claimsupport/features/authentication/presentation/controllers/auth_controller.dart';
+import 'package:claimsupport/features/dashboard/presentation/controllers/dashboard_controller.dart';
+import 'package:claimsupport/features/documents/presentation/saved_list_actions.dart';
+import 'package:claimsupport/features/documents/presentation/saved_list_feedback.dart';
+import 'package:claimsupport/features/home/data/check_summary.dart';
+import 'package:claimsupport/features/home/presentation/controllers/home_checks_provider.dart';
+import 'package:claimsupport/features/home/presentation/widgets/check_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:claimsupport/core/widgets/app_widgets.dart';
-import 'package:claimsupport/features/analysis_reports/presentation/controllers/analysis_report_controller.dart';
-import 'package:claimsupport/features/analysis_reports/data/models/analysis_report_group.dart';
 
-/// Coverage Analysis Reports screen.
-///
-/// Groups policies analyzed against the same prescription under one clean,
-/// expandable parent report card.
 class AnalysesReportsScreen extends ConsumerStatefulWidget {
   const AnalysesReportsScreen({super.key});
 
@@ -17,502 +26,243 @@ class AnalysesReportsScreen extends ConsumerStatefulWidget {
   ConsumerState<AnalysesReportsScreen> createState() => _AnalysesReportsScreenState();
 }
 
-class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen> {
-  bool _isSelectionMode = false;
-  final Set<String> _selectedGroupIds = {};
-  final Set<String> _expandedGroupIds = {};
+typedef _ReportPage = PaginationResponse<AnalysisReportGroup>;
 
-  void _enterSelectionMode([String? initialId]) {
-    setState(() {
-      _isSelectionMode = true;
-      if (initialId != null) {
-        _selectedGroupIds.add(initialId);
-      }
-    });
+class _AnalysesReportsScreenState extends ConsumerState<AnalysesReportsScreen>
+    with SavedListActions<AnalysesReportsScreen, AnalysisReportGroup> {
+  AppCheckFilter _filter = AppCheckFilter.all;
+  (_ReportPage, AppCheckFilter)? _filterSource;
+  Future<_ReportPage>? _filtered;
+
+  bool _matches(CheckSummary check, AppCheckFilter filter) {
+    final kind = switch (filter) {
+      AppCheckFilter.all => null,
+      AppCheckFilter.covered => CheckStatusKind.covered,
+      AppCheckFilter.partial => CheckStatusKind.partial,
+      AppCheckFilter.notCovered => CheckStatusKind.notCovered,
+      AppCheckFilter.verification => CheckStatusKind.verification,
+    };
+    if (kind == null) return true;
+    final policies = check.policyResults;
+    return policies.isEmpty
+        ? check.statusKind == kind
+        : policies.any((policy) => CheckSummary.resultForPolicy(policy).$1 == kind);
   }
 
-  void _exitSelectionMode() {
-    setState(() {
-      _isSelectionMode = false;
-      _selectedGroupIds.clear();
-    });
-  }
-
-  void _toggleSelection(String id) {
-    setState(() {
-      if (_selectedGroupIds.contains(id)) {
-        _selectedGroupIds.remove(id);
-        if (_selectedGroupIds.isEmpty) {
-          _isSelectionMode = false;
-        }
-      } else {
-        _selectedGroupIds.add(id);
-      }
-    });
-  }
-
-  void _toggleSelectAll(List<AnalysisReportGroup> currentGroups) {
-    setState(() {
-      final allIds = currentGroups.map((g) => g.groupId).toSet();
-      if (_selectedGroupIds.containsAll(allIds)) {
-        _selectedGroupIds.clear();
-        _isSelectionMode = false;
-      } else {
-        _selectedGroupIds.addAll(allIds);
-      }
-    });
-  }
-
-  void _toggleExpand(String groupId) {
-    setState(() {
-      if (_expandedGroupIds.contains(groupId)) {
-        _expandedGroupIds.remove(groupId);
-      } else {
-        _expandedGroupIds.add(groupId);
-      }
-    });
-  }
-
-  Future<void> _confirmBatchDelete() async {
-    if (_selectedGroupIds.isEmpty) return;
-    final count = _selectedGroupIds.length;
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Delete Selected Analyses',
-      message:
-          'Are you sure you want to permanently delete $count selected analysis/analyses? '
-          'All policy reports inside them will be removed. This action cannot be undone.',
-      confirmLabel: 'Delete All',
-      destructive: true,
-      icon: Icons.delete_outline_rounded,
+  Future<_ReportPage> _matchingReports(
+    _ReportPage first,
+    AppCheckFilter filter,
+    AnalysisReportNotifier notifier,
+  ) async {
+    final matches = <AnalysisReportGroup>[];
+    var page = first;
+    while (true) {
+      matches.addAll(page.docs.where((group) => _matches(CheckSummary.fromGroup(group), filter)));
+      if (!page.hasNextPage || page.docs.isEmpty) break;
+      page = await notifier.fetchPage(page.page + 1);
+    }
+    return PaginationResponse(
+      docs: matches,
+      totalDocs: matches.length,
+      limit: first.limit,
+      page: 1,
+      totalPages: matches.isEmpty ? 0 : 1,
+      hasPrevPage: false,
+      hasNextPage: false,
     );
-
-    if (confirmed == true) {
-      try {
-        final idsToDelete = _selectedGroupIds.toList();
-        await ref.read(analysisReportProvider.notifier).deleteReports(idsToDelete);
-        if (mounted) {
-          showAppSnackBar(context, '$count analyses deleted successfully.', tone: AppTone.success);
-          _exitSelectionMode();
-        }
-      } catch (e) {
-        if (mounted) {
-          showAppSnackBar(context, 'Failed to delete analyses: ${friendlyErrorMessage(e)}', tone: AppTone.danger);
-        }
-      }
-    }
-  }
-
-  Future<void> _confirmDeleteSingle(AnalysisReportGroup group) async {
-    final label = group.title;
-    final extra = group.isMultiPolicy
-        ? ' All ${group.policyCount} policy reports in this analysis will be removed.'
-        : '';
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Delete Analysis',
-      message: 'Are you sure you want to delete "$label"?$extra This action cannot be undone.',
-      confirmLabel: 'Delete',
-      destructive: true,
-      icon: Icons.delete_outline_rounded,
-    );
-    if (confirmed == true) {
-      try {
-        await ref.read(analysisReportProvider.notifier).deleteReport(group.groupId);
-        if (mounted) {
-          showAppSnackBar(context, 'Analysis deleted successfully.', tone: AppTone.success);
-        }
-      } catch (e) {
-        if (mounted) {
-          showAppSnackBar(context, 'Failed to delete: ${friendlyErrorMessage(e)}', tone: AppTone.danger);
-        }
-      }
-    }
-  }
-
-  /// Tone + icon for a report / job status label. Job states (failed, analyzing,
-  /// needs your input, completed) are handled here; coverage outcomes use the
-  /// shared [coverageStatusStyle] so they match the rest of the app.
-  CoverageStatusStyle _statusStyle(String label) {
-    final lower = label.toLowerCase();
-    if (lower.contains('fail')) return const CoverageStatusStyle(AppTone.danger, Icons.cancel_outlined);
-    if (lower.contains('invalid')) return const CoverageStatusStyle(AppTone.danger, Icons.error_outline_rounded);
-    if (lower.contains('analyzing') || lower.contains('queued') || lower.contains('extracting')) {
-      return const CoverageStatusStyle(AppTone.neutral, Icons.hourglass_empty_rounded);
-    }
-    if (lower.contains('needs your input')) {
-      return const CoverageStatusStyle(AppTone.warning, Icons.edit_note_rounded);
-    }
-    if (lower == 'completed') {
-      return const CoverageStatusStyle(AppTone.success, Icons.check_circle_outline_rounded);
-    }
-    return coverageStatusStyle(label, fallback: AppTone.success);
   }
 
   @override
   Widget build(BuildContext context) {
-    final reportState = ref.watch(analysisReportProvider);
-    final p = context.palette;
+    final state = ref.watch(analysisReportProvider);
+    final notifier = ref.read(analysisReportProvider.notifier);
+    final first = state.value ?? notifier.cachedPage;
 
-    // Every group starts collapsed: a card opens only when the user taps it.
-    final currentGroups = reportState.value?.docs ?? [];
+    void startCheck() => context.push('/check/new');
+    Future<void> refresh() async {
+      if (listBusy) return;
+      setState(() {
+        resetList();
+        _filterSource = null;
+      });
+      await notifier.fetchAnalysisReports(isRefresh: true);
+    }
 
-    final validIds = currentGroups.map((g) => g.groupId).toSet();
-    final allSelected = validIds.isNotEmpty && _selectedGroupIds.containsAll(validIds);
-
-    return Scaffold(
-      appBar: _isSelectionMode
-          ? AppBar(
-              toolbarHeight: 72,
-              leading: IconButton(
-                icon: const Icon(Icons.close_rounded),
-                onPressed: _exitSelectionMode,
-                tooltip: 'Cancel Selection',
-              ),
-              title: Text('${_selectedGroupIds.length} Selected'),
-              actions: [
-                TextButton(
-                  onPressed: () => _toggleSelectAll(currentGroups),
-                  child: Text(allSelected ? 'Deselect All' : 'Select All'),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: AppSpacing.xs),
-                  child: IconButton(
-                    icon: Icon(
-                      Icons.delete_outline_rounded,
-                      color: _selectedGroupIds.isNotEmpty ? p.danger.fg : p.danger.fg.withAlpha(110),
-                    ),
-                    tooltip: 'Delete Selected',
-                    onPressed: _selectedGroupIds.isNotEmpty ? _confirmBatchDelete : null,
-                  ),
-                ),
-              ],
-            )
-          : TabAppBar(
-              title: 'Reports',
-              subtitle: 'Tap a report to see each policy\'s coverage result',
-              actions: [
-                if (currentGroups.isNotEmpty)
-                  IconButton(
-                    icon: const Icon(Icons.checklist_rounded),
-                    tooltip: 'Select / Manage',
-                    onPressed: () => _enterSelectionMode(),
-                  ),
-              ],
-            ),
-      body: SafeArea(
-        child: reportState.when(
-          data: (pagination) {
-            final groups = pagination.docs;
-            if (groups.isEmpty) {
-              return RefreshIndicator(
-                onRefresh: () async {
-                  await ref.read(analysisReportProvider.notifier).fetchAnalysisReports(isRefresh: true);
-                },
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: const [
-                    EmptyState(
-                      icon: Icons.description_outlined,
-                      title: 'No reports yet',
-                      message:
-                          'Start a new analysis from the Home tab. Your coverage reports will be saved here for later.',
-                    ),
-                  ],
-                ),
-              );
+    Widget contents(_ReportPage? source, Future<_ReportPage> Function(int) fetch, {Object? filterError}) =>
+        _buildList(
+          context,
+          source: source,
+          fetch: fetch,
+          isLoading:
+              (state.isLoading && first == null) || (first != null && source == null && filterError == null),
+          error: filterError ?? state.error,
+          hasSaved: first != null,
+          startCheck: startCheck,
+          refresh: refresh,
+          delete: (ids) async {
+            try {
+              return await notifier.deleteReports(ids);
+            } finally {
+              if (mounted) {
+                ref.invalidate(homeChecksProvider);
+                ref.invalidate(dashboardStatsProvider);
+              }
             }
+          },
+        );
 
-            return RefreshIndicator(
-              onRefresh: () async {
-                await ref.read(analysisReportProvider.notifier).fetchAnalysisReports(isRefresh: true);
+    Widget body;
+    if (first == null || _filter == AppCheckFilter.all) {
+      body = contents(first, notifier.fetchAndKeepPage);
+    } else {
+      final key = (first, _filter);
+      if (_filterSource != key) {
+        _filterSource = key;
+        _filtered = _matchingReports(first, _filter, notifier);
+      }
+      body = FutureBuilder(
+        future: _filtered,
+        builder: (context, snapshot) {
+          final result = snapshot.connectionState == ConnectionState.done ? snapshot.data : null;
+          return contents(result, notifier.fetchPage, filterError: snapshot.error);
+        },
+      );
+    }
+    return RootShell(
+      title: selecting ? null : 'History',
+      body: body,
+      useHomeBackgroundColor: Theme.of(context).brightness == Brightness.dark,
+    );
+  }
+
+  String _deletableId(AnalysisReportGroup group, CheckSummary check) =>
+      check.statusKind == CheckStatusKind.checking || group.status == 'waiting_for_user' ? '' : group.groupId;
+
+  Widget _buildList(
+    BuildContext context, {
+    required _ReportPage? source,
+    required Future<_ReportPage> Function(int) fetch,
+    required bool isLoading,
+    required Object? error,
+    required bool hasSaved,
+    required VoidCallback startCheck,
+    required Future<void> Function() refresh,
+    required Future<int> Function(List<String>) delete,
+  }) {
+    final page = source == null ? null : visiblePage(source);
+    final byMonth = <String, List<(AnalysisReportGroup, CheckSummary)>>{};
+    if (page != null) {
+      final groups = page.docs.toList();
+      final earliest = DateTime.fromMillisecondsSinceEpoch(0);
+      groups.sort((a, b) => (b.createdAt ?? earliest).compareTo(a.createdAt ?? earliest));
+      final format = DateFormat.yMMMM();
+      final accountName = ref.watch(authProvider.select((state) => state.value?.name));
+      for (final group in groups) {
+        final check = CheckSummary.fromGroup(group, accountName: accountName);
+        final month = group.createdAt == null
+            ? 'Date unavailable'
+            : format.format(group.createdAt!.toLocal());
+        byMonth.putIfAbsent(month, () => []).add((group, check));
+      }
+    }
+
+    final list = loadOnScroll(
+      source: source,
+      fetch: fetch,
+      enabled: !isLoading && error == null && _filter == AppCheckFilter.all,
+      child: RefreshIndicator(
+        onRefresh: refresh,
+        child: ListView(
+          key: ValueKey(_filter),
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            0,
+            DsSpace.s4,
+            0,
+            selecting ? DsSpace.s8 : FloatingNavBar.scrollClearance(context) + DsSpace.sectionGap,
+          ),
+          children: [
+            AppFilterChips(
+              padding: const EdgeInsets.symmetric(horizontal: DsSpace.screenPadding),
+              selected: _filter,
+              onChanged: (filter) {
+                if (_filter == filter || listBusy) return;
+                setState(() {
+                  resetList();
+                  _filter = filter;
+                });
               },
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.xs, AppSpacing.page, AppSpacing.xxl),
-                itemCount: groups.length + (pagination.hasNextPage ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index == groups.length) {
-                    Future.microtask(() => ref.read(analysisReportProvider.notifier).loadNextPage());
-                    return const Padding(
-                      padding: EdgeInsets.all(AppSpacing.md),
-                      child: Center(
-                        child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.4)),
-                      ),
-                    );
-                  }
-                  return ContentWidth(child: _buildGroupCard(groups[index]));
-                },
-              ),
-            );
-          },
-          loading: () => const LoadingState(message: 'Loading your reports…'),
-          error: (err, stack) => ErrorState(
-            title: 'Couldn\'t load reports',
-            message: friendlyErrorMessage(err),
-            onRetry: () => ref.invalidate(analysisReportProvider),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGroupCard(AnalysisReportGroup group) {
-    final p = context.palette;
-    final isSelected = _selectedGroupIds.contains(group.groupId);
-    final isExpanded = _expandedGroupIds.contains(group.groupId);
-    final statusLabel = group.statusLabel;
-    final style = _statusStyle(statusLabel);
-
-    final dateStr = group.createdAt != null
-        ? DateFormat('dd MMM yyyy, hh:mm a').format(group.createdAt!.toLocal())
-        : '';
-
-    return AppCard(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: EdgeInsets.zero,
-      color: isSelected ? p.primarySoft : null,
-      borderColor: isSelected ? p.primary : null,
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: AppRadius.lgAll,
-          onLongPress: () => _enterSelectionMode(group.groupId),
-          onTap: () {
-            if (_isSelectionMode) {
-              _toggleSelection(group.groupId);
-            } else {
-              _toggleExpand(group.groupId);
-            }
-          },
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xs),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Header: icon / checkbox, title + status, overflow menu
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_isSelectionMode)
-                      SizedBox(
-                        width: 40,
-                        height: 40,
-                        child: Checkbox(value: isSelected, onChanged: (_) => _toggleSelection(group.groupId)),
-                      )
-                    else
-                      const IconTile(icon: Icons.assignment_outlined, tone: AppTone.brand),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            group.title,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                          StatusBadge(label: statusLabel, tone: style.tone, icon: style.icon, dense: true),
-                        ],
-                      ),
-                    ),
-                    if (!_isSelectionMode)
-                      SizedBox(
-                        width: 32,
-                        height: 32,
-                        child: PopupMenuButton<String>(
-                          tooltip: 'More actions',
-                          padding: EdgeInsets.zero,
-                          iconSize: 20,
-                          icon: Icon(Icons.more_vert_rounded, color: p.textTertiary),
-                          onSelected: (value) {
-                            if (value == 'delete') _confirmDeleteSingle(group);
-                          },
-                          itemBuilder: (_) => [
-                            PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete_outline_rounded, size: 20, color: p.danger.fg),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  Text('Delete', style: TextStyle(color: p.danger.fg)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-
-                // Details
-                const SizedBox(height: AppSpacing.sm),
-                Divider(height: 1, color: p.border),
-                const SizedBox(height: AppSpacing.xs),
-                if (group.patientName.isNotEmpty)
-                  _buildMetaRow(Icons.person_outline_rounded, 'Patient', group.patientName),
-                if (group.displayVisitDate.isNotEmpty)
-                  _buildMetaRow(Icons.calendar_today_outlined, 'Prescription date', group.displayVisitDate)
-                else if (group.visitDate.isNotEmpty)
-                  _buildMetaRow(Icons.calendar_today_outlined, 'Prescription date', group.visitDate),
-                _buildMetaRow(Icons.policy_outlined, 'Policies checked', '${group.policyCount}'),
-                if (dateStr.isNotEmpty) _buildMetaRow(Icons.schedule_rounded, 'Checked on', dateStr),
-                if (group.displayProcessingTime.isNotEmpty)
-                  _buildMetaRow(Icons.timer_outlined, 'Processing time', group.displayProcessingTime),
-
-                // Expand / collapse toggle for the per-policy results
-                if (group.policyReports.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Divider(height: 1, color: p.border),
-                  InkWell(
-                    borderRadius: AppRadius.smAll,
-                    onTap: () => _toggleExpand(group.groupId),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              isExpanded
-                                  ? 'Hide policy results'
-                                  : 'View policy results (${group.policyReports.length})',
-                              style: context.text.labelLarge?.copyWith(color: p.primary, fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          Icon(
-                            isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                            color: p.primary,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ] else
-                  const SizedBox(height: AppSpacing.xs),
-
-                // Nested policies (visible when expanded)
-                if (isExpanded && group.policyReports.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: group.policyReports.map(_buildNestedPolicyCard).toList(),
-                    ),
-                  ),
-              ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// One policy's result inside an expanded analysis group.
-  Widget _buildNestedPolicyCard(PolicyReportRow policy) {
-    final p = context.palette;
-    final style = _statusStyle(policy.statusLabel);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-      decoration: BoxDecoration(
-        color: p.surfaceMuted,
-        borderRadius: AppRadius.mdAll,
-        border: Border.all(color: p.border),
-      ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: AppRadius.mdAll,
-          onTap: () {
-            if (policy.hasReport) {
-              context.push('/summary/${policy.reportId}');
-            }
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const IconTile(icon: Icons.shield_outlined, tone: AppTone.brand, size: 34),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        policy.displayName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: context.text.titleSmall,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        policy.policyNumber.isNotEmpty
-                            ? 'Policy No: ${policy.policyNumber}'
-                            : (policy.insuranceCompany.isNotEmpty ? policy.insuranceCompany : 'Policy No: ---'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: context.text.bodySmall,
-                      ),
-                      if (policy.displayPeriod.isNotEmpty)
-                        Text(
-                          'Period: ${policy.displayPeriod}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: context.text.bodySmall,
+            const SizedBox(height: 22),
+            ...<Widget>[
+              if (error != null && !isLoading)
+                SavedListError(
+                  error: error,
+                  offlineMessage: hasSaved ? "You're offline. Showing saved checks." : "You're offline.",
+                  message: 'Couldn’t load checks.',
+                  onRetry: refresh,
+                ),
+              if (page == null && isLoading) const SavedListSkeleton(),
+              if (page != null && source != null) ...[
+                if (page.docs.isEmpty && _filter == AppCheckFilter.all)
+                  AppEmptyState(
+                    illustration: AppIllustrationKind.prescription,
+                    message: 'No checks yet',
+                    actionLabel: 'Start a check',
+                    onAction: startCheck,
+                  )
+                else if (byMonth.isEmpty)
+                  const SavedListMessage('No checks match this filter.'),
+                for (final entry in byMonth.entries) ...[
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(start: DsSpace.s4),
+                    child: Text(
+                      entry.key,
+                      style: AppTextStyles.captionStrong.copyWith(color: context.colors.textSecondary),
+                    ),
+                  ),
+                  const SizedBox(height: 9),
+                  AppRowGroup(
+                    rows: [
+                      for (final (group, check) in entry.value)
+                        AppCheckRow(
+                          grouped: true,
+                          check: check,
+                          onAction: selecting || check.actionRoute == null
+                              ? null
+                              : () => context.push(check.actionRoute!, extra: group),
+                          selected: itemSelection(_deletableId(group, check)),
+                          onLongPress: selecting || _deletableId(group, check).isEmpty
+                              ? null
+                              : () => beginSelection(check.id),
+                          onTap: selecting && _deletableId(group, check).isNotEmpty
+                              ? () => toggleItem(check.id)
+                              : () => context.push(check.route, extra: group),
                         ),
-                      const SizedBox(height: AppSpacing.xs),
-                      StatusBadge(label: policy.statusLabel, tone: style.tone, icon: style.icon, dense: true),
-                      if (policy.isFailed && policy.errorMessage.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(policy.errorMessage, style: context.text.bodySmall?.copyWith(color: p.danger.fg)),
-                      ],
                     ],
                   ),
-                ),
-                if (policy.hasReport)
-                  Padding(
-                    padding: const EdgeInsets.only(left: AppSpacing.xxs, top: 6),
-                    child: Icon(Icons.chevron_right_rounded, size: 22, color: p.textTertiary),
-                  ),
+                  const SizedBox(height: DsSpace.s24),
+                ],
+                moreStatus(source, fetch),
               ],
+            ].map(
+              (child) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: DsSpace.screenPadding),
+                child: child,
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
-  }
-
-  /// Icon + label + value metadata row. Labels sit in a fixed-width column so
-  /// every value in the card lines up.
-  Widget _buildMetaRow(IconData icon, String label, String value) {
-    if (value.trim().isEmpty || value.trim() == '---' || value.trim() == 'N/A') {
-      return const SizedBox.shrink();
-    }
-    final p = context.palette;
-    final base = context.text.bodyMedium?.copyWith(fontSize: 13, height: 1.4);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Icon(icon, size: 15, color: p.textTertiary),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          SizedBox(
-            width: 116,
-            child: Text(label, style: base?.copyWith(color: p.textTertiary)),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: Text(value, style: base?.copyWith(color: p.textPrimary, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
+    return Column(
+      children: [
+        if (selecting)
+          selectionHeader(source, fetch, (group) => _deletableId(group, CheckSummary.fromGroup(group))),
+        Expanded(child: list),
+        if (selecting)
+          selectionFooter(singular: 'check', plural: 'checks', isDocument: false, delete: delete),
+      ],
     );
   }
 }

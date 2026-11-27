@@ -3,8 +3,8 @@ import 'dart:io' show HttpClient;
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'auth_interceptor.dart';
-import 'package:flutter/foundation.dart';
 import 'retry_interceptor.dart';
+import 'server_error_message.dart';
 import '../config/env_config.dart';
 
 class ApiClient {
@@ -18,9 +18,10 @@ class ApiClient {
   ApiClient._internal() {
     dio = Dio(BaseOptions(
       baseUrl: EnvConfig.apiBaseUrl,
-      connectTimeout: const Duration(seconds: 60),
+      connectTimeout: Duration(seconds: EnvConfig.isProd ? 12 : 3),
       sendTimeout: const Duration(seconds: 120),
-      receiveTimeout: const Duration(seconds: 600),  // 10 min — covers multi-page parallel OCR
+      // Allow a hosted cold start. Document analysis itself runs in a background job.
+      receiveTimeout: Duration(seconds: EnvConfig.isProd ? 80 : 20),
     ));
 
     // The server closes idle keep-alive connections after 5 s, while Dart keeps
@@ -32,12 +33,8 @@ class ApiClient {
     );
 
     dio.interceptors.add(AuthInterceptor());
-    dio.interceptors.add(RetryInterceptor(dio: dio));
+    dio.interceptors.add(RetryInterceptor(dio: dio, retryNetworkErrors: EnvConfig.isProd));
     
-    // Only log in development
-    if (!EnvConfig.isProd) {
-      dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
-    }
     
     dio.interceptors.add(InterceptorsWrapper(
       onError: (DioException e, handler) {
@@ -47,39 +44,31 @@ class ApiClient {
           case DioExceptionType.connectionTimeout:
           case DioExceptionType.sendTimeout:
           case DioExceptionType.receiveTimeout:
-            friendlyMessage = 'Connection timed out. Please check your internet connection.';
+          case DioExceptionType.connectionError:
+          case DioExceptionType.unknown:
+            friendlyMessage = serverErrorMessage(e) ?? friendlyMessage;
             break;
           case DioExceptionType.badCertificate:
             friendlyMessage = 'Secure connection failed. Please ensure your network is secure.';
             break;
           case DioExceptionType.badResponse:
             final statusCode = e.response?.statusCode;
-            if (statusCode == 401 || statusCode == 403) {
+            if (statusCode == 401) {
               friendlyMessage = 'Authentication failed. Please log in again.';
             } else if (statusCode != null && statusCode >= 500) {
-              friendlyMessage = 'Our servers are currently unreachable. Please try again later.';
+              friendlyMessage = serverErrorMessage(e)!;
             } else {
-              friendlyMessage = e.response?.data?['message'] ?? friendlyMessage;
+              final body = e.response?.data;
+              final message = body is Map ? body['message'] ?? body['detail'] : null;
+              if (message is String) friendlyMessage = message;
             }
-            break;
-          case DioExceptionType.connectionError:
-            friendlyMessage = 'No internet connection. Please check your network settings.';
             break;
           default:
             break;
         }
 
-        if (!EnvConfig.isProd) {
-          debugPrint('Global Error: ${e.message}');
-        }
-
         // Clone the exception to override the message for UI consumption
-        final customException = DioException(
-          requestOptions: e.requestOptions,
-          response: e.response,
-          type: e.type,
-          error: friendlyMessage,
-        );
+        final customException = e.copyWith(message: friendlyMessage);
         
         return handler.next(customException);
       },

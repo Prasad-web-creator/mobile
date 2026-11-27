@@ -7,6 +7,16 @@ class PaginationResponse<T> {
   final bool hasPrevPage;
   final bool hasNextPage;
 
+  PaginationResponse<T> append(PaginationResponse<T> next) => PaginationResponse(
+    docs: [...docs, ...next.docs],
+    totalDocs: next.totalDocs,
+    limit: next.limit,
+    totalPages: next.totalPages,
+    page: next.page,
+    hasPrevPage: next.hasPrevPage,
+    hasNextPage: next.hasNextPage && next.docs.isNotEmpty,
+  );
+
   PaginationResponse({
     required this.docs,
     required this.totalDocs,

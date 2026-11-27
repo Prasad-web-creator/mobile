@@ -34,7 +34,6 @@ class AnalysisNotifier extends Notifier<AsyncValue<Map<String, dynamic>>> {
     _cancelToken = CancelToken();
     ref.onDispose(() => _cancelToken?.cancel());
 
-    developer.log('[AnalysisNotifier] startAnalysis called. prescription=${params.prescriptionPath}');
     state = const AsyncValue.loading();
     try {
       final repository = ref.read(analysisRepositoryProvider);
@@ -47,13 +46,12 @@ class AnalysisNotifier extends Notifier<AsyncValue<Map<String, dynamic>>> {
       developer.log('[AnalysisNotifier] startAnalysis success. status=${result['status']}');
       state = AsyncValue.data(result);
     } catch (e, st) {
-      developer.log('[AnalysisNotifier] startAnalysis error: $e');
+      developer.log('[AnalysisNotifier] Analysis request failed.');
       state = AsyncValue.error(e, st);
     }
   }
 
   Future<void> submitAnswers(String sessionId, Map<String, dynamic> answers) async {
-    developer.log('[AnalysisNotifier] submitAnswers called. sessionId=$sessionId, answers=$answers');
     _cancelToken = CancelToken();
     state = const AsyncValue.loading();
     try {
@@ -66,7 +64,7 @@ class AnalysisNotifier extends Notifier<AsyncValue<Map<String, dynamic>>> {
       developer.log('[AnalysisNotifier] submitAnswers success. status=${result['status']}');
       state = AsyncValue.data(result);
     } catch (e, st) {
-      developer.log('[AnalysisNotifier] submitAnswers error: $e');
+      developer.log('[AnalysisNotifier] Could not submit clarification answers.');
       state = AsyncValue.error(e, st);
     }
   }

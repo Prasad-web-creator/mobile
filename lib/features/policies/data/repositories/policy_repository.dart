@@ -53,48 +53,6 @@ class PolicyRepository {
     }
   }
 
-  Future<Policy> createPolicy(Map<String, dynamic> data) async {
-    try {
-      final response = await _dio.post('/policies', data: data);
-      return Policy.fromJson(response.data);
-    } on DioException catch (e, st) {
-      throw AppException(
-        statusCode: e.response?.statusCode,
-        message: e.response?.data?['message'] ?? e.message ?? 'Unknown error',
-        responseBody: e.response?.data,
-        originalException: e,
-        stackTrace: st,
-      );
-    } catch (e, st) {
-      throw AppException(
-        message: 'Failed to create policy: $e',
-        originalException: e,
-        stackTrace: st,
-      );
-    }
-  }
-
-  Future<Policy> updatePolicy(String id, Map<String, dynamic> data) async {
-    try {
-      final response = await _dio.put('/policies/$id', data: data);
-      return Policy.fromJson(response.data);
-    } on DioException catch (e, st) {
-      throw AppException(
-        statusCode: e.response?.statusCode,
-        message: e.response?.data?['message'] ?? e.message ?? 'Unknown error',
-        responseBody: e.response?.data,
-        originalException: e,
-        stackTrace: st,
-      );
-    } catch (e, st) {
-      throw AppException(
-        message: 'Failed to update policy: $e',
-        originalException: e,
-        stackTrace: st,
-      );
-    }
-  }
-
   Future<void> deletePolicy(String id) async {
     try {
       await _dio.delete('/policies/$id');
@@ -115,9 +73,10 @@ class PolicyRepository {
     }
   }
 
-  Future<void> deleteBatchPolicies(List<String> ids) async {
+  Future<int> deleteBatchPolicies(List<String> ids) async {
     try {
-      await _dio.post('/policies/batch-delete', data: {'ids': ids});
+      final response = await _dio.post<Map<String, dynamic>>('/policies/batch-delete', data: {'ids': ids});
+      return (response.data!['deletedCount'] as num).toInt();
     } on DioException catch (e, st) {
       throw AppException(
         statusCode: e.response?.statusCode,

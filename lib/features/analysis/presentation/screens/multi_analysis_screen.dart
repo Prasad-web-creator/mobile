@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/design/widgets/app_shells.dart';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -5,16 +6,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:claimsupport/core/network/api_client.dart';
 import 'package:claimsupport/core/utils/shared_prefs.dart';
 import 'package:claimsupport/core/widgets/app_widgets.dart';
+import 'package:claimsupport/features/analysis/data/repositories/analysis_repository.dart';
 import 'package:claimsupport/features/analysis/data/models/multi_analysis_session.dart';
 import 'package:claimsupport/features/analysis/presentation/controllers/multi_analysis_controller.dart';
 import 'package:claimsupport/features/analysis/presentation/widgets/clarification_dialog.dart';
 
 /// Multi-policy analysis: one prescription, several policies, one row per policy.
 class MultiAnalysisScreen extends ConsumerStatefulWidget {
-  const MultiAnalysisScreen({super.key});
+  const MultiAnalysisScreen({super.key, this.resumeJobId, this.resumeSessionId});
+
+  final String? resumeJobId;
+  final String? resumeSessionId;
 
   @override
   ConsumerState<MultiAnalysisScreen> createState() => _MultiAnalysisScreenState();
@@ -32,8 +36,16 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
   }
 
   Future<void> _start() async {
-    if (_started) return;
+    if (_started || !mounted) return;
     _started = true;
+    if (widget.resumeJobId case final jobId?) {
+      await ref.read(multiAnalysisJobProvider.notifier).resumeJob(jobId);
+      return;
+    }
+    if (widget.resumeSessionId case final sessionId?) {
+      await ref.read(multiAnalysisJobProvider.notifier).resumeSession(sessionId);
+      return;
+    }
 
     final prefs = SharedPrefs.instance;
     final prescriptionPath = prefs.getString('prescription_path');
@@ -53,19 +65,23 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
       return;
     }
 
+    final draftJob = prefs.getString(analysisDraftKey);
     await ref
         .read(multiAnalysisJobProvider.notifier)
         .startAnalysis(MultiAnalysisParams(prescriptionPath: prescriptionPath, policyIds: policyIds));
+    if (mounted && draftJob != null && ref.read(multiAnalysisJobProvider).hasValue) {
+      context.pushReplacement('/check/processing/${Uri.encodeComponent(draftJob)}');
+    }
   }
 
   /// Show the questions of [target] (when the user taps that policy's
   /// "Answer question"), or of the first policy that is waiting.
   void _maybeShowClarification(MultiAnalysisSession session, {PolicyAnalysisResult? target}) {
-    if (_dialogShowing || !mounted) return;
+    if (_dialogShowing || !mounted || session.status == 'running') return;
     final pending = (target != null && target.isWaitingForUser && target.questions.isNotEmpty)
         ? target
         : session.pendingClarification;
-    if (pending == null) return;
+    if (pending == null || (target == null && pending.policyId == _answeringPolicyId)) return;
 
     _dialogShowing = true;
     _answeringPolicyId = pending.policyId;
@@ -100,24 +116,12 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
         onCancel: () {
           Navigator.of(dialogContext).pop();
           _dialogShowing = false;
-          _answeringPolicyId = null;
         },
       ),
     ).then((_) => _dialogShowing = false);
   }
 
-  Future<void> _openReport(String reportId) async {
-    // Reuse the existing single-report summary screen.
-    try {
-      final response = await ApiClient().dio.get('/analysis/$reportId');
-      if (!mounted) return;
-      SharedPrefs.instance.setString('analysis_result', jsonEncode(response.data));
-      if (mounted) context.push('/summary/$reportId');
-    } catch (e) {
-      if (!mounted) return;
-      showAppSnackBar(context, 'Could not open report. ${friendlyErrorMessage(e)}', tone: AppTone.danger);
-    }
-  }
+  void _openReport(String reportId) => context.push('/summary/$reportId');
 
   @override
   Widget build(BuildContext context) {
@@ -142,15 +146,22 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
       });
     });
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Policy Comparison'),
-        leading: IconButton(
-          tooltip: 'Close',
-          icon: const Icon(Icons.close_rounded),
-          onPressed: () => context.go('/dashboard'),
-        ),
-      ),
+    return FlowShell(
+      title: 'Policy Comparison',
+      onClose: () => context.go('/dashboard'),
+      action: (state.asData?.value.canCancel ?? false)
+          ? TextButton(
+              onPressed: () async {
+                try {
+                  await ref.read(multiAnalysisJobProvider.notifier).cancelAnalysis();
+                } catch (error) {
+                  if (!context.mounted) return;
+                  showAppSnackBar(context, friendlyErrorMessage(error), tone: AppTone.warning);
+                }
+              },
+              child: const Text('Cancel analysis'),
+            )
+          : null,
       body: SafeArea(
         top: false,
         child: state.when(
@@ -166,7 +177,7 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
   /// with genuinely nothing to measure yet. Once it returns, every indicator on
   /// this screen is driven by steps the backend reports as finished.
   Widget _buildLoading() {
-    return const LoadingState(message: 'Setting up your comparison…');
+    return const LoadingState(message: 'Connecting to the server and preparing analysis…');
   }
 
   /// Session-wide progress: steps the backend has actually completed out of the
@@ -245,6 +256,16 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
   }
 
   Widget _buildSession(MultiAnalysisSession session) {
+    if (session.status == 'failed' &&
+        session.errorMessage.isNotEmpty &&
+        !session.policyAnalyses.any((policy) => policy.hasReport || policy.errorMessage.isNotEmpty)) {
+      return EmptyState(
+        icon: Icons.info_outline_rounded,
+        title: 'Analysis ended',
+        message: session.errorMessage,
+        action: OutlinedButton(onPressed: () => context.go('/dashboard'), child: const Text('Back to Home')),
+      );
+    }
     final p = context.palette;
     final t = context.text;
 
@@ -309,7 +330,7 @@ class _MultiAnalysisScreenState extends ConsumerState<MultiAnalysisScreen> {
     final p = context.palette;
     final t = context.text;
     final waiting = policy.isWaitingForUser;
-    final showAnswer = policy.isWaitingForUser;
+    final showAnswer = policy.isWaitingForUser && session.status != 'running';
     final showRetry = policy.isFailed;
     // Reports open only once the whole comparison has finished: every
     // policy completed, in manual review, or failed. A policy still

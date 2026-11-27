@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:claimsupport/core/theme/app_palette.dart';
 import 'package:claimsupport/core/theme/app_tokens.dart';
+import 'package:claimsupport/core/config/env_config.dart';
+import 'package:claimsupport/core/network/server_error_message.dart';
 
 export 'package:claimsupport/core/theme/app_palette.dart';
 export 'package:claimsupport/core/theme/app_tokens.dart';
@@ -26,53 +28,6 @@ class ContentWidth extends StatelessWidget {
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: child,
       ),
-    );
-  }
-}
-
-/// Header for the bottom-navigation tab screens (Reports, My Benefits, Profile).
-///
-/// The global AppBar theme uses a tight title spacing that suits screens with a
-/// back button; tab screens have no leading icon, so the title would sit almost
-/// on the screen edge. This bar lines the title up with the page gutter
-/// ([AppSpacing.page]) used by the body content below it.
-class TabAppBar extends StatelessWidget implements PreferredSizeWidget {
-  final String title;
-  final String? subtitle;
-  final List<Widget>? actions;
-
-  const TabAppBar({super.key, required this.title, this.subtitle, this.actions});
-
-  bool get _hasSubtitle => subtitle != null && subtitle!.isNotEmpty;
-
-  @override
-  Size get preferredSize => Size.fromHeight(_hasSubtitle ? 72 : 60);
-
-  @override
-  Widget build(BuildContext context) {
-    return AppBar(
-      automaticallyImplyLeading: false,
-      toolbarHeight: preferredSize.height,
-      titleSpacing: AppSpacing.page,
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          if (_hasSubtitle) ...[
-            const SizedBox(height: 2),
-            Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.text.bodySmall),
-          ],
-        ],
-      ),
-      actions: actions == null
-          ? null
-          : [...actions!, const SizedBox(width: AppSpacing.xs)],
     );
   }
 }
@@ -456,15 +411,21 @@ class ErrorState extends StatelessWidget {
 
 /// Turns an exception into a short, user-facing sentence.
 String friendlyErrorMessage(Object? error) {
+  final serverMessage = serverErrorMessage(error);
+  if (serverMessage != null) return serverMessage;
   final text = (error ?? '').toString();
   final lower = text.toLowerCase();
+  if (lower.contains('could not reach the local backend') ||
+      (!EnvConfig.isProd && (lower.contains('socket') || lower.contains('connection error')))) {
+    return 'Could not reach the local backend. Check its address and confirm it is running.';
+  }
   if (lower.contains('socket') || lower.contains('connection') || lower.contains('network')) {
-    return 'No connection. Please check your internet and try again.';
+    return 'Could not reach the backend. Please try again.';
   }
   if (lower.contains('timeout')) return 'The server took too long to respond. Please try again.';
   if (lower.contains('401') || lower.contains('unauthor')) return 'Your session has expired. Please sign in again.';
   final cleaned = text.replaceFirst(RegExp(r'^(Exception|AppException|DioException[^:]*):\s*'), '');
-  if (cleaned.isEmpty || cleaned.length > 160) {
+  if (cleaned.isEmpty || cleaned.toLowerCase() == 'unknown error' || cleaned.length > 160) {
     return 'We couldn\'t load this information. Please try again.';
   }
   return cleaned;
@@ -527,44 +488,6 @@ class SecondaryButton extends StatelessWidget {
     return expand ? SizedBox(width: double.infinity, child: button) : button;
   }
 }
-
-/// Fixed bottom action area (respects the system navigation inset).
-class BottomActionBar extends StatelessWidget {
-  final List<Widget> children;
-
-  const BottomActionBar({super.key, required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Container(
-      decoration: BoxDecoration(
-        color: p.surface,
-        border: Border(top: BorderSide(color: p.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.page, AppSpacing.sm, AppSpacing.page, AppSpacing.sm),
-          child: Column(mainAxisSize: MainAxisSize.min, children: _spaced(children)),
-        ),
-      ),
-    );
-  }
-
-  static List<Widget> _spaced(List<Widget> items) {
-    final out = <Widget>[];
-    for (var i = 0; i < items.length; i++) {
-      if (i > 0) out.add(const SizedBox(height: AppSpacing.xs));
-      out.add(items[i]);
-    }
-    return out;
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Dialogs
-// ─────────────────────────────────────────────────────────────────────────────
 
 /// Standard confirmation dialog. Returns true when the user confirms.
 Future<bool> showConfirmDialog(

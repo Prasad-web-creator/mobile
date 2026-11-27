@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Policy Pal brand navy: launch screen background, matches the Flutter splash. -->
+    <!-- Policy Pal brand navy: native launch screen background. -->
     <color name="splash_background">#0B2350</color>
 </resources>

@@ -2,6 +2,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:claimsupport/core/theme/app_theme.dart';
 import 'package:flutter/foundation.dart';
+import 'package:claimsupport/core/utils/shared_prefs.dart';
 
 class AuthStorage {
   static const _secureStorage = FlutterSecureStorage();
@@ -72,6 +73,13 @@ class AuthStorage {
     try {
       await _secureStorage.delete(key: AppConstants.kAuthTokenKey);
       await _secureStorage.delete(key: AppConstants.kRefreshTokenKey);
+      final preferences = await SharedPrefs.getAsync();
+      for (final key in [
+        SharedPrefs.analysisDraftKey, SharedPrefs.analysisResumeKey,
+        'prescription_path', 'prescription_manual_text', 'is_manual_prescription', 'analysis_result', 'policy_ids',
+      ]) {
+        await preferences.remove(key);
+      }
     } catch (e) {
       debugPrint('AuthStorage clearTokens error: $e');
     }

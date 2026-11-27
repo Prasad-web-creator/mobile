@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/models/retained_page_notifier.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:claimsupport/core/providers.dart';
@@ -8,9 +9,8 @@ final policiesProvider = AsyncNotifierProvider<PoliciesNotifier, PaginationRespo
   return PoliciesNotifier();
 });
 
-class PoliciesNotifier extends AsyncNotifier<PaginationResponse<Policy>> {
+class PoliciesNotifier extends RetainedPageNotifier<Policy> {
   String _searchQuery = '';
-  int _currentPage = 1;
   static const int _limit = 10;
 
   @override
@@ -18,24 +18,16 @@ class PoliciesNotifier extends AsyncNotifier<PaginationResponse<Policy>> {
     ref.onDispose(() {
       _debounceTimer?.cancel();
     });
-    return _fetchPolicies();
+    return super.build();
   }
 
-  Future<PaginationResponse<Policy>> _fetchPolicies() async {
+  @override
+  Future<PaginationResponse<Policy>> fetchPage(int page) {
     final repository = ref.read(policyRepositoryProvider);
-    return await repository.getPolicies(page: _currentPage, limit: _limit, search: _searchQuery);
+    return repository.getPolicies(page: page, limit: _limit, search: _searchQuery);
   }
 
-  Future<void> fetchPolicies({bool isRefresh = false}) async {
-    if (isRefresh) {
-      _currentPage = 1;
-      state = const AsyncLoading();
-      state = await AsyncValue.guard(() => _fetchPolicies());
-    } else {
-      state = const AsyncLoading();
-      state = await AsyncValue.guard(() => _fetchPolicies());
-    }
-  }
+  Future<void> fetchPolicies({bool isRefresh = false}) => refreshPage(firstPage: isRefresh);
 
   Timer? _debounceTimer;
 
@@ -43,50 +35,27 @@ class PoliciesNotifier extends AsyncNotifier<PaginationResponse<Policy>> {
     if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 500), () {
       _searchQuery = query;
-      _currentPage = 1;
-      fetchPolicies();
+      fetchPolicies(isRefresh: true);
     });
   }
 
-  Future<void> loadNextPage() async {
-    final currentState = state.value;
-    if (currentState != null && currentState.hasNextPage) {
-      _currentPage++;
-      try {
-        final newResponse = await _fetchPolicies();
-        state = AsyncData(PaginationResponse(
-          docs: [...currentState.docs, ...newResponse.docs],
-          totalDocs: newResponse.totalDocs,
-          limit: newResponse.limit,
-          totalPages: newResponse.totalPages,
-          page: newResponse.page,
-          hasPrevPage: newResponse.hasPrevPage,
-          hasNextPage: newResponse.hasNextPage,
-        ));
-      } catch (err, stack) {
-        state = AsyncError(err, stack);
+  Future<void> deletePolicy(String id) async {
+    final repository = ref.read(policyRepositoryProvider);
+    await repository.deletePolicy(id);
+    if (ref.mounted) removeLocally((item) => item.id == id);
+  }
+
+  Future<int> deletePolicies(List<String> ids) async {
+    if (ids.isEmpty) return 0;
+    final repository = ref.read(policyRepositoryProvider);
+    final deleted = await repository.deleteBatchPolicies(ids);
+    if (ref.mounted) {
+      final targets = ids.toSet();
+      final updated = removeLocally((item) => targets.contains(item.id));
+      if (updated != null && updated.docs.length < updated.totalDocs) {
+        unawaited(silentRefreshFirstPage(keepLoadedPages: true));
       }
     }
-  }
-
-  Future<void> deletePolicy(String id) async {
-    try {
-      final repository = ref.read(policyRepositoryProvider);
-      await repository.deletePolicy(id);
-      fetchPolicies(isRefresh: true);
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  Future<void> deletePolicies(List<String> ids) async {
-    if (ids.isEmpty) return;
-    try {
-      final repository = ref.read(policyRepositoryProvider);
-      await repository.deleteBatchPolicies(ids);
-      fetchPolicies(isRefresh: true);
-    } catch (e) {
-      rethrow;
-    }
+    return deleted;
   }
 }

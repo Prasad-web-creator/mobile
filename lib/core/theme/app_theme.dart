@@ -2,61 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:claimsupport/core/theme/app_palette.dart';
 import 'package:claimsupport/core/theme/app_tokens.dart';
+import 'package:claimsupport/core/design/app_colors.dart';
+import 'package:claimsupport/core/design/app_illustration_colors.dart';
 
 export 'package:claimsupport/core/theme/app_palette.dart';
 export 'package:claimsupport/core/theme/app_tokens.dart';
-
-/// Legacy colour constants. New code should use `context.palette` so colours
-/// follow light / dark mode automatically.
-class AppColors {
-  AppColors._();
-
-  // Primary
-  static const Color primary = Color(0xFF1D4ED8);
-  static const Color secondary = Color(0xFF0F766E);
-
-  // Text colors — Light mode
-  static const Color textPrimary = Color(0xFF0F172A);
-  static const Color textSecondary = Color(0xFF475569);
-  static const Color textLabel = Color(0xFF1E293B);
-
-  // Text colors — Dark mode
-  static const Color textPrimaryDark = Color(0xFFE8EDF5);
-  static const Color textSecondaryDark = Color(0xFFA5B1C4);
-
-  // Surfaces — Dark mode
-  static const Color scaffoldDark = Color(0xFF0B1220);
-  static const Color surfaceDark = Color(0xFF121B2D);
-  static const Color cardDark = Color(0xFF121B2D);
-  static const Color inputFillDark = Color(0xFF18233A);
-  static const Color borderDark = Color(0xFF243149);
-
-  // Surfaces — Light mode
-  static const Color scaffoldLight = Color(0xFFF5F7FA);
-  static const Color surfaceLight = Colors.white;
-
-  // Status colors
-  static const Color success = Color(0xFF047857);
-  static const Color danger = Color(0xFFB91C1C);
-  static const Color warning = Color(0xFFB45309);
-  static const Color warningBg = Color(0xFFFFFBEB);
-  static const Color warningBgDark = Color(0xFF2B2110);
-  static const Color warningText = Color(0xFF92400E);
-  static const Color warningTextDark = Color(0xFFFDE68A);
-
-  // Accent colors used in upload areas
-  static const Color iconBgLight = Color(0xFFEFF4FF);
-  static const Color iconAccent = Color(0xFF1D4ED8);
-
-  // Upload area
-  static const Color uploadBgLight = Color(0xFFF1F4F8);
-  static const Color uploadBgDark = Color(0xFF18233A);
-
-  static Color textPrimaryFor(Brightness brightness) => brightness == Brightness.dark ? textPrimaryDark : textPrimary;
-
-  static Color textSecondaryFor(Brightness brightness) =>
-      brightness == Brightness.dark ? textSecondaryDark : textSecondary;
-}
 
 /// Centralized string constants for SharedPreferences keys
 /// and other app-wide values.
@@ -71,10 +21,6 @@ class AppConstants {
 }
 
 class AppTheme {
-  static const Color primaryColor = AppColors.primary;
-  static const Color secondaryColor = AppColors.secondary;
-  static const Color backgroundColor = AppColors.scaffoldLight;
-
   static ThemeData get lightTheme => _build(AppPalette.light, Brightness.light);
   static ThemeData get darkTheme => _build(AppPalette.dark, Brightness.dark);
 
@@ -159,7 +105,11 @@ class AppTheme {
       dividerColor: p.border,
       splashFactory: InkSparkle.splashFactory,
       visualDensity: VisualDensity.standard,
-      extensions: [p],
+      extensions: [
+        p,
+        isDark ? AppColors.dark : AppColors.light,
+        isDark ? AppIllustrationColors.dark : AppIllustrationColors.light,
+      ],
       appBarTheme: AppBarTheme(
         backgroundColor: p.background,
         foregroundColor: p.textPrimary,

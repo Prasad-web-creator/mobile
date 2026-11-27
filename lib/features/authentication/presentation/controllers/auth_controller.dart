@@ -19,13 +19,15 @@ class AuthNotifier extends AsyncNotifier<User?> {
   }
 
   Future<void> updateProfile(String name, String email) async {
-    state = const AsyncLoading();
+    final hasAccount = state.value != null;
+    final activeRef = ref;
+    if (!hasAccount) state = const AsyncLoading();
     try {
       final repository = ref.read(authRepositoryProvider);
       final updatedUser = await repository.updateProfile(name, email);
-      state = AsyncData(updatedUser);
+      if (activeRef.mounted) state = AsyncData(updatedUser);
     } catch (err, stack) {
-      state = AsyncError(err, stack);
+      if (activeRef.mounted && !hasAccount) state = AsyncError(err, stack);
       rethrow;
     }
   }

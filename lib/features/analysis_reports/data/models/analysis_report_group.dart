@@ -1,5 +1,7 @@
 import 'package:intl/intl.dart';
 
+import 'package:claimsupport/core/utils/activity_timestamp.dart';
+
 /// A Coverage Analysis Reports list entry.
 ///
 /// One group = one analysis. When several policies were analysed against the
@@ -21,7 +23,9 @@ class PolicyReportRow {
   final String reportId;
   final String reportLabel;
   final String errorMessage;
+  final String failedAtStage;
   final List<dynamic> questions;
+  final List<String> reasons;
 
   const PolicyReportRow({
     required this.policyId,
@@ -39,13 +43,15 @@ class PolicyReportRow {
     required this.reportId,
     required this.reportLabel,
     required this.errorMessage,
+    this.failedAtStage = '',
     required this.questions,
+    this.reasons = const [],
   });
 
   factory PolicyReportRow.fromJson(Map<String, dynamic> json) {
     return PolicyReportRow(
       policyId: json['policyId']?.toString() ?? '',
-      policyName: json['policyName']?.toString() ?? '',
+      policyName: policyProductName([json['policyName'], json['planName'], json['productName']]) ?? '',
       policyNumber: json['policyNumber']?.toString() ?? '',
       insuranceCompany: json['insuranceCompany']?.toString() ?? '',
       policyStartDate: json['policyStartDate']?.toString() ?? '',
@@ -59,7 +65,12 @@ class PolicyReportRow {
       reportId: json['reportId']?.toString() ?? '',
       reportLabel: json['reportLabel']?.toString() ?? '',
       errorMessage: json['errorMessage']?.toString() ?? '',
+      failedAtStage: json['failedAtStage']?.toString().trim().toLowerCase() ?? '',
       questions: (json['questions'] as List?) ?? const [],
+      reasons: [
+        for (final reason in (json['reasons'] as List? ?? const []).whereType<String>())
+          if (reason.trim().isNotEmpty) reason.trim(),
+      ],
     );
   }
 
@@ -69,10 +80,27 @@ class PolicyReportRow {
   bool get isRunning =>
       status == 'queued' || status == 'extracting' || status == 'analyzing' || status == 'reanalyzing';
 
-  String get displayName {
-    if (policyName.trim().isNotEmpty) return policyName.trim();
-    if (insuranceCompany.trim().isNotEmpty) return insuranceCompany.trim();
-    return 'Policy';
+  String? get productName => policyProductName([policyName]);
+
+  String get displayName => productName ?? policyProductName([insuranceCompany]) ?? 'Policy';
+
+  static String? policyProductName(Iterable<Object?> candidates) {
+    const placeholders = {
+      '',
+      '-',
+      'uploaded policy',
+      'policy',
+      'unknown',
+      'n/a',
+      'null',
+      'none',
+      'not specified',
+    };
+    for (final candidate in candidates.whereType<String>()) {
+      final name = candidate.trim();
+      if (!placeholders.contains(name.toLowerCase())) return name;
+    }
+    return null;
   }
 
   String get displayPeriod {
@@ -109,11 +137,33 @@ class PolicyReportRow {
 
   String get displayProcessingTime =>
       processingTimeMs > 0 ? '${(processingTimeMs / 1000).toStringAsFixed(1)}s' : '';
+
+  Map<String, dynamic> toJson() => {
+    'policyId': policyId,
+    'policyName': policyName,
+    'policyNumber': policyNumber,
+    'insuranceCompany': insuranceCompany,
+    'policyStartDate': policyStartDate,
+    'policyEndDate': policyEndDate,
+    'status': status,
+    'overallStatus': overallStatus,
+    'outcome': outcome,
+    'decisionType': decisionType,
+    'dominanceScore': dominanceScore,
+    'processingTimeMs': processingTimeMs,
+    'reportId': reportId,
+    'reportLabel': reportLabel,
+    'errorMessage': errorMessage,
+    'failedAtStage': failedAtStage,
+    'questions': questions,
+    'reasons': reasons,
+  };
 }
 
 class AnalysisReportGroup {
   final String groupId;
   final String groupType; // 'multi' | 'single'
+  final bool isDurableJob;
   final String prescriptionId;
   final String status;
   final int policyCount;
@@ -122,9 +172,17 @@ class AnalysisReportGroup {
   final List<String> reportIds;
   final List<PolicyReportRow> policyReports;
   final Map<String, dynamic> prescription;
+  final String displayName;
   final DateTime? createdAt;
 
+  /// Multi-policy checks only: the policy the backend ranks best. Empty when
+  /// no policy is covered or partially covered (backend display hint).
+  final String bestPolicyId;
+
   const AnalysisReportGroup({
+    this.displayName = '',
+    this.bestPolicyId = '',
+    this.isDurableJob = false,
     required this.groupId,
     required this.groupType,
     required this.prescriptionId,
@@ -142,21 +200,24 @@ class AnalysisReportGroup {
     return AnalysisReportGroup(
       groupId: json['groupId']?.toString() ?? '',
       groupType: json['groupType']?.toString() ?? 'single',
+      isDurableJob: json['isDurableJob'] == true,
       prescriptionId: json['prescriptionId']?.toString() ?? '',
       status: json['status']?.toString() ?? '',
       policyCount: (json['policyCount'] as num?)?.toInt() ?? 0,
       completedCount: (json['completedCount'] as num?)?.toInt() ?? 0,
       totalProcessingTimeMs: (json['totalProcessingTimeMs'] as num?)?.toInt() ?? 0,
-      reportIds: ((json['reportIds'] as List?) ?? const [])
-          .map((e) => e.toString())
-          .toList(),
+      reportIds: ((json['reportIds'] as List?) ?? const []).map((e) => e.toString()).toList(),
       policyReports: ((json['policyReports'] as List?) ?? const [])
           .map((e) => PolicyReportRow.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList(),
-      prescription: Map<String, dynamic>.from((json['prescription'] as Map?) ?? const {}),
-      createdAt: json['createdAt'] != null
-          ? DateTime.tryParse(json['createdAt'].toString())
-          : null,
+      prescription: Map<String, dynamic>.from(
+        (json['prescriptionJson'] as Map?) ?? (json['prescription'] as Map?) ?? const {},
+      ),
+      displayName: json['displayName']?.toString() ?? '',
+      createdAt: parseActivityTimestamp(json['createdAt']),
+      bestPolicyId:
+          (json['comparisonSummary'] is Map ? json['comparisonSummary']['bestPolicyId'] : null)?.toString() ??
+          '',
     );
   }
 
@@ -213,4 +274,21 @@ class AnalysisReportGroup {
 
   String get displayProcessingTime =>
       totalProcessingTimeMs > 0 ? '${(totalProcessingTimeMs / 1000).toStringAsFixed(1)}s' : '';
+
+  Map<String, dynamic> toJson() => {
+    'groupId': groupId,
+    'groupType': groupType,
+    'isDurableJob': isDurableJob,
+    'prescriptionId': prescriptionId,
+    'status': status,
+    'policyCount': policyCount,
+    'completedCount': completedCount,
+    'totalProcessingTimeMs': totalProcessingTimeMs,
+    'reportIds': reportIds,
+    'policyReports': [for (final row in policyReports) row.toJson()],
+    'prescription': prescription,
+    'displayName': displayName,
+    'createdAt': createdAt?.toIso8601String(),
+    'comparisonSummary': {'bestPolicyId': bestPolicyId},
+  };
 }

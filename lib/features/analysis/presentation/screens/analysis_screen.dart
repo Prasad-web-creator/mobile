@@ -1,3 +1,4 @@
+import 'package:claimsupport/core/design/widgets/app_shells.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:convert';
@@ -66,10 +67,6 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
       final policyPath = prefs.getString('policy_path');
       final policyId = policyPath != null ? null : prefs.getString('policy_id');
 
-      developer.log(
-        '[AnalysisScreen] Starting analysis. prescription=$prescriptionPath, policyPath=$policyPath, policyId=$policyId',
-      );
-
       if (prescriptionPath != null && (policyPath != null || policyId != null)) {
         final params = AnalysisParams(prescriptionPath: prescriptionPath, policyPath: policyPath, policyId: policyId);
         ref.read(analysisJobProvider.notifier).startAnalysis(params);
@@ -109,7 +106,6 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
       builder: (dialogContext) => ClarificationDialog(
         clarificationData: data,
         onSubmit: (answers) {
-          developer.log('[AnalysisScreen] Answers submitted: $answers');
           Navigator.of(dialogContext).pop();
           _dialogShowing = false;
           // Advance to re-analysis stage visually
@@ -347,7 +343,9 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
     }
 
     if (prescriptionPath == null || (policyPath == null && policyId == null)) {
-      return Scaffold(
+      return FlowShell(
+        title: 'Coverage Analysis',
+        onClose: () => context.go('/dashboard'),
         body: SafeArea(
           child: EmptyState(
             icon: Icons.upload_file_outlined,
@@ -402,7 +400,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
         }
       },
       error: (error, st) {
-        developer.log('[AnalysisScreen] Error state: $error');
+        developer.log('[AnalysisScreen] Analysis request failed.');
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && !_hasError) {
             setState(() {
@@ -426,7 +424,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> with SingleTick
       });
     }
 
-    return Scaffold(body: _buildContent(context));
+    return FlowShell(title: 'Coverage Analysis', onClose: () => context.go('/dashboard'), body: _buildContent(context));
   }
 }
 

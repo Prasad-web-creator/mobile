@@ -33,7 +33,6 @@ Map<String, dynamic> _report({
     },
     'documentValidity': {'policyValid': true, 'prescriptionValid': true},
     // Present so the screen does not try to fetch the report again.
-    'referenceComparison': {'available': false},
     'processingTimeMs': 27700,
   };
 }
@@ -106,6 +105,17 @@ Future<Set<String>> _pumpSummary(WidgetTester tester, Map<String, dynamic> repor
 }
 
 void main() {
+  testWidgets('older manual review reports show the unresolved item count', (tester) async {
+    await _pumpSummary(tester, _report(
+      overall: 'Manual Review Required',
+      comparison: [{'item': 'Example item', 'coverageStatus': 'Manual Review'}],
+      breakdown: {'covered': 0, 'partiallyCovered': 0, 'notCovered': 0, 'total': 1},
+    ));
+    expect(find.text('1 item needs manual review before coverage can be determined.'), findsOneWidget);
+    expect(find.text('No evaluated claim items available.'), findsNothing);
+    expect(find.text('Dominance Score'), findsNothing);
+  });
+
   testWidgets('Needs Verification report: card above Policy Summary, 4th count, no new overflow', (tester) async {
     final baseline = await _pumpSummary(tester, _oldReport);
     expect(find.text('Needs Verification'), findsNothing);

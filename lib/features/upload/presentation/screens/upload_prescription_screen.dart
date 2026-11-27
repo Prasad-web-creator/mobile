@@ -1,3 +1,6 @@
+import 'package:claimsupport/core/design/app_icons.dart';
+import 'package:claimsupport/core/design/widgets/app_buttons.dart';
+import 'package:claimsupport/core/design/widgets/app_shells.dart';
 import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -7,12 +10,16 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:claimsupport/core/network/api_client.dart';
+import 'package:claimsupport/features/analysis/data/repositories/analysis_repository.dart';
+import 'package:claimsupport/core/config/app_config_provider.dart';
 import 'package:claimsupport/core/utils/shared_prefs.dart';
 import 'package:claimsupport/core/utils/device_app_info.dart';
 import 'package:claimsupport/core/widgets/app_widgets.dart';
 
 class UploadPrescriptionScreen extends ConsumerStatefulWidget {
-  const UploadPrescriptionScreen({super.key});
+  const UploadPrescriptionScreen({super.key, this.resumeDraft = false});
+
+  final bool resumeDraft;
 
   @override
   ConsumerState<UploadPrescriptionScreen> createState() => _UploadPrescriptionScreenState();
@@ -22,12 +29,23 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
   final TextEditingController _manualTextController = TextEditingController();
   String? _selectedFileName;
   String? _uploadedPath;
+  String? _prescriptionRecordId;
   bool _isUploading = false;
   bool _isExtracting = false;
+  String? _savedManualText;
+  String? _savedManualId;
+  CancelToken? _extractionToken;
+  AppRuntimeConfig get _config => ref.read(appConfigProvider).value ?? AppRuntimeConfig.defaults;
 
   @override
   void initState() {
     super.initState();
+    final savedId = widget.resumeDraft ? SharedPrefs.instance.getString('prescription_path') : null;
+    if (savedId != null) {
+      _prescriptionRecordId = savedId;
+      _uploadedPath = savedId;
+      _selectedFileName = 'Saved prescription';
+    }
     _manualTextController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -35,14 +53,17 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
 
   @override
   void dispose() {
+    _extractionToken?.cancel();
     _manualTextController.dispose();
     super.dispose();
   }
 
   void _clearUploadedFile() {
+    SharedPrefs.instance.remove('prescription_path');
     setState(() {
       _selectedFileName = null;
       _uploadedPath = null;
+      _prescriptionRecordId = null;
     });
   }
 
@@ -82,79 +103,66 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
   Future<void> _pickAndUploadFile() async {
     FilePickerResult? result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'docx'],
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
     );
 
-    if (result != null && result.files.single.path != null) {
-      setState(() {
-        _selectedFileName = result.files.single.name;
-        _isUploading = true;
-      });
+    if (!mounted) return;
+    final file = result?.files.single;
+    if (file != null && file.path != null) {
+      if (!_config.acceptsFileSize(file.size)) {
+        showAppSnackBar(context, _config.uploadLimitMessage, tone: AppTone.warning);
+        return;
+      }
+      setState(() => _isUploading = true);
+      String? uploadedId;
 
       try {
-        final formData = FormData.fromMap({'file': await MultipartFile.fromFile(result.files.single.path!)});
+        final formData = FormData.fromMap({
+          'file': await MultipartFile.fromFile(file.path!),
+          'documentType': 'prescription',
+        });
 
-        final response = await ApiClient().dio.post('/upload', data: formData);
-
-        if (response.statusCode == 200) {
-          _uploadedPath = response.data['fileId'].toString();
-          final isImageBased =
-              response.data['isImageBased'] == true ||
-              _selectedFileName?.toLowerCase().endsWith('.jpg') == true ||
-              _selectedFileName?.toLowerCase().endsWith('.jpeg') == true ||
-              _selectedFileName?.toLowerCase().endsWith('.png') == true;
-          final prefs = SharedPrefs.instance;
-          await prefs.setString('prescription_path', _uploadedPath!);
-          await prefs.setBool('prescription_is_image_based', isImageBased);
-
-          try {
-            final agreementData = await DeviceAppInfo.buildAgreementData();
-            await ApiClient().dio.post(
-              '/prescriptions',
-              data: {
-                'hospitalName': '',
-                'gridFsFileId': _uploadedPath,
-                'originalFileName': _selectedFileName,
-                'agreement': agreementData,
-              },
-            );
-
-            // File card shows the inline success state directly without obscuring action buttons.
-          } catch (e) {
-            debugPrint("Failed to save prescription record: $e");
-            try {
-              await ApiClient().dio.delete('/upload/$_uploadedPath');
-            } catch (deleteError) {
-              debugPrint("Failed to rollback uploaded file: $deleteError");
-            }
-            if (mounted) {
-              showAppSnackBar(
-                context,
-                'Failed to save prescription record. Please try again.',
-                tone: AppTone.danger,
-              );
-              setState(() {
-                _isUploading = false;
-                _uploadedPath = null;
-                _selectedFileName = null;
-              });
-            }
-            return;
-          }
-        }
+        final response = await ApiClient().dio.post('/upload', data: formData, options: analysisUploadOptions());
+        uploadedId = response.data['fileId'] as String?;
+        if (uploadedId == null) throw StateError('Upload returned no document ID');
+        final agreementData = await DeviceAppInfo.buildAgreementData();
+        final saved = await ApiClient().dio.post(
+          '/prescriptions',
+          options: analysisUploadOptions(),
+          data: {
+            'hospitalName': '',
+            'gridFsFileId': uploadedId,
+            'originalFileName': file.name,
+            'agreement': agreementData,
+          },
+        );
+        final recordId = (saved.data['_id'] ?? saved.data['id'])?.toString();
+        if (recordId == null) throw StateError('No prescription record returned');
+        await SharedPrefs.instance.setString('prescription_path', recordId);
+        await SharedPrefs.instance.setBool('prescription_is_image_based', response.data['isImageBased'] == true);
+        if (!mounted) return;
+        setState(() {
+          _uploadedPath = uploadedId;
+          _prescriptionRecordId = recordId;
+          _selectedFileName = file.name;
+        });
       } on DioException catch (e) {
+        await _rollbackUpload(uploadedId);
         if (mounted) {
           String msg;
-          if (e.type == DioExceptionType.connectionError ||
+          if (e.response?.statusCode == 413) {
+            msg = _apiMessage(e, _config.uploadLimitMessage);
+          } else if (e.type == DioExceptionType.connectionError ||
               e.type == DioExceptionType.connectionTimeout ||
               e.type == DioExceptionType.receiveTimeout) {
-            msg = "Unable to connect to the server. Please check your internet connection and try again.";
+            msg = friendlyErrorMessage(e);
           } else {
             msg = "Our servers are experiencing issues processing your upload. Please try again later.";
           }
           showAppSnackBar(context, msg, tone: AppTone.danger);
         }
-      } catch (e) {
+      } catch (_) {
+        await _rollbackUpload(uploadedId);
         if (mounted) {
           showAppSnackBar(
             context,
@@ -169,6 +177,21 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
           });
         }
       }
+    }
+  }
+
+  String _apiMessage(DioException error, String fallback) {
+    final data = error.response?.data;
+    final message = data is Map ? data['message'] ?? data['detail'] : null;
+    return message is String ? message : fallback;
+  }
+
+  Future<void> _rollbackUpload(String? fileId) async {
+    if (fileId == null) return;
+    try {
+      await ApiClient().dio.delete('/upload/$fileId');
+    } on DioException {
+      // An unlinked upload is eligible for server cleanup.
     }
   }
 
@@ -204,45 +227,64 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
     try {
       if (hasManualText) {
         try {
-          final agreementData = await DeviceAppInfo.buildAgreementData();
-          final response = await ApiClient().dio.post(
-            '/prescriptions',
-            data: {
-              'hospitalName': '',
-              'isManual': true,
-              'extractedPrescriptionText': manualText,
-              'originalFileName': 'Manual Prescription',
-              'agreement': agreementData,
-            },
-          );
+          if (_savedManualText != manualText || _savedManualId == null) {
+            final agreementData = await DeviceAppInfo.buildAgreementData();
+            final response = await ApiClient().dio.post(
+              '/prescriptions',
+              options: analysisUploadOptions(),
+              data: {
+                'hospitalName': '',
+                'isManual': true,
+                'extractedPrescriptionText': manualText,
+                'originalFileName': 'Manual Prescription',
+                'agreement': agreementData,
+              },
+            );
 
-          String? rxId;
-          if (response.statusCode == 200 || response.statusCode == 201) {
-            if (response.data is Map) {
-              rxId =
-                  response.data['id']?.toString() ??
-                  response.data['data']?['id']?.toString() ??
-                  response.data['_id']?.toString();
+            String? rxId;
+            if (response.statusCode == 200 || response.statusCode == 201) {
+              if (response.data is Map) {
+                rxId =
+                    response.data['id']?.toString() ??
+                    response.data['data']?['id']?.toString() ??
+                    response.data['_id']?.toString();
+              }
             }
-          }
 
+            if (rxId == null) throw StateError('No prescription record returned');
+            _savedManualText = manualText;
+            _savedManualId = rxId;
+          }
           final prefs = SharedPrefs.instance;
-          await prefs.setString('prescription_path', rxId ?? manualText);
-          await prefs.setString('prescription_manual_text', manualText);
+          await prefs.setString('prescription_path', _savedManualId!);
+          await prefs.remove('prescription_manual_text');
           await prefs.setBool('is_manual_prescription', true);
-        } catch (e) {
-          debugPrint("Failed to save manual prescription record: $e");
-          final prefs = SharedPrefs.instance;
-          await prefs.setString('prescription_path', manualText);
-          await prefs.setString('prescription_manual_text', manualText);
-          await prefs.setBool('is_manual_prescription', true);
+        } on DioException catch (error) {
+          if (mounted) {
+            showAppSnackBar(
+              context,
+              _apiMessage(error, 'Could not save the prescription. Please try again.'),
+              tone: AppTone.warning,
+            );
+          }
+          return;
         }
       } else {
+        final recordId = _prescriptionRecordId;
         final prefs = SharedPrefs.instance;
+        await prefs.setString('prescription_path', recordId ?? _uploadedPath!);
         await prefs.setBool('is_manual_prescription', false);
         await prefs.remove('prescription_manual_text');
       }
 
+      final prefs = SharedPrefs.instance;
+      final jobId = prefs.getString(analysisDraftKey);
+      final prescriptionId = prefs.getString('prescription_path');
+      if (jobId != null && prescriptionId != null && mounted) {
+        final token = _extractionToken = CancelToken();
+        await AnalysisRepository().preparePrescription(jobId, prescriptionId, token);
+      }
+      if (!mounted) return;
       List<dynamic> policiesList = [];
       bool hasPolicies = false;
 
@@ -258,7 +300,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
           }
         }
       } catch (e) {
-        debugPrint("Failed to fetch policies: $e");
+        debugPrint('Failed to fetch policies.');
       }
 
       if (!mounted) return;
@@ -318,7 +360,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
         },
       );
     } catch (err) {
-      debugPrint("Error in _processNext: $err");
+      debugPrint('Could not proceed from prescription upload.');
       if (mounted) {
         showAppSnackBar(context, friendlyErrorMessage(err), tone: AppTone.danger);
       }
@@ -335,6 +377,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
     // Multiple policies may be selected: the prescription is analysed against
     // each one independently.
     final Set<String> localSelectedPolicyIds = {};
+    final config = _config;
 
     showDialog(
       context: context,
@@ -354,7 +397,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                   const SizedBox(height: 4),
                   Text(
                     localSelectedPolicyIds.isEmpty
-                        ? "Choose one or more policies to compare"
+                        ? "Choose up to ${config.maxPolicies} policies"
                         : "${localSelectedPolicyIds.length} selected",
                     style: dialogCtx.text.bodySmall?.copyWith(
                       color: localSelectedPolicyIds.isEmpty ? pal.textTertiary : pal.primary,
@@ -395,9 +438,14 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                       borderRadius: AppRadius.mdAll,
                       child: InkWell(
                         onTap: () {
+                          final id = p['id']?.toString();
+                          if (id == null) return;
+                          if (!localSelectedPolicyIds.contains(id) &&
+                              localSelectedPolicyIds.length >= config.maxPolicies) {
+                            showAppSnackBar(context, config.policyLimitMessage, tone: AppTone.warning);
+                            return;
+                          }
                           setDialogState(() {
-                            final id = p['id']?.toString();
-                            if (id == null) return;
                             if (localSelectedPolicyIds.contains(id)) {
                               localSelectedPolicyIds.remove(id);
                             } else {
@@ -468,16 +516,9 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                               final selected = localSelectedPolicyIds.toList();
                               await prefs.remove('policy_path'); // Ensure policy_path is cleared
 
-                              if (selected.length == 1) {
-                                // Unchanged single-policy flow
-                                await prefs.setString('policy_id', selected.first);
-                                await prefs.remove('policy_ids');
-                                if (mounted) context.push('/analysis');
-                              } else {
-                                await prefs.setString('policy_ids', jsonEncode(selected));
-                                await prefs.remove('policy_id');
-                                if (mounted) context.push('/analysis-multi');
-                              }
+                              await prefs.setString('policy_ids', jsonEncode(selected));
+                              await prefs.remove('policy_id');
+                              if (mounted) context.push('/analysis-multi');
                             },
                       style: FilledButton.styleFrom(minimumSize: const Size(0, 50)),
                       child: Text(
@@ -505,6 +546,7 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
 
   @override
   Widget build(BuildContext context) {
+    final config = ref.watch(appConfigProvider).value ?? AppRuntimeConfig.defaults;
     final p = context.palette;
     final bool hasFile = _selectedFileName != null && _uploadedPath != null;
     final bool hasManual = _manualTextController.text.trim().isNotEmpty;
@@ -512,15 +554,11 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
     final bool canSubmit = isValid && !_isUploading && !_isExtracting;
     final bool bothMethods = _selectedFileName != null && hasManual;
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          tooltip: 'Back',
-          onPressed: () => context.pop(),
-        ),
-        title: const Text('Add Prescription'),
-      ),
+    return FlowShell(
+      title: 'Add Prescription',
+      step: 2,
+      stepCount: 3,
+      onClose: () => context.go('/dashboard'),
       body: SafeArea(
         bottom: false,
         child: ContentWidth(
@@ -530,8 +568,6 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const _StepHeader(current: 2, total: 3, label: 'Prescription'),
-                const SizedBox(height: AppSpacing.xl),
                 Text('Add your prescription', style: context.text.headlineSmall),
                 const SizedBox(height: AppSpacing.xs),
                 Text("Upload your doctor's prescription, diagnosis, or medical bills.", style: context.text.bodyMedium),
@@ -545,7 +581,9 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
                     title: _isUploading
                         ? 'Uploading ${_selectedFileName ?? 'document'}…'
                         : 'Tap to upload medical documents',
-                    subtitle: _isUploading ? 'Please keep the app open' : 'PDF, JPG, PNG or DOCX',
+                    subtitle: _isUploading
+                        ? 'Please keep the app open'
+                        : 'PDF, JPG, PNG · ${config.maxFileSizeMb} MB max',
                     icon: Icons.find_in_page_outlined,
                     loading: _isUploading,
                     onTap: _isUploading ? null : _pickAndUploadFile,
@@ -647,36 +685,15 @@ class _UploadPrescriptionScreenState extends ConsumerState<UploadPrescriptionScr
           ),
         ),
       ),
-      bottomNavigationBar: BottomActionBar(
-        children: [
-          FilledButton(
-            onPressed: canSubmit ? _processNext : null,
-            style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 52)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (_isExtracting) ...[
-                  SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2.4, color: p.onPrimary),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  const Text('Processing...'),
-                ] else ...[
-                  Flexible(
-                    child: Text(
-                      hasManual ? 'Process Manual Prescription' : 'Process Prescription',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  const Icon(Icons.chevron_right_rounded, size: 20),
-                ],
-              ],
-            ),
-          ),
-        ],
+      bottomAction: AppButton(
+        label: _isExtracting
+            ? 'Reading prescription?'
+            : hasManual
+            ? 'Process Manual Prescription'
+            : 'Process Prescription',
+        onPressed: canSubmit ? _processNext : null,
+        busy: _isExtracting,
+        icon: AppIcons.caretRight,
       ),
     );
   }
@@ -872,58 +889,6 @@ class _SelectedFileCard extends StatelessWidget {
 }
 
 /// Visual-only progress indicator for the Consent → Prescription → Policy flow.
-class _StepHeader extends StatelessWidget {
-  final int current;
-  final int total;
-  final String label;
-
-  const _StepHeader({required this.current, required this.total, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              'STEP $current OF $total',
-              style: context.text.labelSmall?.copyWith(color: p.primary, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            Flexible(
-              child: Text(
-                '· $label',
-                overflow: TextOverflow.ellipsis,
-                style: context.text.labelSmall?.copyWith(color: p.textTertiary),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Row(
-          children: [
-            for (int i = 1; i <= total; i++) ...[
-              if (i > 1) const SizedBox(width: 6),
-              Expanded(
-                child: Container(
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: i <= current ? p.primary : p.border,
-                    borderRadius: AppRadius.pillAll,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-// Custom Painter for Dashed Border
 class DashedBorderPainter extends CustomPainter {
   final Color color;
   final double strokeWidth;

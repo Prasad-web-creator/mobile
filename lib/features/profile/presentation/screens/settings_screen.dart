@@ -1,8 +1,14 @@
+import 'package:claimsupport/core/design/widgets/app_shells.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:claimsupport/core/config/app_config_provider.dart';
 import 'package:claimsupport/core/network/api_client.dart';
 import 'package:claimsupport/core/widgets/app_widgets.dart';
 import 'package:claimsupport/features/authentication/presentation/controllers/auth_controller.dart';
+import 'package:claimsupport/features/authentication/data/google_identity.dart';
+import 'package:claimsupport/features/authentication/presentation/widgets/otp_method_selector.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -15,6 +21,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   bool _isSaving = false;
+  bool _linkingGoogle = false;
+
+  Future<void> _linkGoogle(String clientId) async {
+    setState(() => _linkingGoogle = true);
+    try {
+      final token = await GoogleIdentity.requestIdToken(clientId);
+      if (token == null || !mounted) return;
+      await ApiClient().dio.post('/auth/me/google', data: {'idToken': token});
+      if (!mounted) return;
+      ref.invalidate(authProvider);
+      showAppSnackBar(context, 'Google sign-in linked.', tone: AppTone.success);
+    } on DioException catch (error) {
+      if (mounted) {
+        showAppSnackBar(context, otpErrorFrom(error, 'Could not link Google sign-in.'), tone: AppTone.warning);
+      }
+    } catch (_) {
+      if (mounted) showAppSnackBar(context, 'Could not link Google sign-in.', tone: AppTone.warning);
+    } finally {
+      if (mounted) setState(() => _linkingGoogle = false);
+    }
+  }
 
   @override
   void initState() {
@@ -37,11 +64,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _promptEmailOtpVerification({required String name, required String newEmail}) async {
     try {
-      final response = await ApiClient().dio.post(
-        '/auth/me/change-email/send-otp',
-        data: {'newEmail': newEmail},
-      );
+      final response = await ApiClient().dio.post('/auth/me/change-email/send-otp', data: {'newEmail': newEmail});
       final masked = response.data['destination']?.toString() ?? newEmail;
+      final otpLength = OtpSendResult.fromResponse(response, fallbackDestination: masked).otpLength;
 
       if (!mounted) return;
 
@@ -77,7 +102,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     TextField(
                       controller: otpController,
                       keyboardType: TextInputType.number,
-                      maxLength: 6,
+                      maxLength: otpLength,
                       textAlign: TextAlign.center,
                       style: ctx.text.headlineSmall?.copyWith(letterSpacing: 6, fontWeight: FontWeight.w700),
                       decoration: InputDecoration(
@@ -85,7 +110,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         hintText: '••••',
                         filled: true,
                         fillColor: p.surfaceMuted,
-                        border: OutlineInputBorder(borderRadius: AppRadius.mdAll, borderSide: BorderSide(color: p.border)),
+                        border: OutlineInputBorder(
+                          borderRadius: AppRadius.mdAll,
+                          borderSide: BorderSide(color: p.border),
+                        ),
                       ),
                     ),
                     if (errorMessage != null) ...[
@@ -114,11 +142,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               try {
                                 await ApiClient().dio.post(
                                   '/auth/me/change-email/verify',
-                                  data: {
-                                    'newEmail': newEmail,
-                                    'otp': otp,
-                                    'name': name,
-                                  },
+                                  data: {'newEmail': newEmail, 'otp': otp, 'name': name},
                                 );
                                 ref.invalidate(authProvider);
                                 if (ctx.mounted) Navigator.pop(ctx);
@@ -143,11 +167,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
     } catch (e) {
       if (mounted) {
-        showAppSnackBar(
-          context,
-          'Could not send verification code: ${friendlyErrorMessage(e)}',
-          tone: AppTone.danger,
-        );
+        showAppSnackBar(context, 'Could not send verification code: ${friendlyErrorMessage(e)}', tone: AppTone.danger);
       }
     }
   }
@@ -155,9 +175,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final clientId = ref.watch(appConfigProvider).value?.googleClientId;
+    final currentUser = ref.watch(authProvider).value;
+    final canLinkGoogle = currentUser?.emailVerified == true && clientId != null && GoogleIdentity.isSupported;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Edit Profile')),
+    return PushedShell(
+      title: 'Edit Profile',
+      onBack: () => context.canPop() ? context.pop() : context.go('/dashboard'),
       body: SafeArea(
         child: SingleChildScrollView(
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -175,10 +199,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Full Name',
-                        style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                      ),
+                      Text('Full Name', style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                       const SizedBox(height: AppSpacing.xs),
                       TextField(
                         controller: _nameController,
@@ -188,7 +209,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
                           filled: true,
                           fillColor: p.surfaceMuted,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: AppRadius.mdAll,
                             borderSide: BorderSide(color: p.border),
@@ -204,10 +228,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      Text(
-                        'Email Address',
-                        style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                      ),
+                      Text('Email Address', style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                       const SizedBox(height: AppSpacing.xs),
                       TextField(
                         controller: _emailController,
@@ -217,7 +238,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           prefixIcon: const Icon(Icons.email_outlined, size: 20),
                           filled: true,
                           fillColor: p.surfaceMuted,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: AppRadius.mdAll,
                             borderSide: BorderSide(color: p.border),
@@ -287,6 +311,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           }
                         },
                 ),
+                if (canLinkGoogle || currentUser?.googleLinked == true) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  if (currentUser?.googleLinked == true)
+                    const Text('Google sign-in is linked.')
+                  else
+                    SecondaryButton(
+                      label: _linkingGoogle ? 'Linking Google…' : 'Link Google sign-in',
+                      onPressed: _linkingGoogle ? null : () => _linkGoogle(clientId!),
+                    ),
+                ],
               ],
             ),
           ),

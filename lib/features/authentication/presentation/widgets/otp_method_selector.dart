@@ -18,7 +18,7 @@ class OtpSendResult {
   final int otpLength;
   final int resendAfterSeconds;
 
-  /// False when the server did not actually send an email (static/test mode).
+  /// Whether the delivery request was accepted.
   final bool delivered;
 
   /// Message from the server, e.g. "OTP sent to su****@gmail.com".
@@ -34,7 +34,7 @@ class OtpSendResult {
 
   /// One-line status shown above the OTP field.
   String statusText([OtpChannel channel = OtpChannel.email]) {
-    return delivered ? 'We sent a $otpLength-digit code by email to $destination.' : message;
+    return message;
   }
 
   factory OtpSendResult.fromResponse(Response response, {required String fallbackDestination}) {
@@ -42,8 +42,8 @@ class OtpSendResult {
     final destination = (data['destination'] as String?) ?? fallbackDestination;
     return OtpSendResult(
       destination: destination,
-      otpLength: (data['otpLength'] as num?)?.toInt() ?? 4,
-      resendAfterSeconds: (data['resendAfterSeconds'] as num?)?.toInt() ?? 30,
+      otpLength: (data['otpLength'] as num?)?.toInt() ?? 6,
+      resendAfterSeconds: (data['resendAfterSeconds'] as num?)?.toInt() ?? 60,
       delivered: data['delivered'] != false,
       message: (data['message'] as String?) ?? 'OTP sent to $destination',
     );
@@ -85,200 +85,13 @@ String otpErrorFrom(DioException e, String fallback) {
   return fallback;
 }
 
+String authVerificationError(DioException error) {
+  final body = error.response?.data;
+  final detail = body is Map ? body['detail'] ?? body['message'] : null;
+  if (detail is String && detail.toLowerCase().contains('invalid or expired otp')) {
+    return "That code isn't right. Check it, or get a new one.";
+  }
+  return otpErrorFrom(error, 'Could not verify the code. Try again.');
+}
+
 final RegExp emailPattern = RegExp(r'^[\w\-.+]+@([\w-]+\.)+[\w-]{2,}$');
-
-/// "Continue with Email OTP" / "Continue with SMS OTP" choice, shown as a segmented control.
-class OtpMethodSelector extends StatelessWidget {
-  final OtpChannel selected;
-  final ValueChanged<OtpChannel> onChanged;
-  final bool enabled;
-  final String prefix;
-
-  const OtpMethodSelector({
-    super.key,
-    required this.selected,
-    required this.onChanged,
-    this.enabled = true,
-    this.prefix = 'Continue with',
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: p.surfaceMuted,
-        borderRadius: AppRadius.mdAll,
-        border: Border.all(color: p.border),
-      ),
-      child: Row(
-        children: [
-          for (final channel in OtpChannel.values) ...[
-            if (channel != OtpChannel.values.first) const SizedBox(width: 4),
-            Expanded(child: _option(context, channel)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _option(BuildContext context, OtpChannel channel) {
-    final p = context.palette;
-    final isSelected = channel == selected;
-    final foreground = isSelected ? p.primary : p.textSecondary;
-
-    return Semantics(
-      button: true,
-      selected: isSelected,
-      label: '$prefix ${channel.label}',
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: AppRadius.smAll,
-          onTap: enabled ? () => onChanged(channel) : null,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            constraints: const BoxConstraints(minHeight: 44),
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-            decoration: BoxDecoration(
-              color: isSelected ? p.surface : Colors.transparent,
-              borderRadius: AppRadius.smAll,
-              border: Border.all(color: isSelected ? p.primary.withAlpha(90) : Colors.transparent),
-              boxShadow: isSelected ? p.softShadow : null,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(channel.icon, color: foreground, size: 18),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    channel.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.text.labelLarge?.copyWith(
-                      fontSize: 14,
-                      color: foreground,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Brand mark + title + subtitle used at the top of the sign-in and registration screens.
-class AuthHeader extends StatelessWidget {
-  final String title;
-  final String subtitle;
-
-  const AuthHeader({super.key, required this.title, required this.subtitle});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(color: p.primary, borderRadius: AppRadius.mdAll),
-              child: Icon(Icons.health_and_safety_rounded, color: p.onPrimary, size: 26),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Text('Policy Pal', style: context.text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xxl),
-        Text(title, style: context.text.headlineMedium),
-        const SizedBox(height: AppSpacing.xs),
-        Text(subtitle, style: context.text.bodyLarge?.copyWith(color: p.textSecondary)),
-      ],
-    );
-  }
-}
-
-/// Label shown above an auth form field.
-class AuthFieldLabel extends StatelessWidget {
-  final String text;
-
-  const AuthFieldLabel(this.text, {super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: Text(text, style: context.text.titleSmall),
-    );
-  }
-}
-
-/// "Text + link" row at the bottom of the auth screens.
-class AuthFooterLink extends StatelessWidget {
-  final String text;
-  final String linkLabel;
-  final VoidCallback onTap;
-
-  const AuthFooterLink({super.key, required this.text, required this.linkLabel, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      alignment: WrapAlignment.center,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(text, style: context.text.bodyMedium),
-        TextButton(
-          onPressed: onTap,
-          style: TextButton.styleFrom(
-            minimumSize: const Size(48, 40),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-          ),
-          child: Text(linkLabel),
-        ),
-      ],
-    );
-  }
-}
-
-/// Resend countdown / resend button shown after an OTP is sent.
-class OtpResendRow extends StatelessWidget {
-  final int secondsLeft;
-  final bool loading;
-  final VoidCallback onResend;
-
-  const OtpResendRow({super.key, required this.secondsLeft, required this.loading, required this.onResend});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Center(
-      child: secondsLeft > 0
-          ? Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.schedule_rounded, size: 16, color: p.textTertiary),
-                  const SizedBox(width: 6),
-                  Text('Resend OTP in ${secondsLeft}s', style: context.text.bodyMedium),
-                ],
-              ),
-            )
-          : TextButton.icon(
-              onPressed: loading ? null : onResend,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Resend OTP'),
-            ),
-    );
-  }
-}

@@ -156,6 +156,7 @@ class AuthInterceptor extends Interceptor {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
+    if (_isPublicRoute(options.path)) return handler.next(options);
     try {
       String? token = await AuthStorage.getToken();
 
@@ -188,6 +189,7 @@ class AuthInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
+    if (_isPublicRoute(err.requestOptions.path)) return handler.next(err);
     // Safety net: if a 401 still happens (e.g. backend clock mismatch or revoked token)
     if (err.response?.statusCode == 401) {
       try {
@@ -229,4 +231,12 @@ class AuthInterceptor extends Interceptor {
 
     handler.next(err);
   }
+
+  bool _isPublicRoute(String path) => const {
+    '/app-config',
+    '/auth/google',
+    '/auth/send-otp',
+    '/auth/login',
+    '/auth/register',
+  }.contains(path);
 }
